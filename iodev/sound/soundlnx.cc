@@ -32,7 +32,9 @@
 
 #include <errno.h>
 #include <sys/ioctl.h>
+#ifndef ANDROID
 #include <sys/soundcard.h>
+#endif
 
 bx_sound_linux_c::bx_sound_linux_c()
   :bx_sound_lowlevel_c()
@@ -141,7 +143,7 @@ int bx_sound_linux_c::startwaveplayback(int frequency, int bits, bx_bool stereo,
   wave_ch[0].oldbits = bits;
   wave_ch[0].oldstereo = stereo;
   wave_ch[0].oldformat = format;
-
+#ifndef ANDROID
   if (bits == 16)
     if (signeddata == 1)
       fmt = AFMT_S16_LE;
@@ -187,7 +189,7 @@ int bx_sound_linux_c::startwaveplayback(int frequency, int bits, bx_bool stereo,
 
   // ioctl(wave_fd[0], SNDCTL_DSP_GETBLKSIZE, &fragment);
   // BX_DEBUG(("current output block size is %d", fragment));
-
+#endif
   return BX_SOUNDLOW_OK;
 }
 
@@ -290,7 +292,7 @@ int bx_sound_linux_c::startwaverecord(int frequency, int bits, bx_bool stereo, i
   wave_ch[0].oldbits = bits;
   wave_ch[0].oldstereo = stereo;
   wave_ch[0].oldformat = format;
-
+#ifndef ANDROID
   if (bits == 16)
     if (signeddata == 1)
       fmt = AFMT_S16_LE;
@@ -329,7 +331,7 @@ int bx_sound_linux_c::startwaverecord(int frequency, int bits, bx_bool stereo, i
              frequency, strerror(errno)));
     return BX_SOUNDLOW_ERR;
   }
-
+#endif
   return BX_SOUNDLOW_OK;
 }
 
