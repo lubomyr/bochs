@@ -17,6 +17,7 @@ fi
 
 if [ \! -f bochs/Makefile ] ; then
 env CFLAGS="-Ofast -ffast-math" \
+env LIBS="-lgnustl_static" \
 	../setEnvironment-armeabi-v7a.sh sh -c "cd bochs && ./configure --build=x86_64-unknown-linux-gnu --host=arm-linux-androideabi --with-sdl"
 fi
 
