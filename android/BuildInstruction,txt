@@ -1,0 +1,46 @@
+1) At first for building we need linux-console
+I used speedLinux under windows
+
+2) Install Android sdk&ndk (i unpacked it into ~/sdk directory)
+https://developer.android.com/tools/sdk/ndk/index.html
+https://developer.android.com/sdk/index.html
+
+for run android environment i create and use simple script setenv-android.sh
+
+#!/bin/sh
+
+export ANT_HOME=~/sdk/apache-ant-1.8.2
+export PATH=~/sdk/android-ndk-r10c:$PATH
+export PATH=~/sdk/android-sdk-linux/tools:$PATH
+export PATH=~/sdk/android-sdk-linux/build-tools/21.0.1:$PATH
+export PATH=~/sdk/jdk1.7.0_03/jre/bin:$PATH
+export PATH=~/sdk/apache-ant-1.8.2/bin:$PATH
+
+now we can run android build environment via console
+. setenv-android.sh
+
+Now via Android SDK Manager (for call sdk manager via console type android). We need download latest version:
+Android SDK Tools
+Android SDK Platform-tools
+Android SDL Build tools
+Android 5.0 (API 21)
++SDK Platform (API 21)
++Google APIs (API 21)
+
+3) Install pelya's libSDL-environment
+cd ~
+git clone git://github.com/pelya/commandergenius
+I renamed commandergenius folder to androidsdl
+
+4) download bochs sources
+git clone git://github.com/lubomyr/bochs
+Copy folder ~/bochs/android/bochs into ~/androidsdl/project/jni/application
+
+// creating symlink src to bochs
+cd ~/androidsdl/project/jni/application
+rm src
+ln -s bochs src
+
+// Now we can build project (apk)
+cd ~/androidsdl
+./build.sh
