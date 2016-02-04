@@ -59,8 +59,9 @@ void delete_audio_buffer();
 Bit32u pcm_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len);
 
 extern int mixer_control;
+#ifndef ANDROID
 extern BX_MUTEX(mixer_mutex);
-
+#endif
 // the waveout class
 
 class bx_soundlow_waveout_c : public logfunctions {
