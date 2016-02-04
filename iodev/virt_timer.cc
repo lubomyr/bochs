@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: virt_timer.cc 12514 2014-10-19 08:54:16Z vruppert $
+// $Id: virt_timer.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -390,7 +390,7 @@ void bx_virt_timer_c::register_state(void)
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "virt_timer", "Virtual Timer State");
   bx_list_c *vtimers = new bx_list_c(list, "timer");
   for (i = 0; i < numTimers; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     bx_list_c *bxtimer = new bx_list_c(vtimers, name);
     BXRS_PARAM_BOOL(bxtimer, inUse, timer[i].inUse);
     BXRS_DEC_PARAM_FIELD(bxtimer, period, timer[i].period);
@@ -401,7 +401,7 @@ void bx_virt_timer_c::register_state(void)
   }
   bx_list_c *sys = new bx_list_c(list, "s");
   for (i = 0; i < 2; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     bx_list_c *snum = new bx_list_c(sys, name);
     BXRS_DEC_PARAM_FIELD(snum, current_timers_time, s[i].current_timers_time);
     BXRS_DEC_PARAM_FIELD(snum, timers_next_event_time, s[i].timers_next_event_time);
@@ -493,7 +493,7 @@ void bx_virt_timer_c::timer_handler(bx_bool mode)
         printf("useconds: " FMT_LL "u, ", temp1);
         printf("expect ticks: " FMT_LL "u, ", temp2);
         printf("ticks: " FMT_LL "u, ", temp3);
-        printf("diff: "FMT_LL "u\n", temp4);
+        printf("diff: " FMT_LL "u\n", temp4);
       }
 #  endif
 

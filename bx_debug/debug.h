@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: debug.h 12184 2014-02-11 20:51:18Z sshwarts $
+// $Id: debug.h 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2013  The Bochs Project
@@ -317,16 +317,16 @@ void bx_dbg_exception(unsigned cpu, Bit8u vector, Bit16u error_code);
 void bx_dbg_interrupt(unsigned cpu, Bit8u vector, Bit16u error_code);
 void bx_dbg_halt(unsigned cpu);
 
-// memory trace callbacks from CPU, len=1,2,4 or 8
-void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned pl, unsigned rw, Bit8u *data);
-void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, unsigned rw, unsigned attr, Bit8u *data);
+// memory trace callbacks from CPU
+void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw,                Bit8u *data);
+void bx_dbg_phy_memory_access(unsigned cpu,                 bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw, unsigned attr, Bit8u *data);
 
 // check memory access for watchpoints
 void bx_dbg_check_memory_watchpoints(unsigned cpu, bx_phy_address phy, unsigned len, unsigned rw);
 
 // commands that work with Bochs param tree
 void bx_dbg_restore_command(const char *param_name, const char *path);
-void bx_dbg_show_param_command(const char *param);
+void bx_dbg_show_param_command(const char *param, bx_bool xml);
 
 int bx_dbg_show_symbolic(void);
 void bx_dbg_set_symbol_command(const char *symbol, bx_address val);

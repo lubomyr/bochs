@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpuid.h 12528 2014-11-01 13:12:24Z sshwarts $
+// $Id: cpuid.h 12697 2015-03-27 21:39:24Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2010-2014 Stanislav Shwartsman
+//   Copyright (c) 2010-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -32,7 +32,8 @@ struct cpuid_function_t {
 };
 
 enum {
-  BX_ISA_X87 = 0,                 /* FPU (X87) instruction */
+  BX_ISA_386 = 0,                 /* 386 or earlier instruction */
+  BX_ISA_X87,                     /* FPU (X87) instruction */
   BX_ISA_486,                     /* 486 new instruction */
   BX_ISA_PENTIUM,                 /* Pentium new instruction */
   BX_ISA_P6,                      /* P6 new instruction */
@@ -126,7 +127,7 @@ public:
   virtual ~bx_cpuid_t() {}
 
   // return CPU name
-  virtual const char *get_name(void) const { return NULL; }
+  virtual const char *get_name(void) const = 0;
 
   BX_CPP_INLINE void get_cpu_extensions(Bit32u *extensions) const {
     for (unsigned n=0; n < BX_ISA_EXTENSIONS_ARRAY_SIZE; n++)
@@ -179,14 +180,13 @@ protected:
     ia_extensions_bitmask[extension / 32] &= ~(1 << (extension % 32));
   }
 
-  BX_CPP_INLINE void register_cpu_extensions(Bit8u *extensions)
-  {
-    while(1) {
-      unsigned cpu_extension = *extensions++;
-      if (cpu_extension == BX_ISA_EXTENSION_LAST) break;
-      enable_cpu_extension(cpu_extension);
-    }
-  }
+  void get_leaf_0(unsigned max_leaf, const char *vendor_string, cpuid_function_t *leaf) const;
+  void get_ext_cpuid_brand_string_leaf(const char *brand_string, Bit32u function, cpuid_function_t *leaf) const;
+  void get_cpuid_hidden_level(cpuid_function_t *leaf, const char *magic_string) const;
+
+#if BX_SUPPORT_APIC
+  void get_std_cpuid_extended_topology_leaf(Bit32u subfunction, cpuid_function_t *leaf) const;
+#endif
 
   BX_CPP_INLINE void get_reserved_leaf(cpuid_function_t *leaf) const
   {
@@ -196,45 +196,8 @@ protected:
     leaf->edx = 0;
   }
 
-#if BX_SUPPORT_APIC
-  void get_std_cpuid_extended_topology_leaf(Bit32u subfunction, cpuid_function_t *leaf) const;
-#endif
-
-  BX_CPP_INLINE void get_ext_cpuid_brand_string_leaf(const char *brand_string, Bit32u function, cpuid_function_t *leaf) const
-  {
-    switch(function) {
-    case 0x80000002:
-      memcpy(&(leaf->eax), brand_string     , 4);
-      memcpy(&(leaf->ebx), brand_string +  4, 4);
-      memcpy(&(leaf->ecx), brand_string +  8, 4);
-      memcpy(&(leaf->edx), brand_string + 12, 4);
-      break;
-    case 0x80000003:
-      memcpy(&(leaf->eax), brand_string + 16, 4);
-      memcpy(&(leaf->ebx), brand_string + 20, 4);
-      memcpy(&(leaf->ecx), brand_string + 24, 4);
-      memcpy(&(leaf->edx), brand_string + 28, 4);
-      break;
-    case 0x80000004:
-      memcpy(&(leaf->eax), brand_string + 32, 4);
-      memcpy(&(leaf->ebx), brand_string + 36, 4);
-      memcpy(&(leaf->ecx), brand_string + 40, 4);
-      memcpy(&(leaf->edx), brand_string + 44, 4);
-      break;
-    default:
-      break;
-    }
-
-#ifdef BX_BIG_ENDIAN
-    leaf->eax = bx_bswap32(leaf->eax);
-    leaf->ebx = bx_bswap32(leaf->ebx);
-    leaf->ecx = bx_bswap32(leaf->ecx);
-    leaf->edx = bx_bswap32(leaf->edx);
-#endif
-  }
-
+  void dump_cpuid_leaf(unsigned function, unsigned subfunction = 0) const;
   void dump_cpuid(unsigned max_std_leaf, unsigned max_ext_leaf) const;
-
 };
 
 typedef bx_cpuid_t* (*bx_create_cpuid_method)(BX_CPU_C *cpu);

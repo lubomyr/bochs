@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.h 12108 2014-01-12 19:27:01Z vruppert $
+// $Id: wxmain.h 12583 2014-12-27 15:57:30Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -152,6 +152,7 @@ public:
   void OnTimer(wxTimerEvent& event);
   void OnPaint(wxPaintEvent& event);
   void OnMouse(wxMouseEvent& event);
+  void OnKillFocus(wxFocusEvent& event);
   void MyRefresh();
   static void OnPluginInit();
   void ToggleMouse(bool fromToolbar);

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: generic_cpuid.h 12527 2014-11-01 11:51:03Z sshwarts $
+// $Id: generic_cpuid.h 12640 2015-02-11 21:31:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or

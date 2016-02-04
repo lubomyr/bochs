@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.h 12528 2014-11-01 13:12:24Z sshwarts $
+// $Id: vmx.h 12697 2015-03-27 21:39:24Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2014 Stanislav Shwartsman
+//   Copyright (c) 2009-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -1055,8 +1055,6 @@ enum VMX_INVEPT_INVVPID_type {
 
 #define VMX_MSR_VMX_EPT_VPID_CAP \
    (BX_CPU_THIS_PTR vmx_cap.vmx_ept_vpid_cap_supported_bits)
-
-#define BX_VMX_EPT_ACCESS_DIRTY_ENABLED (BX_CPU_THIS_PTR vmcs.eptptr & 0x40)
 
 #endif
 

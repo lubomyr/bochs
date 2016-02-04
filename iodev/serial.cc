@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: serial.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: serial.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -583,7 +583,7 @@ void bx_serial_c::register_state(void)
 
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "serial", "Serial Port State");
   for (i=0; i<BX_N_SERIAL_PORTS; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     port = new bx_list_c(list, name);
     new bx_shadow_bool_c(port, "ls_interrupt", &BX_SER_THIS s[i].ls_interrupt);
     new bx_shadow_bool_c(port, "ms_interrupt", &BX_SER_THIS s[i].ms_interrupt);
@@ -780,7 +780,7 @@ Bit32u bx_serial_c::read(Bit32u address, unsigned io_len)
         if (BX_SER_THIS s[port].fifo_cntl.enable) {
           val = BX_SER_THIS s[port].rx_fifo[0];
           if (BX_SER_THIS s[port].rx_fifo_end > 0) {
-            memcpy(&BX_SER_THIS s[port].rx_fifo[0], &BX_SER_THIS s[port].rx_fifo[1], 15);
+            memmove(&BX_SER_THIS s[port].rx_fifo[0], &BX_SER_THIS s[port].rx_fifo[1], 15);
             BX_SER_THIS s[port].rx_fifo_end--;
           }
           if (BX_SER_THIS s[port].rx_fifo_end == 0) {
@@ -1004,7 +1004,7 @@ void bx_serial_c::write(Bit32u address, Bit32u value, unsigned io_len)
           if (BX_SER_THIS s[port].line_status.tsr_empty) {
             if (BX_SER_THIS s[port].fifo_cntl.enable) {
               BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].tx_fifo[0];
-              memcpy(&BX_SER_THIS s[port].tx_fifo[0], &BX_SER_THIS s[port].tx_fifo[1], 15);
+              memmove(&BX_SER_THIS s[port].tx_fifo[0], &BX_SER_THIS s[port].tx_fifo[1], 15);
               BX_SER_THIS s[port].line_status.thr_empty = (--BX_SER_THIS s[port].tx_fifo_end == 0);
             } else {
               BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].thrbuffer;
@@ -1469,7 +1469,7 @@ void bx_serial_c::tx_timer(void)
   if (BX_SER_THIS s[port].fifo_cntl.enable && (BX_SER_THIS s[port].tx_fifo_end > 0)) {
     BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].tx_fifo[0];
     BX_SER_THIS s[port].line_status.tsr_empty = 0;
-    memcpy(&BX_SER_THIS s[port].tx_fifo[0], &BX_SER_THIS s[port].tx_fifo[1], 15);
+    memmove(&BX_SER_THIS s[port].tx_fifo[0], &BX_SER_THIS s[port].tx_fifo[1], 15);
     gen_int = (--BX_SER_THIS s[port].tx_fifo_end == 0);
   } else if (!BX_SER_THIS s[port].line_status.thr_empty) {
     BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].thrbuffer;

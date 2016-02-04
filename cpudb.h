@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpudb.h 12360 2014-06-06 18:29:28Z sshwarts $
+// $Id: cpudb.h 12643 2015-02-12 21:28:24Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -23,6 +23,7 @@
 
 bx_define_cpudb(bx_generic)
 #if BX_CPU_LEVEL >= 5
+bx_define_cpudb(pentium)
 bx_define_cpudb(pentium_mmx)
 bx_define_cpudb(amd_k6_2_chomper)
 #if BX_CPU_LEVEL >= 6
@@ -46,6 +47,7 @@ bx_define_cpudb(zambezi)
 bx_define_cpudb(trinity_apu)
 bx_define_cpudb(corei7_ivy_bridge_3770k)
 bx_define_cpudb(corei7_haswell_4770)
+bx_define_cpudb(broadwell_ult)
 #endif
 #endif
 #endif

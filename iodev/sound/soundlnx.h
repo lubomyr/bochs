@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlnx.h 11738 2013-07-14 15:14:53Z vruppert $
+// $Id: soundlnx.h 12672 2015-02-23 21:32:34Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -23,47 +23,58 @@
 // Josef Drexler coded the original version of the lowlevel sound support
 // for Linux using OSS. The current version also supports OSS on FreeBSD.
 
-#if (defined(linux) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
+#if BX_HAVE_SOUND_OSS
 
-#define BX_SOUND_LINUX_BUFSIZE   BX_SOUNDLOW_WAVEPACKETSIZE * 2
-
-class bx_sound_linux_c : public bx_sound_lowlevel_c {
+class bx_soundlow_waveout_oss_c : public bx_soundlow_waveout_c {
 public:
-  bx_sound_linux_c();
-  virtual ~bx_sound_linux_c();
+  bx_soundlow_waveout_oss_c();
+  virtual ~bx_soundlow_waveout_oss_c();
 
-  virtual int get_type() {return BX_SOUNDLOW_LINUX;}
+  virtual int openwaveoutput(const char *wavedev);
+  virtual int set_pcm_params(bx_pcm_param_t *param);
+  virtual int output(int length, Bit8u data[]);
+private:
+  int waveout_fd;
+};
 
-  virtual int waveready();
-  virtual int midiready();
+class bx_soundlow_wavein_oss_c : public bx_soundlow_wavein_c {
+public:
+  bx_soundlow_wavein_oss_c();
+  virtual ~bx_soundlow_wavein_oss_c();
+
+  virtual int openwaveinput(const char *wavedev, sound_record_handler_t rh);
+  virtual int startwaverecord(bx_pcm_param_t *param);
+  virtual int getwavepacket(int length, Bit8u data[]);
+  virtual int stopwaverecord();
+
+  static void record_timer_handler(void *);
+  void record_timer(void);
+private:
+  int wavein_fd;
+  bx_pcm_param_t wavein_param;
+};
+
+class bx_soundlow_midiout_oss_c : public bx_soundlow_midiout_c {
+public:
+  bx_soundlow_midiout_oss_c();
+  virtual ~bx_soundlow_midiout_oss_c();
 
   virtual int openmidioutput(const char *mididev);
   virtual int sendmidicommand(int delta, int command, int length, Bit8u data[]);
   virtual int closemidioutput();
 
-  virtual int openwaveoutput(const char *wavedev);
-  virtual int startwaveplayback(int frequency, int bits, bx_bool stereo, int format);
-  virtual int sendwavepacket(int length, Bit8u data[]);
-  virtual int stopwaveplayback();
-  virtual int closewaveoutput();
-
-  virtual int openwaveinput(const char *wavedev, sound_record_handler_t rh);
-  virtual int startwaverecord(int frequency, int bits, bx_bool stereo, int format);
-  virtual int getwavepacket(int length, Bit8u data[]);
-  virtual int stopwaverecord();
-  virtual int closewaveinput();
-
-  static void record_timer_handler(void *);
-  void record_timer(void);
 private:
   FILE *midi;
-  char *wave_device[2];
-  int  wave_fd[2];
-  struct {
-    int oldfreq, oldbits, oldformat;
-    bx_bool oldstereo;
-  } wave_ch[2];
-  Bit8u audio_buffer[2][BX_SOUND_LINUX_BUFSIZE];
+};
+
+class bx_sound_oss_c : public bx_sound_lowlevel_c {
+public:
+  bx_sound_oss_c();
+  virtual ~bx_sound_oss_c() {}
+
+  virtual bx_soundlow_waveout_c* get_waveout();
+  virtual bx_soundlow_wavein_c* get_wavein();
+  virtual bx_soundlow_midiout_c* get_midiout();
 };
 
 #endif

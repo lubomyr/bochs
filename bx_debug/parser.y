@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parser.y 12450 2014-08-02 19:43:05Z sshwarts $
+// $Id: parser.y 12553 2014-11-15 22:03:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 %{
@@ -116,6 +116,7 @@
 %token <uval> BX_TOKEN_NUMERIC
 %token <sval> BX_TOKEN_PAGE
 %token <sval> BX_TOKEN_HELP
+%token <sval> BX_TOKEN_XML
 %token <sval> BX_TOKEN_CALC
 %token <sval> BX_TOKEN_DEVICE
 %token <sval> BX_TOKEN_GENERIC
@@ -264,8 +265,13 @@ show_command:
       }
     | BX_TOKEN_SHOW BX_TOKEN_STRING '\n'
       {
-          bx_dbg_show_param_command($2);
+          bx_dbg_show_param_command($2, 0);
           free($1); free($2);
+      }
+    | BX_TOKEN_SHOW BX_TOKEN_STRING BX_TOKEN_XML '\n'
+      {
+          bx_dbg_show_param_command($2, 1);
+          free($1); free($2); free($3);
       }
     | BX_TOKEN_SHOW '\n'
       {

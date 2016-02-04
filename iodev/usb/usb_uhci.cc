@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_uhci.cc 12488 2014-09-22 19:49:39Z vruppert $
+// $Id: usb_uhci.cc 12709 2015-04-07 16:57:36Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009       Benjamin D Lunt (fys at frontiernet net)
-//                2009-2014  The Bochs Project
+//                2009-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 /////////////////////////////////////////////////////////////////////////
 
-// Experimental USB UHCI adapter
+// USB UHCI adapter
 // PIIX3/PIIX4 function 2
 
 /* Notes by Ben Lunt:
@@ -172,7 +172,7 @@ void bx_usb_uhci_c::init(void)
     BX_UHCI_THIS hub.devfunc = 0x00;
   }
   DEV_register_pci_handlers(this, &BX_UHCI_THIS hub.devfunc, BX_PLUGIN_USB_UHCI,
-                            "Experimental USB UHCI");
+                            "USB UHCI");
 
   // initialize readonly registers
   init_pci_conf(0x8086, 0x7020, 0x01, 0x0c0300, 0x00);

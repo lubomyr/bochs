@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: ctrl_xfer_pro.cc 11107 2012-03-25 19:07:17Z sshwarts $
+// $Id: ctrl_xfer_pro.cc 12613 2015-01-25 20:55:10Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2009  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -94,7 +94,7 @@ BX_CPU_C::load_cs(bx_selector_t *selector, bx_descriptor_t *descriptor, Bit8u cp
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector = *selector;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache = *descriptor;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.rpl = cpl;
-  BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid  = 1;
+  BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid  = SegValidCache;
 
 #if BX_SUPPORT_X86_64
   if (long_mode()) {

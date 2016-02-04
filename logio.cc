@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: logio.cc 12451 2014-08-03 15:15:36Z vruppert $
+// $Id: logio.cc 12590 2015-01-03 13:53:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -84,7 +84,7 @@ void iofunctions::remove_logfn(logfunc_t *fn)
 {
   assert(n_logfn > 0);
   int i = 0;
-  while ((fn != logfn_list[i]) && (i < n_logfn)) {
+  while ((i < n_logfn) && (fn != logfn_list[i])) {
     i++;
   };
   if (i < n_logfn) {
@@ -434,6 +434,7 @@ void logfunctions::panic(const char *fmt, ...)
   if (onoff[LOGLEV_PANIC] == ACT_FATAL) {
     va_start(ap, fmt);
     fatal(prefix, fmt, ap, 1);
+    va_end(ap);
   }
 }
 

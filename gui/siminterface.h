@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.h 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: siminterface.h 12698 2015-03-29 14:27:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -546,9 +546,10 @@ enum {
   BX_HDIMAGE_MODE_GROWING,
   BX_HDIMAGE_MODE_VOLATILE,
   BX_HDIMAGE_MODE_VVFAT,
-  BX_HDIMAGE_MODE_VPC
+  BX_HDIMAGE_MODE_VPC,
+  BX_HDIMAGE_MODE_VBOX
 };
-#define BX_HDIMAGE_MODE_LAST     BX_HDIMAGE_MODE_VPC
+#define BX_HDIMAGE_MODE_LAST     BX_HDIMAGE_MODE_VBOX
 #define BX_HDIMAGE_MODE_UNKNOWN  -1
 
 enum {
@@ -593,12 +594,33 @@ enum {
 #define BX_CLOCK_TIME0_LOCAL     1
 #define BX_CLOCK_TIME0_UTC       2
 
+enum {
+  BX_SOUNDDRV_DUMMY,
+#if BX_HAVE_SOUND_ALSA
+  BX_SOUNDDRV_ALSA,
+#endif
+#if BX_HAVE_SOUND_OSS
+  BX_SOUNDDRV_OSS,
+#endif
+#if BX_HAVE_SOUND_OSX
+  BX_SOUNDDRV_OSX,
+#endif
+#if BX_HAVE_SOUND_SDL
+  BX_SOUNDDRV_SDL,
+#endif
+#if BX_HAVE_SOUND_WIN
+  BX_SOUNDDRV_WIN,
+#endif
+  BX_SOUNDDRV_FILE
+};
+
 BOCHSAPI extern const char *floppy_devtype_names[];
 BOCHSAPI extern const char *floppy_type_names[];
 BOCHSAPI extern int floppy_type_n_sectors[];
 BOCHSAPI extern const char *media_status_names[];
 BOCHSAPI extern const char *bochs_bootdisk_names[];
 BOCHSAPI extern const char *hdimage_mode_names[];
+BOCHSAPI extern const char *sound_driver_names[];
 
 ////////////////////////////////////////////////////////////////////
 // base class simulator interface, contains just virtual functions.

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pc_system.h 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: pc_system.h 12589 2014-12-31 12:27:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -140,6 +140,7 @@ public:
 #if BX_ENABLE_STATISTICS
   static void dumpStatsTimer(void* this_ptr);
 #endif
+  void isa_bus_delay(void);
 
   // ===========================
   // Non-timer oriented features

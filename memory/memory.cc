@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: memory.cc 11556 2012-12-02 19:59:23Z vruppert $
+// $Id: memory.cc 12569 2014-12-18 17:52:40Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2009  The Bochs Project
+//  Copyright (C) 2001-2014  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -194,7 +194,7 @@ inc_one:
     }
   } else {
     // access outside limits of physical memory, ignore
-    BX_DEBUG(("Write outside the limits of physical memory (0x"FMT_PHY_ADDRX") (ignore)", a20addr));
+    BX_DEBUG(("Write outside the limits of physical memory (0x" FMT_PHY_ADDRX ") (ignore)", a20addr));
   }
 }
 

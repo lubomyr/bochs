@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: scsi_device.cc 12409 2014-07-09 15:39:47Z sshwarts $
+// $Id: scsi_device.cc 12559 2014-12-01 17:06:00Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  SCSI emulation layer (ported from QEMU)
@@ -843,7 +843,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun)
     case 0x08:
     case 0x28:
     case 0x88:
-      BX_DEBUG(("Read (sector "FMT_LL"d, count %d)", lba, len));
+      BX_DEBUG(("Read (sector " FMT_LL "d, count %d)", lba, len));
       if (lba > max_lba)
         goto illegal_lba;
       r->sector = lba;
@@ -852,7 +852,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun)
     case 0x0a:
     case 0x2a:
     case 0x8a:
-      BX_DEBUG(("Write (sector "FMT_LL"d, count %d)", lba, len));
+      BX_DEBUG(("Write (sector " FMT_LL "d, count %d)", lba, len));
       if (lba > max_lba)
         goto illegal_lba;
       r->sector = lba;
@@ -860,7 +860,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun)
       is_write = 1;
       break;
     case 0x35:
-      BX_DEBUG(("Syncronise cache (sector "FMT_LL"d, count %d)", lba, len));
+      BX_DEBUG(("Syncronise cache (sector " FMT_LL "d, count %d)", lba, len));
       // TODO: flush cache
       break;
     case 0x43:

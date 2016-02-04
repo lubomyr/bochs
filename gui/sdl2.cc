@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sdl2.cc 12469 2014-08-17 12:48:05Z vruppert $
+// $Id: sdl2.cc 12607 2015-01-19 20:32:20Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2014  The Bochs Project
@@ -423,7 +423,7 @@ bx_sdl2_gui_c::bx_sdl2_gui_c()
   }
   atexit(SDL_Quit);
   SDL_GetDisplayMode(0, 0, &sdl_maxres);
-  info("maximum host resolution: x=%d y=%d\n", sdl_maxres.w, sdl_maxres.h);
+  info("maximum host resolution: x=%d y=%d", sdl_maxres.w, sdl_maxres.h);
 }
 
 void bx_sdl2_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
@@ -781,6 +781,9 @@ void bx_sdl2_gui_c::handle_events(void)
       case SDL_WINDOWEVENT:
         if (sdl_event.window.event == SDL_WINDOWEVENT_EXPOSED) {
           SDL_UpdateWindowSurface(window);
+        }
+        if (sdl_event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+          DEV_kbd_release_keys();
         }
         break;
 
@@ -1508,13 +1511,47 @@ int sdl2_ask_dialog(BxEvent *event)
   }
 }
 
+int sdl2_yesno_dialog(bx_param_bool_c *bparam)
+{
+  SDL_MessageBoxData msgboxdata;
+  SDL_MessageBoxButtonData buttondata[2];
+  int retcode;
+
+  msgboxdata.flags = SDL_MESSAGEBOX_ERROR;
+  msgboxdata.window = window;
+  msgboxdata.title = bparam->get_label();
+  msgboxdata.message = bparam->get_description();
+  msgboxdata.numbuttons = 2;
+  msgboxdata.buttons = buttondata;
+  msgboxdata.colorScheme = NULL;
+  buttondata[0].flags = 0;
+  buttondata[0].buttonid = 1;
+  buttondata[0].text = "Yes";
+  buttondata[1].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+  buttondata[1].buttonid = 0;
+  buttondata[1].text = "No";
+  if (SDL_ShowMessageBox(&msgboxdata, &retcode) < 0) {
+    return -1;
+  } else {
+    bparam->set(retcode);
+    return retcode;
+  }
+}
+
 BxEvent *sdl2_notify_callback(void *unused, BxEvent *event)
 {
+  bx_param_c *param;
+
   switch (event->type) {
     case BX_SYNC_EVT_LOG_ASK:
       event->retcode = sdl2_ask_dialog(event);
       return event;
     case BX_SYNC_EVT_ASK_PARAM:
+      param = event->u.param.param;
+      if (param->get_type() == BXT_PARAM_BOOL) {
+        event->retcode = sdl2_yesno_dialog((bx_param_bool_c*)param);
+        return event;
+      }
     case BX_SYNC_EVT_TICK: // called periodically by siminterface.
     case BX_ASYNC_EVT_REFRESH: // called when some bx_param_c parameters have changed.
       // fall into default case

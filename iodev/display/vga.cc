@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vga.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: vga.cc 12577 2014-12-24 19:44:47Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -231,6 +231,7 @@ void bx_vga_c::register_state(void)
 
 void bx_vga_c::after_restore_state(void)
 {
+  bx_vgacore_c::after_restore_state();
 #if BX_SUPPORT_PCI
   if (BX_VGA_THIS pci_enabled) {
     if (BX_VGA_THIS vbe_present) {
@@ -251,7 +252,6 @@ void bx_vga_c::after_restore_state(void)
     bx_gui->dimension_update(BX_VGA_THIS vbe.xres, BX_VGA_THIS vbe.yres, 0, 0,
                              BX_VGA_THIS vbe.bpp);
   }
-  bx_vgacore_c::after_restore_state();
 }
 
 // static IO port write callback handler

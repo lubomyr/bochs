@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: access.cc 12432 2014-07-20 18:19:02Z sshwarts $
+// $Id: access.cc 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2005-2014  The Bochs Project
+//  Copyright (C) 2005-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -44,10 +44,20 @@ bx_address bx_asize_mask[] = {
   #endif
 #endif
 
-  bx_bool BX_CPP_AttrRegparmN(3)
-BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned length)
+  bx_bool BX_CPP_AttrRegparmN(4)
+BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned length, bx_bool align)
 {
   Bit32u upper_limit;
+
+  length--;
+
+  if (align) {
+    Bit32u laddr = seg->cache.u.segment.base + offset;
+    if (laddr & length) {
+      BX_DEBUG(("write_virtual_checks(): #GP misaligned access"));
+      exception(BX_GP_EXCEPTION, 0);
+    }
+  }
 
   if (seg->cache.valid==0) {
     BX_DEBUG(("write_virtual_checks(): segment descriptor not valid"));
@@ -58,8 +68,6 @@ BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned le
     BX_ERROR(("write_virtual_checks(): segment not present"));
     return 0;
   }
-
-  length--;
 
   switch (seg->cache.type) {
     case 0: case 1:   // read only
@@ -72,6 +80,11 @@ BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned le
       return 0;
 
     case 2: case 3: /* read/write */
+      if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
+        seg->cache.valid |= SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
+	break;
+      }
+
       if (offset > (seg->cache.u.segment.limit_scaled - length)
           || length > seg->cache.u.segment.limit_scaled)
       {
@@ -98,7 +111,7 @@ BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned le
       if (offset <= seg->cache.u.segment.limit_scaled ||
            offset > upper_limit || (upper_limit - offset) < length)
       {
-        BX_ERROR(("write_virtual_checks(): write beyond limit, r/w ED"));
+        BX_ERROR(("write_virtual_checks(): write beyond limit, r/w expand down"));
         return 0;
       }
       break;
@@ -110,10 +123,20 @@ BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned le
   return 1;
 }
 
-  bx_bool BX_CPP_AttrRegparmN(3)
-BX_CPU_C::read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned length)
+  bx_bool BX_CPP_AttrRegparmN(4)
+BX_CPU_C::read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned length, bx_bool align)
 {
   Bit32u upper_limit;
+
+  length--;
+
+  if (align) {
+    Bit32u laddr = seg->cache.u.segment.base + offset;
+    if (laddr & length) {
+      BX_DEBUG(("read_virtual_checks(): #GP misaligned access"));
+      exception(BX_GP_EXCEPTION, 0);
+    }
+  }
 
   if (seg->cache.valid==0) {
     BX_DEBUG(("read_virtual_checks(): segment descriptor not valid"));
@@ -125,13 +148,16 @@ BX_CPU_C::read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len
     return 0;
   }
 
-  length--;
-
   switch (seg->cache.type) {
     case 0: case 1: /* read only */
     case 2: case 3: /* read/write */
     case 10: case 11: /* execute/read */
     case 14: case 15: /* execute/read-only, conforming */
+      if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
+        seg->cache.valid |= SegAccessROK | SegAccessROK4G;
+	break;
+      }
+
       if (offset > (seg->cache.u.segment.limit_scaled - length)
           || length > seg->cache.u.segment.limit_scaled)
       {
@@ -154,7 +180,7 @@ BX_CPU_C::read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len
       if (offset <= seg->cache.u.segment.limit_scaled ||
            offset > upper_limit || (upper_limit - offset) < length)
       {
-        BX_ERROR(("read_virtual_checks(): read beyond limit ED"));
+        BX_ERROR(("read_virtual_checks(): read beyond limit expand down"));
         return 0;
       }
       break;
@@ -194,6 +220,11 @@ BX_CPU_C::execute_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned 
     case 2: case 3: /* read/write */
     case 10: case 11: /* execute/read */
     case 14: case 15: /* execute/read-only, conforming */
+      if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
+        seg->cache.valid |= SegAccessROK | SegAccessROK4G;
+	break;
+      }
+
       if (offset > (seg->cache.u.segment.limit_scaled - length)
           || length > seg->cache.u.segment.limit_scaled)
       {
@@ -226,7 +257,7 @@ BX_CPU_C::execute_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned 
       if (offset <= seg->cache.u.segment.limit_scaled ||
            offset > upper_limit || (upper_limit - offset) < length)
       {
-        BX_ERROR(("execute_virtual_checks(): read beyond limit ED"));
+        BX_ERROR(("execute_virtual_checks(): read beyond limit expand down"));
         return 0;
       }
       break;
@@ -276,7 +307,7 @@ BX_CPU_C::system_read_byte(bx_address laddr)
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit8u *hostAddr = (Bit8u*) (hostPageAddr | pageOffset);
       data = *hostAddr;
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 1, 0, BX_READ, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 1, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
   }
@@ -303,7 +334,7 @@ BX_CPU_C::system_read_word(bx_address laddr)
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit16u *hostAddr = (Bit16u*) (hostPageAddr | pageOffset);
       ReadHostWordFromLittleEndian(hostAddr, data);
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 2, 0, BX_READ, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 2, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
   }
@@ -330,7 +361,7 @@ BX_CPU_C::system_read_dword(bx_address laddr)
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit32u *hostAddr = (Bit32u*) (hostPageAddr | pageOffset);
       ReadHostDWordFromLittleEndian(hostAddr, data);
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 4, 0, BX_READ, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 4, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
   }
@@ -357,7 +388,7 @@ BX_CPU_C::system_read_qword(bx_address laddr)
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit64u *hostAddr = (Bit64u*) (hostPageAddr | pageOffset);
       ReadHostQWordFromLittleEndian(hostAddr, data);
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 8, 0, BX_READ, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 8, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
   }
@@ -381,7 +412,7 @@ BX_CPU_C::system_write_byte(bx_address laddr, Bit8u data)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       bx_phy_address pAddr = tlbEntry->ppf | pageOffset;
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 1, 0, BX_WRITE, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 1, tlbEntry->get_memtype(), BX_WRITE, (Bit8u*) &data);
       Bit8u *hostAddr = (Bit8u*) (hostPageAddr | pageOffset);
       pageWriteStampTable.decWriteStamp(pAddr, 1);
      *hostAddr = data;
@@ -406,7 +437,7 @@ BX_CPU_C::system_write_word(bx_address laddr, Bit16u data)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       bx_phy_address pAddr = tlbEntry->ppf | pageOffset;
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 2, 0, BX_WRITE, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 2, tlbEntry->get_memtype(), BX_WRITE, (Bit8u*) &data);
       Bit16u *hostAddr = (Bit16u*) (hostPageAddr | pageOffset);
       pageWriteStampTable.decWriteStamp(pAddr, 2);
       WriteHostWordToLittleEndian(hostAddr, data);
@@ -431,7 +462,7 @@ BX_CPU_C::system_write_dword(bx_address laddr, Bit32u data)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       bx_phy_address pAddr = tlbEntry->ppf | pageOffset;
-      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 4, 0, BX_WRITE, (Bit8u*) &data);
+      BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, pAddr, 4, tlbEntry->get_memtype(), BX_WRITE, (Bit8u*) &data);
       Bit32u *hostAddr = (Bit32u*) (hostPageAddr | pageOffset);
       pageWriteStampTable.decWriteStamp(pAddr, 4);
       WriteHostDWordToLittleEndian(hostAddr, data);

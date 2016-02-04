@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.cc 12109 2014-01-13 18:03:40Z vruppert $
+// $Id: wxmain.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -522,7 +522,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size, 
   panel = new MyPanel(this, -1, wxDefaultPosition, wxDefaultSize, wxNO_BORDER);
   panel->SetBackgroundColour(wxColour(0,0,0));
   panel->SetFocus();
-  wxGridSizer *sz = new wxGridSizer(1, 1);
+  wxGridSizer *sz = new wxGridSizer(0, 1, 1, 0);
   sz->Add(panel, 0, wxGROW);
   SetAutoLayout(TRUE);
   SetSizer(sz);
@@ -550,10 +550,11 @@ void MyFrame::OnConfigNew(wxCommandEvent& WXUNUSED(event))
 void MyFrame::OnConfigRead(wxCommandEvent& WXUNUSED(event))
 {
   char bochsrc[512];
-  long style = wxOPEN;
+  long style = wxFD_OPEN;
   wxFileDialog *fdialog = new wxFileDialog(this, wxT("Read configuration"), wxT(""), wxT(""), wxT("*.*"), style);
   if (fdialog->ShowModal() == wxID_OK) {
     strncpy(bochsrc, fdialog->GetPath().mb_str(wxConvUTF8), sizeof(bochsrc));
+    bochsrc[sizeof(bochsrc) - 1] = '\0';
     SIM->reset_all_param();
     SIM->read_rc(bochsrc);
   }
@@ -563,10 +564,11 @@ void MyFrame::OnConfigRead(wxCommandEvent& WXUNUSED(event))
 void MyFrame::OnConfigSave(wxCommandEvent& WXUNUSED(event))
 {
   char bochsrc[512];
-  long style = wxSAVE | wxOVERWRITE_PROMPT;
+  long style = wxFD_SAVE | wxFD_OVERWRITE_PROMPT;
   wxFileDialog *fdialog = new wxFileDialog(this, wxT("Save configuration"), wxT(""), wxT(""), wxT("*.*"), style);
   if (fdialog->ShowModal() == wxID_OK) {
     strncpy(bochsrc, fdialog->GetPath().mb_str(wxConvUTF8), sizeof(bochsrc));
+    bochsrc[sizeof(bochsrc) - 1] = '\0';
     SIM->write_rc(bochsrc, 1);
   }
   delete fdialog;
@@ -583,6 +585,7 @@ void MyFrame::OnStateRestore(wxCommandEvent& WXUNUSED(event))
 
   if (ddialog.ShowModal() == wxID_OK) {
     strncpy(sr_path, ddialog.GetPath().mb_str(wxConvUTF8), sizeof(sr_path));
+    sr_path[sizeof(sr_path) - 1] = '\0';
     SIM->get_param_bool(BXPN_RESTORE_FLAG)->set(1);
     SIM->get_param_string(BXPN_RESTORE_PATH)->set(sr_path);
   }
@@ -854,15 +857,15 @@ void MyFrame::simStatusChanged(StatusChange change, bx_bool popupNotify) {
 
   // only enabled ATA channels with a cdrom connected are available at runtime
   for (unsigned i=0; i<BX_MAX_ATA_CHANNEL; i++) {
-    sprintf(ata_name, "ata.%d.resources", i);
+    sprintf(ata_name, "ata.%u.resources", i);
     base = (bx_list_c*) SIM->get_param(ata_name);
     if (!SIM->get_param_bool("enabled", base)->get()) {
       menuEdit->Enable(ID_Edit_ATA0+i, canConfigure);
     } else {
-      sprintf(ata_name, "ata.%d.master", i);
+      sprintf(ata_name, "ata.%u.master", i);
       base = (bx_list_c*) SIM->get_param(ata_name);
       if (SIM->get_param_enum("type", base)->get() != BX_ATA_DEVICE_CDROM) {
-        sprintf(ata_name, "ata.%d.slave", i);
+        sprintf(ata_name, "ata.%u.slave", i);
         base = (bx_list_c*) SIM->get_param(ata_name);
         if (SIM->get_param_enum("type", base)->get() != BX_ATA_DEVICE_CDROM) {
           menuEdit->Enable(ID_Edit_ATA0+i, canConfigure);
@@ -1029,14 +1032,16 @@ int MyFrame::HandleAskParamString(bx_param_string_c *param)
 
     if (ddialog->ShowModal() == wxID_OK)
       strncpy(newval, ddialog->GetPath().mb_str(wxConvUTF8), sizeof(newval));
+      newval[sizeof(newval) - 1] = '\0';
     dialog = ddialog; // so I can delete it
   } else if (n_opt & param->IS_FILENAME) {
     // use file open dialog
     long style =
-      (n_opt & param->SAVE_FILE_DIALOG) ? wxSAVE|wxOVERWRITE_PROMPT : wxOPEN;
+      (n_opt & param->SAVE_FILE_DIALOG) ? wxFD_SAVE|wxFD_OVERWRITE_PROMPT : wxFD_OPEN;
     wxFileDialog *fdialog = new wxFileDialog(this, wxString(msg, wxConvUTF8), wxT(""), wxString(param->getptr(), wxConvUTF8), wxT("*.*"), style);
     if (fdialog->ShowModal() == wxID_OK)
       strncpy(newval, fdialog->GetPath().mb_str(wxConvUTF8), sizeof(newval));
+      newval[sizeof(newval) - 1] = '\0';
     dialog = fdialog; // so I can delete it
   } else {
     // use simple string dialog
@@ -1044,6 +1049,7 @@ int MyFrame::HandleAskParamString(bx_param_string_c *param)
     wxTextEntryDialog *tdialog = new wxTextEntryDialog(this, wxString(msg, wxConvUTF8), wxT("Enter new value"), wxString(param->getptr(), wxConvUTF8), style);
     if (tdialog->ShowModal() == wxID_OK)
       strncpy(newval, tdialog->GetValue().mb_str(wxConvUTF8), sizeof(newval));
+      newval[sizeof(newval) - 1] = '\0';
     dialog = tdialog; // so I can delete it
   }
   if (strlen(newval) > 0) {

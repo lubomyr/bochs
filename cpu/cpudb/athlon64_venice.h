@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: athlon64_venice.h 12476 2014-08-31 18:39:18Z sshwarts $
+// $Id: athlon64_venice.h 12640 2015-02-11 21:31:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -50,8 +50,6 @@ private:
   void get_ext_cpuid_leaf_6(cpuid_function_t *leaf) const;
   void get_ext_cpuid_leaf_7(cpuid_function_t *leaf) const;
   void get_ext_cpuid_leaf_8(cpuid_function_t *leaf) const;
-
-  void get_cpuid_hidden_level(cpuid_function_t *leaf) const;
 };
 
 extern bx_cpuid_t *create_athlon64_venice_cpuid(BX_CPU_C *cpu);

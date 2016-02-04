@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pentium_mmx.h 12476 2014-08-31 18:39:18Z sshwarts $
+// $Id: pentium_mmx.h 12640 2015-02-11 21:31:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2014 Stanislav Shwartsman
@@ -47,6 +47,6 @@ private:
 
 extern bx_cpuid_t *create_pentium_mmx_cpuid(BX_CPU_C *cpu);
 
-#endif // BX_CPU_LEVEL >= 5 && BX_SUPPORT_X86_64 == 0
+#endif // BX_CPU_LEVEL >= 5
 
 #endif

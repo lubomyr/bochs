@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bxcompat.h 11913 2013-10-27 19:23:59Z vruppert $
+// $Id: bxcompat.h 12698 2015-03-29 14:27:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2013       Volker Ruppert
@@ -54,9 +54,10 @@ enum {
   BX_HDIMAGE_MODE_GROWING,
   BX_HDIMAGE_MODE_VOLATILE,
   BX_HDIMAGE_MODE_VVFAT,
-  BX_HDIMAGE_MODE_VPC
+  BX_HDIMAGE_MODE_VPC,
+  BX_HDIMAGE_MODE_VBOX
 };
-#define BX_HDIMAGE_MODE_LAST     BX_HDIMAGE_MODE_VPC
+#define BX_HDIMAGE_MODE_LAST     BX_HDIMAGE_MODE_VBOX
 #define BX_HDIMAGE_MODE_UNKNOWN  -1
 
 extern const char *hdimage_mode_names[];

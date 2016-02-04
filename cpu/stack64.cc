@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: stack64.cc 12516 2014-10-20 21:10:52Z sshwarts $
+// $Id: stack64.cc 12619 2015-01-26 20:01:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -124,7 +124,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::ENTER64_IwIb(bxInstruction_c *i)
   // ENTER finishes with memory write check on the final stack pointer
   // the memory is touched but no write actually occurs
   // emulate it by doing RMW read access from SS:RSP
-  read_RMW_virtual_qword_64(BX_SEG_REG_SS, temp_RSP);
+  read_RMW_linear_qword(BX_SEG_REG_SS, temp_RSP);
 
   RBP = frame_ptr64;
   RSP = temp_RSP;

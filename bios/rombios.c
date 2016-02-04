@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.c 12412 2014-07-10 07:28:59Z vruppert $
+// $Id: rombios.c 12579 2014-12-26 10:31:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -921,7 +921,7 @@ Bit16u cdrom_boot();
 
 #endif // BX_ELTORITO_BOOT
 
-static char bios_cvs_version_string[] = "$Revision: 12412 $ $Date: 2014-07-10 09:28:59 +0200 (Do, 10. Jul 2014) $";
+static char bios_cvs_version_string[] = "$Revision: 12579 $ $Date: 2014-12-26 11:31:39 +0100 (Fr, 26. Dez 2014) $";
 
 #define BIOS_COPYRIGHT_STRING "(c) 2001-2014  The Bochs Project"
 
@@ -11243,6 +11243,10 @@ int09_handler:
   mov  ah, #0x4f     ;; allow for keyboard intercept
   stc
   int  #0x15
+  push bp
+  mov  bp, sp
+  mov  [bp + 0x10], al
+  pop  bp
   jnc  int09_done
 #endif
 

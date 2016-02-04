@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.h 11732 2013-06-29 10:25:56Z sshwarts $
+// $Id: icache.h 12678 2015-03-01 20:55:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2007-2011 Stanislav Shwartsman
+//   Copyright (c) 2007-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -173,16 +173,16 @@ public:
 
   BX_CPP_INLINE void commit_trace(unsigned len) { mpindex += len; }
 
-  BX_CPP_INLINE void commit_page_split_trace(bx_phy_address paddr, bxICacheEntry_c *entry)
+  BX_CPP_INLINE void commit_page_split_trace(bx_phy_address paddr, bxICacheEntry_c *e)
   {
-    mpindex += entry->tlen;
+    mpindex += e->tlen;
 
     // register page split entry
     if (pageSplitIndex[nextPageSplitIndex].ppf != BX_ICACHE_INVALID_PHY_ADDRESS)
       pageSplitIndex[nextPageSplitIndex].e->pAddr = BX_ICACHE_INVALID_PHY_ADDRESS;
 
     pageSplitIndex[nextPageSplitIndex].ppf = paddr;
-    pageSplitIndex[nextPageSplitIndex].e = entry;
+    pageSplitIndex[nextPageSplitIndex].e = e;
 
     nextPageSplitIndex = (nextPageSplitIndex+1) & (BX_ICACHE_PAGE_SPLIT_ENTRIES-1);
   }
@@ -199,11 +199,11 @@ public:
     return NULL;
   }
 
-  BX_CPP_INLINE void victim_entry(bxICacheEntry_c *entry, Bit32u fetchModeMask)
+  BX_CPP_INLINE void victim_entry(bxICacheEntry_c *e, Bit32u fetchModeMask)
   {
-    if (entry->pAddr != BX_ICACHE_INVALID_PHY_ADDRESS) {
+    if (e->pAddr != BX_ICACHE_INVALID_PHY_ADDRESS) {
       victimCache[nextVictimCacheIndex].fetchModeMask = fetchModeMask;
-      victimCache[nextVictimCacheIndex].vc_entry = *entry;
+      victimCache[nextVictimCacheIndex].vc_entry = *e;
       nextVictimCacheIndex = (nextVictimCacheIndex+1) & (BX_ICACHE_VICTIM_ENTRIES-1);
     }
   }

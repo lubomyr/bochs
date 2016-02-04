@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: x.cc 12469 2014-08-17 12:48:05Z vruppert $
+// $Id: x.cc 12591 2015-01-03 17:13:54Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -374,12 +374,48 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   XSetWindowAttributes win_attr;
   unsigned long plane_masks_return[1];
   XColor color;
+#if BX_DEBUGGER && BX_DEBUGGER_GUI
+  bx_bool x11_with_debug_gui = 0;
+#endif
 
   put("XGUI");
 
   bx_headerbar_y = headerbar_y;
 
   progname = argv[0];
+
+  // parse x11 specific options
+  if (argc > 1) {
+    for (i = 1; i < argc; i++) {
+      if (!strcmp(argv[i], "nokeyrepeat")) {
+        BX_INFO(("disabled host keyboard repeat"));
+        x11_nokeyrepeat = 1;
+#if BX_DEBUGGER && BX_DEBUGGER_GUI
+      } else if (!strcmp(argv[i], "gui_debug")) {
+        x11_with_debug_gui = 1;
+#endif
+#if BX_SHOW_IPS
+      } else if (!strcmp(argv[i], "hideIPS")) {
+        BX_INFO(("hide IPS display in status bar"));
+        x11_hide_ips = 1;
+#endif
+      } else {
+        BX_PANIC(("Unknown x11 option '%s'", argv[i]));
+      }
+    }
+  }
+
+#if BX_DEBUGGER && BX_DEBUGGER_GUI
+  if (x11_with_debug_gui) {
+    // This is only necessary when GTK+ and Xlib are sharing the same
+    // connection. XInitThreads() must finish before any calls to GTK+
+    // or Xlib are made.
+    if (XInitThreads() == 0) {
+      BX_PANIC(("trying to run Bochs with the GTK+ "
+                "debugger on a non-threading X11."));
+    }
+  }
+#endif
 
   /* connect to X server */
   if ((bx_x_display=XOpenDisplay(display_name)) == NULL)
@@ -547,7 +583,7 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   /* Select event types wanted */
   XSelectInput(bx_x_display, win, ExposureMask | KeyPressMask | KeyReleaseMask |
       ButtonPressMask | ButtonReleaseMask | StructureNotifyMask | PointerMotionMask |
-      EnterWindowMask | LeaveWindowMask);
+      EnterWindowMask | LeaveWindowMask | FocusChangeMask);
 
   /* Create default Graphics Context */
   gc               = XCreateGC(bx_x_display, win, valuemask, &values);
@@ -647,27 +683,13 @@ void bx_x_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
     bx_keymap.loadKeymap(convertStringToXKeysym);
   }
 
-  // parse x11 specific options
-  if (argc > 1) {
-    for (i = 1; i < argc; i++) {
-      if (!strcmp(argv[i], "nokeyrepeat")) {
-        BX_INFO(("disabled host keyboard repeat"));
-        x11_nokeyrepeat = 1;
 #if BX_DEBUGGER && BX_DEBUGGER_GUI
-      } else if (!strcmp(argv[i], "gui_debug")) {
-        SIM->set_debug_gui(1);
-        init_debug_dialog();
-#endif
-#if BX_SHOW_IPS
-      } else if (!strcmp(argv[i], "hideIPS")) {
-        BX_INFO(("hide IPS display in status bar"));
-        x11_hide_ips = 1;
-#endif
-      } else {
-        BX_PANIC(("Unknown x11 option '%s'", argv[i]));
-      }
-    }
+  // initialize debugger gui
+  if (x11_with_debug_gui) {
+    SIM->set_debug_gui(1);
+    init_debug_dialog();
   }
+#endif
 
   new_gfx_api = 1;
   dialog_caps |= (BX_GUI_DLG_USER | BX_GUI_DLG_SNAPSHOT | BX_GUI_DLG_CDROM);
@@ -718,20 +740,19 @@ void bx_x_gui_c::statusbar_setitem_specific(int element, bx_bool active, bx_bool
 // In all those cases, setting the parameter value will get you here.
 void bx_x_gui_c::mouse_enabled_changed_specific(bx_bool val)
 {
+  if (val != mouse_captured) {
+    BX_INFO(("Mouse capture %s", val ? "on":"off"));
+    sprintf(bx_status_info_text, "%s %sables mouse", get_toggle_info(), val ? "dis":"en");
+    set_status_text(0, bx_status_info_text, 0);
+  }
   mouse_captured = val;
   if (val) {
-    BX_INFO(("Mouse capture on"));
-    sprintf(bx_status_info_text, "%s disables mouse", get_toggle_info());
-    set_status_text(0, bx_status_info_text, 0);
     mouse_enable_x = current_x;
     mouse_enable_y = current_y;
     disable_cursor();
     // Move the cursor to a 'safe' place
     warp_cursor(warp_home_x-current_x, warp_home_y-current_y);
   } else {
-    BX_INFO(("Mouse capture off"));
-    sprintf(bx_status_info_text, "%s enables mouse", get_toggle_info());
-    set_status_text(0, bx_status_info_text, 0);
     enable_cursor();
     warp_cursor(mouse_enable_x-current_x, mouse_enable_y-current_y);
   }
@@ -960,6 +981,10 @@ void bx_x_gui_c::handle_events(void)
        * requests before window mapped
        */
       //retval = 1;
+      break;
+
+    case FocusOut:
+      DEV_kbd_release_keys();
       break;
 
     case ClientMessage:

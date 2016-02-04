@@ -1,4 +1,4 @@
-$Id: PARAM_TREE.txt 12501 2014-10-14 15:59:10Z sshwarts $
+$Id: PARAM_TREE.txt 12737 2015-05-03 06:36:30Z vruppert $
 
 Starting from Bochs 2.3 the parameters are organized in a tree structure
 instead of a huge flat list. The parameter tree was required for implementing
@@ -257,23 +257,28 @@ network
 
 sound
   lowlevel
-    driver
+    waveoutdrv
     waveout
+    waveindrv
     wavein
+    midioutdrv
+    midiout
   speaker
     enabled
     mode
   sb16
     enabled
-    midi
-    wave
-    log
     midimode
+    midifile
     wavemode
+    wavefile
+    log
     loglevel
     dmatimer
   es1370
     enabled
+    midimode
+    midifile
     wavemode
     wavefile
 

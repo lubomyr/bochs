@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: harddrv.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: harddrv.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -166,7 +166,7 @@ void bx_hard_drive_c::init(void)
   char  pname[8];
   bx_list_c *base;
 
-  BX_DEBUG(("Init $Id: harddrv.cc 12366 2014-06-08 08:40:08Z vruppert $"));
+  BX_DEBUG(("Init $Id: harddrv.cc 12615 2015-01-25 21:24:13Z sshwarts $"));
 
   for (channel=0; channel<BX_MAX_ATA_CHANNEL; channel++) {
     sprintf(ata_name, "ata.%d.resources", channel);
@@ -578,11 +578,11 @@ void bx_hard_drive_c::register_state(void)
 
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "hard_drive", "Hard Drive State");
   for (i=0; i<BX_MAX_ATA_CHANNEL; i++) {
-    sprintf(cname, "%d", i);
+    sprintf(cname, "%u", i);
     chan = new bx_list_c(list, cname);
     for (j=0; j<2; j++) {
       if (BX_DRIVE_IS_PRESENT(i, j)) {
-        sprintf(dname, "drive%d", j);
+        sprintf(dname, "drive%u", j);
         drive = new bx_list_c(chan, dname);
         if (channels[i].drives[j].hdimage != NULL) {
           channels[i].drives[j].hdimage->register_state(drive);
@@ -814,7 +814,7 @@ Bit32u bx_hard_drive_c::read(Bit32u address, unsigned io_len)
           if (controller->buffer_index >= controller->buffer_size)
             BX_PANIC(("IO read(0x%04x): buffer_index >= %d", address, controller->buffer_size));
 
-#if BX_SupportRepeatSpeedups
+#if BX_SUPPORT_REPEAT_SPEEDUPS
           if (DEV_bulk_io_quantum_requested()) {
             unsigned transferLen, quantumsMax;
             quantumsMax = (controller->buffer_size - controller->buffer_index) / io_len;
@@ -1188,7 +1188,7 @@ void bx_hard_drive_c::write(Bit32u address, Bit32u value, unsigned io_len)
           if (controller->buffer_index >= controller->buffer_size)
             BX_PANIC(("IO write(0x%04x): buffer_index >= %d", address, controller->buffer_size));
 
-#if BX_SupportRepeatSpeedups
+#if BX_SUPPORT_REPEAT_SPEEDUPS
           if (DEV_bulk_io_quantum_requested()) {
             unsigned transferLen, quantumsMax;
             quantumsMax = (controller->buffer_size - controller->buffer_index) / io_len;
@@ -2624,7 +2624,7 @@ bx_hard_drive_c::calculate_logical_address(Bit8u channel, Bit64s *sector)
 
   Bit64s sector_count = BX_SELECTED_DRIVE(channel).hdimage->hd_size / 512;
   if (logical_sector >= sector_count) {
-    BX_ERROR (("logical address out of bounds ("FMT_LL"d/"FMT_LL"d) - aborting command", logical_sector, sector_count));
+    BX_ERROR (("logical address out of bounds (" FMT_LL "d/" FMT_LL "d) - aborting command", logical_sector, sector_count));
     return 0;
   }
   *sector = logical_sector;
@@ -3164,7 +3164,7 @@ void bx_hard_drive_c::init_mode_sense_single(Bit8u channel, const void* src, int
   controller->buffer[7] = 0; // reserved
 
   // Data
-  memcpy(controller->buffer + 8, src, size);
+  memmove(controller->buffer + 8, src, size);
 }
 
   void BX_CPP_AttrRegparmN(1)

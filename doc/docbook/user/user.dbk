@@ -1,7 +1,7 @@
 <!--
 ================================================================
 doc/docbook/user/user.dbk
-$Id: user.dbk 12524 2014-11-01 09:39:47Z vruppert $
+$Id: user.dbk 12734 2015-05-02 15:40:11Z vruppert $
 
 This is the top level file for the Bochs Users Manual.
 ================================================================
@@ -131,7 +131,7 @@ The last version of Bochs that he released was 3/25/2000, three days after the
 Mandrake press release.
 -->
 In March 2001, Kevin helped a few developers to move all Bochs activities from
-bochs.com to a new site at bochs.sourceforge.net.  Since then the Bochs project
+bochs.com to a new site at <ulink url="http://bochs.sourceforge.net"></ulink>.  Since then the Bochs project
 has settled into its new home, and around release times has even hit #1 most
 active project of the week at SourceForge.
 </para>
@@ -443,7 +443,7 @@ currently work with.
     <entry>CD-ROM</entry>
     <entry>Yes</entry>
     <entry>Emulates ATAPI-4/IDE CD-ROM.  The CD-ROMs can read from an ISO disk image
-    on any platform. On Windows (9x/ME/NT/2000/XP), Linux, SunOS, FreeBSD,
+    on any platform. On Windows (NT/2000/XP/Vista), Linux, SunOS, FreeBSD,
     NetBSD, OpenBSD, Amiga/MorphOS and MacOSX, Bochs can read from the
     physical CD-ROM drive. The Bochs BIOS supports booting from the first CD-ROM drive.
     </entry>
@@ -453,23 +453,27 @@ currently work with.
     <entry>Yes</entry>
     <entry>Emulates a PS/2 keyboard with North American key mappings. Optional keyboard layout
     remapping files are provided to support localized keyboard in X11 (Belgian, Danish, French,
-    German, Italian, Russian, Slovenian, Spanish, Swedish, U.K.).
+    German, Italian, Russian, Slovenian, Spanish, Swedish, U.K.) and SDL/SDL2
+    (German).
     </entry>
   </row>
   <row>
     <entry>Mouse</entry>
     <entry>Yes</entry>
     <entry>Emulates a serial, PS/2, bus or USB mouse with 3 buttons + optional mouse
-    wheel support.
+    wheel support. There is also an USB tablet emulation available.
     </entry>
   </row>
   <row>
     <entry>Sound card</entry>
     <entry>Yes</entry>
-    <entry>Emulates a Sound Blaster 16 card (ISA, no plug&amp;play) or an ES1370 PCI
-    card. On Windows, Linux, FreeBSD, MacOS 9, MacOSX and all platforms supported by
-    SDL, the output can be sent to the host computer's sound system. For the SB16,
-    see the <ulink url="../development/sb16-emulation-basics.html">developer documentation</ulink>
+    <entry>Emulates a Sound Blaster 16 card (ISA, no plug&amp;play) or an
+    ES1370 PCI card. The SB16 emulation provides wave input / output, the OPL3
+    chip, the external MIDI port and volume control for wave and FM. The ES1370
+    provides wave input / output, the MIDI UART port and volume control for
+    wave output. On Windows, Linux, FreeBSD, MacOS 9, MacOSX and all platforms
+    supported by SDL, the output can be sent to the host computer's sound
+    system. For the SB16, see the <ulink url="../development/sb16-emulation-basics.html">developer documentation</ulink>
     for details.
     </entry>
   </row>
@@ -533,7 +537,7 @@ currently work with.
     <entry>Plugins</entry>
     <entry>Yes</entry>
     <entry>Compiling gui and devices as plugins is supported on Linux, MacOS X,
-    Solaris, Cygwin, MinGW/MSYS, MSVC nmake and the VS2008Ex IDE (workspace provided).
+    Solaris, Cygwin, MinGW/MSYS, MSVC nmake and the VS2013 IDE (workspace provided).
     </entry>
   </row>
   <row>
@@ -724,7 +728,7 @@ code that displays the Bochs VGA screen and handles keyboard and mouse events.
      system, it does not reach high emulation speeds. Users who have an x86
      processor and want the highest emulation speeds may want to consider PC
      virtualization software such as Vmware or VirtualBox (free software).
-     Another related project is <ulink url="http://www.nongnu.org/qemu/">QEMU</ulink>.
+     Another related project is <ulink url="http://www.qemu.org/">QEMU</ulink>.
      </para></answer>
   </qandaentry>
 
@@ -1129,6 +1133,11 @@ The <replaceable>tagname</replaceable> tells which release you want, and it can 
       </row>
     </thead>
     <tbody>
+      <row>
+        <entry>2.6.7 (bugfix)</entry>
+        <entry>REL_2_6_7_FINAL</entry>
+        <entry>12531</entry>
+      </row>
       <row>
         <entry>2.6.6 (bugfix)</entry>
         <entry>REL_2_6_6_FINAL</entry>
@@ -2176,28 +2185,28 @@ to explicitly turn it off.
       <entry>--enable-sb16</entry>
       <entry>no</entry>
       <entry>
-      Enable Sound Blaster emulation. The lowlevel sound interface is autodetected.
-      See section <link linkend="using-sound">Using Sound</link> for supported
-      platforms and more info. This option also enables the standard PC gameport
-      which is a part of the SB16. If you don't want to use it, you might use
-      <option>--disable-gameport</option>.
+      Enable Sound Blaster emulation. The available lowlevel sound interfaces
+      are autodetected. See section <link linkend="using-sound">Using Sound</link>
+      for supported platforms and more info. This option also enables the standard
+      PC gameport which is a part of the SB16. If you don't want to use it, you
+      might use <option>--disable-gameport</option>.
       </entry>
     </row>
     <row>
       <entry>--enable-es1370</entry>
       <entry>no</entry>
       <entry>
-      Enable ES1370 sound emulation. Just like the SB16 option, the lowlevel sound
-      interface is autodetected and the gameport is turned on.
+      Enable ES1370 sound emulation. Just like the SB16 option, the available
+      lowlevel sound interfaces are autodetected and the gameport is turned on.
       </entry>
     </row>
     <row>
       <entry>--enable-gameport</entry>
       <entry>no</entry>
       <entry>
-      Enables the standard PC gameport. This option is only necessary if you want to
-      have a gameport, but no SB16 (see above). The connection to a real joystick is
-      currently supported on Linux and win32 only.
+      Enables the standard PC gameport. This option is only necessary if you want
+      to have a gameport, but no SB16 or ES1370 (see above). The connection to a
+      real joystick is currently supported on Linux and win32 only.
       </entry>
     </row>
     <row>
@@ -2590,7 +2599,7 @@ file.
 <para>
 When you have the Win32 sources transferred to a Windows machine with VC++,
 find the workspace file called <filename>bochs.sln</filename> in the folder
-"vs2008" and load it in VC++. Choose <command>Project:Set Active Project</command>
+"vs2013" and load it in VC++. Choose <command>Project:Set Active Project</command>
 and be sure that "bochs" is selected. Then choose <command>Build:Build bochs.exe</command>.
 This will build all the required libraries (iodev, cpu, etc.) and the auxiliary
 programs <filename>bximage.exe</filename> and <filename>niclist.exe</filename>.
@@ -2598,7 +2607,7 @@ programs <filename>bximage.exe</filename> and <filename>niclist.exe</filename>.
 
 <para>
 Using workspaces is easy and intuitive, but there is one caveat. The workspaces
-come directly out of a ZIP file in <filename>build/win32/vs2008ex-workspace.zip</filename>,
+come directly out of a ZIP file in <filename>build/win32/vs2013ex-workspace.zip</filename>,
 and they are not controlled by the configure script. When you compile with certain
 configure options (e.g. <option>--with-sdl</option>) you need to link with additional
 libraries. For now you must add them to the VC++ workspace by hand. In version 2.0,
@@ -2717,7 +2726,8 @@ Mac developer helps to clean it up.
 <para>
 On MacOS X the default GUI is the Carbon interface, but you can also try other
 Bochs GUIs. Use <option>--with-x11</option> for X windows,
-<option>--with-rfb</option> for VNC/RFB, or <option>--with-sdl</option> for SDL.
+<option>--with-rfb</option> for VNC/RFB, <option>--with-sdl</option> for SDL
+or <option>--with-sdl2</option> for SDL2.
 </para>
 </section><!-- end: Compiling on MacOS X -->
 
@@ -2818,7 +2828,7 @@ possible to connect a Bochs session with a web browser.
 </screen>
 </para>
 <para>
-To compile in Microsoft VS2008Ex, you have to configure on a different system
+To compile in Microsoft VS2013Ex, you have to configure on a different system
 (see <link linkend="compiling-win32">Compiling on Win32 with Microsoft VC++</link>).
 Before running the configure script, you have to add <option>--with-sdl</option>
 to the shortcut script. If you have already configured, you can set <command>BX_WITH_SDL
@@ -2840,7 +2850,7 @@ Compiling with MSVC <command>nmake</command> is not supported yet.
 <para>
 The SDL library version 2 is now also supported by Bochs. For some basic information
 about SDL, see <xref linkend="compile-sdl">. The configure option to enable SDL2
-support is <option>--with-sdl</option> and the configuration script is called
+support is <option>--with-sdl2</option> and the configuration script is called
 <command>sdl2-config</command>. Note that the Bochs guis for SDL version 1.2.x
 and 2.x are mutually exclusive. The legacy SDL gui support will be removed someday.
 When using the gui library autodetection (<option>--with-all-libs</option>) the
@@ -3185,7 +3195,7 @@ These plugins will be loaded by default (if present): 'biosdev', 'extfpuirq',
 <para>
 These plugins are also supported, but they are usually loaded directly with
 their bochsrc option: 'e1000', 'es1370', 'ne2k', 'pcidev', 'pcipnic', 'sb16',
-'usb_ohci', 'usb_uhci' and 'usb_xhci'.
+'usb_ohci', 'usb_uhci', 'usb_xhci' and 'voodoo'.
 </para>
 </section>
 
@@ -3712,7 +3722,7 @@ in the simulation, that can be retrieved by the boot loader
 <para>
 Examples:
 <screen>
-  vga: extension=cirrus, update_freq=10
+  vga: extension=cirrus, update_freq=10, realtime=1
   vga: extension=vbe
 </screen>
 This defines parameters related to the VGA display
@@ -3727,8 +3737,15 @@ and 'cirrus' for Cirrus SVGA support (needs
 </para>
 <para>
 The VGA update frequency specifies the number of display updates per second.
-The update timer now uses the realtime engine and the default value is 5.
-This parameter can be changed at runtime.
+This parameter can be changed at runtime. The default value is 5.
+</para>
+<para>
+The 'realtime' option specifies the operation mode of the VGA update timer.
+If set to 1, the VGA timer is based on realtime, otherwise it is based on the
+ips setting. If the host is slow (low ips, update_freq) and the guest uses HLT
+appropriately, setting this to 0 and "clock: sync=none" may improve the
+responsiveness of the guest GUI when the guest is otherwise idle. The default
+value is 1.
 </para>
 </section>
 
@@ -3856,10 +3873,10 @@ Examples:
   pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
 </screen>
 This option controls the presence of a PCI chipset in Bochs. Currently it only
-supports the i440FX chipset. You can also specify the devices connected to
-PCI slots. Up to 5 slots are available. For these combined PCI/ISA devices
-assigning to slot is mandatory if you want to emulate the PCI model: cirrus,
-ne2k and pcivga. These PCI-only devices are also supported, but they are
+supports the i430FX and i440FX chipsets. You can also specify the devices
+connected to PCI slots. Up to 5 slots are available. For these combined PCI/ISA
+devices assigning to slot is mandatory if you want to emulate the PCI model:
+cirrus, ne2k and pcivga. These PCI-only devices are also supported, but they are
 auto-assigned if you don't use the slot configuration: e1000, es1370, pcidev,
 pcipnic, usb_ohci and usb_xhci.
 </para>
@@ -4035,7 +4052,7 @@ This defines the type and characteristics of all attached ata devices:
 <row>
   <entry> mode  </entry>
   <entry> image type, only valid for disks </entry>
-  <entry> [flat | concat | external | dll | sparse | vmware3 | vmware4 | undoable | growing | volatile | vpc | vvfat ]</entry>
+  <entry> [flat | concat | external | dll | sparse | vmware3 | vmware4 | undoable | growing | volatile | vpc | vbox | vvfat ]</entry>
 </row>
 <row> <entry> cylinders </entry> <entry> only valid for disks </entry> </row>
 <row> <entry> heads </entry> <entry> only valid for disks </entry> </row>
@@ -4137,6 +4154,9 @@ volatile : read-only base file with volatile redolog
 </para></listitem>
 <listitem><para>
 vpc: fixed / dynamic size VirtualPC image
+</para></listitem>
+<listitem><para>
+vbox: fixed / dynamic size Oracle(tm) VM VirtualBox image (VDI version 1.1)
 </para></listitem>
 <listitem><para>
 vvfat: local directory appears as VFAT disk (with volatile redolog / optional commit)
@@ -4356,17 +4376,66 @@ win32 platforms).
 <section id="bochsopt-sound">
 <title>sound</title>
 <para>
-Example:
+Example for one driver (uses platform-default):
 <screen>
-  sound: driver=default, waveout=/dev/dsp. wavein=
+  sound: driver=default, waveout=/dev/dsp
 </screen>
-This defines the lowlevel sound driver and the wave (PCM) input and
-output devices to be used by sound emulation devices. Possible values
-for the driver parameter are 'default', 'dummy' (no input/output),
-'alsa' (if present) and 'sdl' (if present). For some drivers the wave
-devices must be specified. If the 'wavein' parameter is not set, Bochs
-uses the 'waveout' device for input, too. See <xref linkend="using-sound">
-for more information.
+Example for different drivers:
+<screen>
+  sound: waveoutdrv=sdl, waveindrv=alsa, midioutdrv=dummy
+</screen>
+This defines the lowlevel sound driver(s) for the wave (PCM) input / output
+and the MIDI output feature and (if necessary) the devices to be used.
+It can have several of the following properties. All properties are in the
+format sound: property=value.
+
+ <itemizedlist>
+   <listitem><para>
+    <option>waveoutdrv</option>: This defines the driver to be used for the
+    waveout feature. Possible values are 'file' (all wave data sent to file),
+    'dummy' (no output) and the platform-dependant drivers 'alsa', 'oss', 'osx',
+    'sdl' and 'win'.
+   </para></listitem>
+
+   <listitem><para>
+    <option>waveout</option>:
+    This defines the device to be used for wave output (if necessary) or the
+    output file for the 'file' driver.
+   </para></listitem>
+
+   <listitem><para>
+    <option>waveindrv</option>:
+    This defines the driver to be used for the wavein feature.
+    Possible values are 'dummy' (recording silence) and platform-dependent
+    drivers 'alsa', 'oss' and 'win'.
+   </para></listitem>
+
+   <listitem><para>
+    <option>wavein</option>:
+    This defines the device to be used for wave output (if necessary).
+   </para></listitem>
+
+   <listitem><para>
+    <option>midioutdrv</option>:
+    This defines the driver to be used for the MIDI output feature.
+    Possible values are 'file' (all MIDI data sent to file), 'dummy' (no
+    output) and platform-dependent drivers 'alsa', 'oss', 'osx' and 'win'.
+   </para></listitem>
+
+   <listitem><para>
+    <option>midiout</option>:
+    This defines the device to be used for MIDI output (if necessary).
+   </para></listitem>
+
+   <listitem><para>
+    <option>driver</option>:
+    This defines the driver to be used for all sound features with one
+    property. Possible values are 'default' (platform default) and all
+    other choices described above. Overriding one or more settings with
+    the specific driver parameter is possible.
+   </para></listitem>
+ </itemizedlist>
+See <xref linkend="using-sound"> for more information.
 </para>
 </section>
 
@@ -4390,7 +4459,7 @@ gui methods (currently only used by the Carbon gui).
 <para>
 Example:
 <screen>
-  sb16: midimode=1, midi=/dev/midi00, wavemode=1, wave=/dev/dsp,
+  sb16: midimode=2, midifile=output.mid, wavemode=3, wavefile=output.wav
         loglevel=2, log=sb16.log, dmatimer=600000
 </screen>
 <note><para>
@@ -4404,50 +4473,49 @@ are in the usual "property=value" format.
 
  <itemizedlist>
    <listitem><para>
-   enabled: This optional property controls the presence of the SB16 emulation.
+   <option>enabled</option>:
+   This optional property controls the presence of the SB16 emulation.
    The emulation is turned on unless this property is used and set to 0.
    </para></listitem>
 
    <listitem><para>
-   midimode:
+   <option>midimode</option>:
+   This parameter specifies what to do with the MIDI output.
    <screen>
-   0 = No data should be output.
-   1 = output to device (system dependent - midi denotes the device driver).
-   2 = SMF file output, including headers.
-   3 = Output the midi data stream to the file (no midi headers and no
-       delta times, just command and data bytes).
+    0 = no output
+    1 = output to device specified with the sound option (system dependent)
+    2 = MIDI or raw data output to file (depends on file name extension)
+    3 = dual output (mode 1 and 2 at the same time)
    </screen>
    </para></listitem>
 
    <listitem><para>
-   midi: The filename is where the midi data is sent to. This
-   can be a device or just a file if you want to record the midi data.
-   On a Windows host this parameter specifies the ID of the MIDI device
-   to use. If not specified, the default MIDI mapper is used. On a Linux
-   host and with the ALSA driver selected the default sequencer device
-   will be used with the given client and port parameters.
+   <option>midifile</option>:
+   This is the file where the midi output is stored (midimode 2 or 3).
    </para></listitem>
 
    <listitem><para>
-   wavemode:
+   <option>wavemode</option>:
+   This parameter specifies what to do with the PCM output.
    <screen>
-   0 = no data
-   1 = output to device (system dependent - wave denotes the device driver).
-   2 = VOC file output, including headers.
-   3 = Output the raw wave stream to the file.
+    0 = no output
+    1 = output to device specified with the sound option (system dependent)
+    2 = VOC, WAV or raw data output to file (depends on file name extension)
+    3 = dual output (mode 1 and 2 at the same time)
    </screen>
    </para></listitem>
 
    <listitem><para>
-   wave: This is the file where the wave output is stored (wavemode 2 or 3).
+   <option>wavefile</option>:
+   This is the file where the wave output is stored (wavemode 2 or 3).
    </para></listitem>
 
    <listitem><para>
-   log: The file to write the sb16 emulator messages to.
+   <option>log</option>: The file to write the sb16 emulator messages to.
    </para></listitem>
 
    <listitem><para>
-   loglevel:
+   <option>loglevel</option>:
    <screen>
    0 = No log.
    1 = Resource changes, midi program and bank changes.
@@ -4460,7 +4528,8 @@ are in the usual "property=value" format.
    </para></listitem>
 
    <listitem><para>
-   dmatimer: Microseconds per second for a DMA cycle. Make it smaller to fix
+   <option>dmatimer</option>:
+   Microseconds per second for a DMA cycle. Make it smaller to fix
    non-continuous sound. 750000 is usually a good value. This needs a reasonably
    correct setting for the <command>ips</command> parameter of the
    <link linkend="bochsopt-cpu-ips">cpu option</link>. It is possible to adjust the
@@ -4479,9 +4548,9 @@ Examples:
 </screen>
 This defines the ES1370 sound emulation (recording and playback - except
 DAC1+DAC2 output at the same time). The parameter 'enabled' controls the
-presence of the device. The 'wavemode' parameter can be used to redirect
-the output to a file (see SB16). The 'wavefile' parameter is similar to the
-'wave' parameter of the SB16 soundcard.
+presence of the device. The wave and MIDI output can be sent to device, file
+or both using the parameters 'wavemode', 'wavefile', 'midimode' and
+'midifile'. See the description of these parameters at the SB16 directive.
 </para>
 </section>
 
@@ -5623,6 +5692,7 @@ drivers and their features.
 These special values are also valid for the sound driver:
 <itemizedlist>
 <listitem><para><option>default</option> - select platform-default sound driver.</para></listitem>
+<listitem><para><option>file</option> - wave and MIDI output to file(s)</para></listitem>
 <listitem><para><option>dummy</option> - no output at all</para></listitem>
 </itemizedlist>
 </para>
@@ -5634,8 +5704,9 @@ one.
 </para>
 <para>
 At runtime the lowlevel sound module will be loaded automatically if one of the
-sound devices is enabled in the <filename>bochsrc</filename>. The driver and the
-wave input and output devices must be set up with the <link linkend="bochsopt-sound">sound</link> option.
+sound devices is enabled in the <filename>bochsrc</filename>. The drivers and
+devices for wave input / output and MIDI output must be set up with the
+<link linkend="bochsopt-sound">sound</link> option.
 </para>
 </section>
 <section><title>The PC speaker</title>
@@ -8541,6 +8612,11 @@ If unspecified, the default "mode" is flat.
  <row> <entry> vpc </entry> <entry> VirtualPC disk support </entry>
        <entry>
        fixed / dynamic size supported
+       </entry>
+ </row>
+ <row> <entry> vbox </entry> <entry> Oracle(tm) VM VirtualBox disk support </entry>
+       <entry>
+       VDI version 1.1 fixed / dynamic size supported
        </entry>
  </row>
  <row> <entry> vvfat </entry> <entry> local directory appears as VFAT disk (with volatile redolog) </entry>

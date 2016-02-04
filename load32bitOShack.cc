@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: load32bitOShack.cc 12415 2014-07-10 11:14:49Z vruppert $
+// $Id: load32bitOShack.cc 12590 2015-01-03 13:53:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -65,6 +65,7 @@ void bx_load32bitOSimagehack(void)
       }
       if (feof(fp)) break;
     }
+    fclose(fp);
   } //if iolog file to load
 
   // Invoke proper hack depending on which OS image we're loading

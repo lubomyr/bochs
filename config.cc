@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: config.cc 12502 2014-10-14 17:55:41Z sshwarts $
+// $Id: config.cc 12681 2015-03-06 22:54:30Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -957,6 +957,12 @@ void bx_init_options()
   screenmode->set_handler(bx_param_string_handler);
 #endif
 
+  new bx_param_bool_c(display,
+      "vga_realtime",
+      "VGA timer realtime",
+      "If enabled, the VGA timer is based on realtime",
+      1);
+
   bx_param_num_c *vga_update_freq = new bx_param_num_c(display,
       "vga_update_frequency",
       "VGA Update Frequency",
@@ -1499,20 +1505,44 @@ void bx_init_options()
   soundlow->set_enabled(BX_SUPPORT_SOUNDLOW);
 
 #if BX_SUPPORT_SOUNDLOW
-  new bx_param_string_c(soundlow,
-    "driver",
-    "Sound driver",
-    "This is the lowlevel driver to use for emulated sound devices",
-    "default", BX_PATHNAME_LEN);
+  bx_param_enum_c *driver = new bx_param_enum_c(soundlow,
+    "waveoutdrv",
+    "Waveout driver",
+    "This is the waveout driver to use for emulated sound devices",
+    sound_driver_names,
+    BX_SOUNDDRV_DUMMY,
+    BX_SOUNDDRV_DUMMY);
+  driver->set_by_name(BX_SOUND_LOWLEVEL_NAME);
   new bx_param_filename_c(soundlow,
     "waveout",
     "Wave output device",
     "This is the device where the wave output is sent to",
     "", BX_PATHNAME_LEN);
+  driver = new bx_param_enum_c(soundlow,
+    "waveindrv",
+    "Wavein driver",
+    "This is the wavein driver to use for emulated sound devices",
+    sound_driver_names,
+    BX_SOUNDDRV_DUMMY,
+    BX_SOUNDDRV_DUMMY);
+  driver->set_by_name(BX_SOUND_LOWLEVEL_NAME);
   new bx_param_filename_c(soundlow,
     "wavein",
     "Wave input device",
     "This is the device to be used as the wave input source",
+    "", BX_PATHNAME_LEN);
+  driver = new bx_param_enum_c(soundlow,
+    "midioutdrv",
+    "Midiout driver",
+    "This is the midiout driver to use for emulated sound devices",
+    sound_driver_names,
+    BX_SOUNDDRV_DUMMY,
+    BX_SOUNDDRV_DUMMY);
+  driver->set_by_name(BX_SOUND_LOWLEVEL_NAME);
+  new bx_param_filename_c(soundlow,
+    "midiout",
+    "MIDI output device",
+    "This is the device where the MIDI output is sent to",
     "", BX_PATHNAME_LEN);
 #endif
   // sound device options initialized in the devive plugin code
@@ -2720,6 +2750,8 @@ static int parse_line_formatted(const char *context, int num_params, char *param
         SIM->get_param_string(BXPN_VGA_EXTENSION)->set(&params[i][10]);
       } else if (!strncmp(params[i], "update_freq=", 12)) {
         SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->set(atol(&params[i][12]));
+      } else if (!strncmp(params[i], "realtime=", 9)) {
+        SIM->get_param_bool(BXPN_VGA_REALTIME)->set(atol(&params[i][9]));
       } else {
         PARSE_ERR(("%s: vga directive malformed.", context));
       }
@@ -2868,8 +2900,19 @@ static int parse_line_formatted(const char *context, int num_params, char *param
     }
   } else if (!strcmp(params[0], "sound")) {
 #if BX_SUPPORT_SOUNDLOW
+    static const char default_drv[] = BX_SOUND_LOWLEVEL_NAME;
+    const char *driver;
     for (i=1; i<num_params; i++) {
-      if (bx_parse_param_from_list(context, params[i], (bx_list_c*) SIM->get_param(BXPN_SOUNDLOW)) < 0) {
+      if (!strncmp(params[i], "driver=", 7)) {
+        if (!strcmp(&params[i][7], "default")) {
+          driver = default_drv;
+        } else {
+          driver = &params[i][7];
+        }
+        SIM->get_param_enum(BXPN_SOUND_WAVEOUT_DRV)->set_by_name(driver);
+        SIM->get_param_enum(BXPN_SOUND_WAVEIN_DRV)->set_by_name(driver);
+        SIM->get_param_enum(BXPN_SOUND_MIDIOUT_DRV)->set_by_name(driver);
+      } else if (bx_parse_param_from_list(context, params[i], (bx_list_c*) SIM->get_param(BXPN_SOUNDLOW)) < 0) {
         BX_ERROR(("%s: unknown parameter for sound ignored.", context));
       }
     }
@@ -3377,9 +3420,10 @@ int bx_write_configuration(const char *rc, int overwrite)
     }
   }
   fprintf(fp, "\n");
-  fprintf(fp, "vga: extension=%s, update_freq=%u\n",
+  fprintf(fp, "vga: extension=%s, update_freq=%u, realtime=%u\n",
     SIM->get_param_string(BXPN_VGA_EXTENSION)->getptr(),
-    SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->get());
+    SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->get(),
+    SIM->get_param_bool(BXPN_VGA_REALTIME)->get());
 #if BX_SUPPORT_SMP
   fprintf(fp, "cpu: count=%u:%u:%u, ips=%u, quantum=%d, ",
     SIM->get_param_num(BXPN_CPU_NPROCESSORS)->get(), SIM->get_param_num(BXPN_CPU_NCORES)->get(),

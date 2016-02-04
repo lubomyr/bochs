@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpu.h 12528 2014-11-01 13:12:24Z sshwarts $
+// $Id: cpu.h 12695 2015-03-23 20:27:36Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -173,11 +173,7 @@ enum {
 // access to 64 bit MSR registers
 #define MSR_FSBASE  (BX_CPU_THIS_PTR sregs[BX_SEG_REG_FS].cache.u.segment.base)
 #define MSR_GSBASE  (BX_CPU_THIS_PTR sregs[BX_SEG_REG_GS].cache.u.segment.base)
-#define MSR_LSTAR   (BX_CPU_THIS_PTR msr.lstar)
-#define MSR_CSTAR   (BX_CPU_THIS_PTR msr.cstar)
-#define MSR_FMASK   (BX_CPU_THIS_PTR msr.fmask)
 #define MSR_KERNELGSBASE   (BX_CPU_THIS_PTR msr.kernelgsbase)
-#define MSR_TSC_AUX (BX_CPU_THIS_PTR msr.tsc_aux)
 
 #else // simplify merge between 32-bit and 64-bit mode
 
@@ -296,38 +292,46 @@ enum {
 // <TAG-INSTRUMENTATION_COMMON-BEGIN>
 
 // possible types passed to BX_INSTR_TLB_CNTRL()
-#define BX_INSTR_MOV_CR0        10
-#define BX_INSTR_MOV_CR3        11
-#define BX_INSTR_MOV_CR4        12
-#define BX_INSTR_TASK_SWITCH    13
-#define BX_INSTR_CONTEXT_SWITCH 14
-#define BX_INSTR_INVLPG         15
-#define BX_INSTR_INVEPT         16
-#define BX_INSTR_INVVPID        17
-#define BX_INSTR_INVPCID        18
+enum {
+  BX_INSTR_MOV_CR0 = 10,
+  BX_INSTR_MOV_CR3 = 11,
+  BX_INSTR_MOV_CR4 = 12,
+  BX_INSTR_TASK_SWITCH = 13,
+  BX_INSTR_CONTEXT_SWITCH = 14,
+  BX_INSTR_INVLPG = 15,
+  BX_INSTR_INVEPT = 16,
+  BX_INSTR_INVVPID = 17,
+  BX_INSTR_INVPCID = 18
+};
 
 // possible types passed to BX_INSTR_CACHE_CNTRL()
-#define BX_INSTR_INVD           10
-#define BX_INSTR_WBINVD         11
+enum {
+  BX_INSTR_INVD = 10,
+  BX_INSTR_WBINVD = 11
+};
 
 // possible types passed to BX_INSTR_FAR_BRANCH() and BX_INSTR_UCNEAR_BRANCH()
-#define BX_INSTR_IS_JMP            10
-#define BX_INSTR_IS_JMP_INDIRECT   11
-#define BX_INSTR_IS_CALL           12
-#define BX_INSTR_IS_CALL_INDIRECT  13
-#define BX_INSTR_IS_RET            14
-#define BX_INSTR_IS_IRET           15
-#define BX_INSTR_IS_INT            16
-#define BX_INSTR_IS_SYSCALL        17
-#define BX_INSTR_IS_SYSRET         18
-#define BX_INSTR_IS_SYSENTER       19
-#define BX_INSTR_IS_SYSEXIT        20
+enum {
+  BX_INSTR_IS_JMP = 10,
+  BX_INSTR_IS_JMP_INDIRECT = 11,
+  BX_INSTR_IS_CALL = 12,
+  BX_INSTR_IS_CALL_INDIRECT = 13,
+  BX_INSTR_IS_RET = 14,
+  BX_INSTR_IS_IRET = 15,
+  BX_INSTR_IS_INT = 16,
+  BX_INSTR_IS_SYSCALL = 17,
+  BX_INSTR_IS_SYSRET = 18,
+  BX_INSTR_IS_SYSENTER = 19,
+  BX_INSTR_IS_SYSEXIT = 20
+};
 
 // possible types passed to BX_INSTR_PREFETCH_HINT()
-#define BX_INSTR_PREFETCH_NTA   0
-#define BX_INSTR_PREFETCH_T0    1
-#define BX_INSTR_PREFETCH_T1    2
-#define BX_INSTR_PREFETCH_T2    3
+enum {
+  BX_INSTR_PREFETCH_NTA = 0,
+  BX_INSTR_PREFETCH_T0  = 1,
+  BX_INSTR_PREFETCH_T1  = 2,
+  BX_INSTR_PREFETCH_T2  = 3
+};
 
 // <TAG-INSTRUMENTATION_COMMON-END>
 
@@ -400,6 +404,8 @@ struct BxExceptionInfo {
 #define BX_MSR_LASTBRANCHTOIP      0x1dc
 #define BX_MSR_LASTINTOIP          0x1dd
 
+const unsigned BX_NUM_VARIABLE_RANGE_MTRRS = 8;
+
 #if BX_CPU_LEVEL >= 6
   #define BX_MSR_MTRRCAP           0x0fe
   #define BX_MSR_MTRRPHYSBASE0     0x200
@@ -463,13 +469,24 @@ struct BxExceptionInfo {
 
 enum {
   BX_MEMTYPE_UC = 0,
-  BX_MEMTYPE_WC,
-  BX_MEMTYPE_RESERVED2,
-  BX_MEMTYPE_RESERVED3,
-  BX_MEMTYPE_WT,
-  BX_MEMTYPE_WP,
-  BX_MEMTYPE_WB
+  BX_MEMTYPE_WC = 1,
+  BX_MEMTYPE_RESERVED2 = 2,
+  BX_MEMTYPE_RESERVED3 = 3,
+  BX_MEMTYPE_WT = 4,
+  BX_MEMTYPE_WP = 5,
+  BX_MEMTYPE_WB = 6,
+  BX_MEMTYPE_UC_WEAK = 7, // PAT only
+  BX_MEMTYPE_INVALID = 8
 };
+
+typedef unsigned BxMemtype;
+
+// avoid wasting cycles to determine memory type if not required
+#if BX_SUPPORT_MEMTYPE
+  #define MEMTYPE(memtype) (memtype)
+#else
+  #define MEMTYPE(memtype) (BX_MEMTYPE_UC)
+#endif
 
 #if BX_SUPPORT_VMX
   #define BX_MSR_VMX_BASIC                0x480
@@ -509,11 +526,13 @@ enum {
 #define BX_SVM_SMM_CTL_MSR      0xc0010116
 #define BX_SVM_HSAVE_PA_MSR     0xc0010117
 
-#define BX_MODE_IA32_REAL       0x0   // CR0.PE=0                |
-#define BX_MODE_IA32_V8086      0x1   // CR0.PE=1, EFLAGS.VM=1   | EFER.LMA=0
-#define BX_MODE_IA32_PROTECTED  0x2   // CR0.PE=1, EFLAGS.VM=0   |
-#define BX_MODE_LONG_COMPAT     0x3   // EFER.LMA = 1, CR0.PE=1, CS.L=0
-#define BX_MODE_LONG_64         0x4   // EFER.LMA = 1, CR0.PE=1, CS.L=1
+enum BxCpuMode {
+  BX_MODE_IA32_REAL = 0,        // CR0.PE=0                |
+  BX_MODE_IA32_V8086 = 1,       // CR0.PE=1, EFLAGS.VM=1   | EFER.LMA=0
+  BX_MODE_IA32_PROTECTED = 2,   // CR0.PE=1, EFLAGS.VM=0   |
+  BX_MODE_LONG_COMPAT = 3,      // EFER.LMA = 1, CR0.PE=1, CS.L=0
+  BX_MODE_LONG_64 = 4           // EFER.LMA = 1, CR0.PE=1, CS.L=1
+};
 
 extern const char* cpu_mode_string(unsigned cpu_mode);
 
@@ -568,14 +587,14 @@ BOCHSAPI extern BX_CPU_C   bx_cpu;
 #endif
 
 // notify internal debugger/instrumentation about memory access
-#define BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, paddr, size, pl, rw, dataptr) {              \
-  BX_INSTR_LIN_ACCESS(BX_CPU_ID, (laddr), (paddr), (size), (rw));                       \
-  BX_DBG_LIN_MEMORY_ACCESS(BX_CPU_ID, (laddr), (paddr), (size), (pl), (rw), (dataptr)); \
+#define BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, paddr, size, memtype, rw, dataptr) {              \
+  BX_INSTR_LIN_ACCESS(BX_CPU_ID, (laddr), (paddr), (size), (memtype), (rw));                 \
+  BX_DBG_LIN_MEMORY_ACCESS(BX_CPU_ID, (laddr), (paddr), (size), (memtype), (rw), (dataptr)); \
 }
 
-#define BX_NOTIFY_PHY_MEMORY_ACCESS(paddr, size, rw, why, dataptr) {            \
-  BX_INSTR_PHY_ACCESS(BX_CPU_ID, (paddr), (size), (rw));                        \
-  BX_DBG_PHY_MEMORY_ACCESS(BX_CPU_ID, (paddr), (size), (rw), (why), (dataptr)); \
+#define BX_NOTIFY_PHY_MEMORY_ACCESS(paddr, size, memtype, rw, why, dataptr) {              \
+  BX_INSTR_PHY_ACCESS(BX_CPU_ID, (paddr), (size), (memtype), (rw));                        \
+  BX_DBG_PHY_MEMORY_ACCESS(BX_CPU_ID, (paddr), (size), (memtype), (rw), (why), (dataptr)); \
 }
 
 // accessors for all eflags in bx_flags_reg_t
@@ -700,23 +719,23 @@ BOCHSAPI extern BX_CPU_C   bx_cpu;
     return 3 & (BX_CPU_THIS_PTR eflags >> 12);                  \
   }
 
-#define EFlagsCFMask   (1 <<  0)
-#define EFlagsPFMask   (1 <<  2)
-#define EFlagsAFMask   (1 <<  4)
-#define EFlagsZFMask   (1 <<  6)
-#define EFlagsSFMask   (1 <<  7)
-#define EFlagsTFMask   (1 <<  8)
-#define EFlagsIFMask   (1 <<  9)
-#define EFlagsDFMask   (1 << 10)
-#define EFlagsOFMask   (1 << 11)
-#define EFlagsIOPLMask (3 << 12)
-#define EFlagsNTMask   (1 << 14)
-#define EFlagsRFMask   (1 << 16)
-#define EFlagsVMMask   (1 << 17)
-#define EFlagsACMask   (1 << 18)
-#define EFlagsVIFMask  (1 << 19)
-#define EFlagsVIPMask  (1 << 20)
-#define EFlagsIDMask   (1 << 21)
+const Bit32u EFlagsCFMask   = (1 <<  0);
+const Bit32u EFlagsPFMask   = (1 <<  2);
+const Bit32u EFlagsAFMask   = (1 <<  4);
+const Bit32u EFlagsZFMask   = (1 <<  6);
+const Bit32u EFlagsSFMask   = (1 <<  7);
+const Bit32u EFlagsTFMask   = (1 <<  8);
+const Bit32u EFlagsIFMask   = (1 <<  9);
+const Bit32u EFlagsDFMask   = (1 << 10);
+const Bit32u EFlagsOFMask   = (1 << 11);
+const Bit32u EFlagsIOPLMask = (3 << 12);
+const Bit32u EFlagsNTMask   = (1 << 14);
+const Bit32u EFlagsRFMask   = (1 << 16);
+const Bit32u EFlagsVMMask   = (1 << 17);
+const Bit32u EFlagsACMask   = (1 << 18);
+const Bit32u EFlagsVIFMask  = (1 << 19);
+const Bit32u EFlagsVIPMask  = (1 << 20);
+const Bit32u EFlagsIDMask   = (1 << 21);
 
 #define EFlagsOSZAPCMask \
     (EFlagsCFMask | EFlagsPFMask | EFlagsAFMask | EFlagsZFMask | EFlagsSFMask | EFlagsOFMask)
@@ -724,7 +743,11 @@ BOCHSAPI extern BX_CPU_C   bx_cpu;
 #define EFlagsOSZAPMask  \
     (EFlagsPFMask | EFlagsAFMask | EFlagsZFMask | EFlagsSFMask | EFlagsOFMask)
 
-#define EFlagsValidMask  0x003f7fd5	// only supported bits for EFLAGS
+const Bit32u EFlagsValidMask = 0x003f7fd5; // only supported bits for EFLAGS
+
+#if BX_SUPPORT_FPU
+#include "i387.h"
+#endif
 
 #if BX_CPU_LEVEL >= 5
 typedef struct
@@ -751,12 +774,12 @@ typedef struct
   bx_address sysenter_esp_msr;
   bx_address sysenter_eip_msr;
 
+  BxPackedRegister pat;
   Bit64u mtrrphys[16];
-  Bit64u mtrrfix64k_00000;
-  Bit64u mtrrfix16k[2];
-  Bit64u mtrrfix4k[8];
-  Bit16u mtrr_deftype;
-  Bit64u pat;
+  BxPackedRegister mtrrfix64k;
+  BxPackedRegister mtrrfix16k[2];
+  BxPackedRegister mtrrfix4k[8];
+  Bit32u mtrr_deftype;
 #endif
 
 #if BX_SUPPORT_VMX
@@ -797,6 +820,18 @@ typedef struct {
   bx_hostpageaddr_t hostPageAddr;
   Bit32u accessBits;
   Bit32u lpf_mask;      // linear address mask of the page size
+
+#if BX_SUPPORT_MEMTYPE
+  Bit32u memtype;      // keep it Bit32u for alignment
+#endif
+
+  Bit32u get_memtype() const {
+#if BX_SUPPORT_MEMTYPE
+    return memtype;
+#else
+    return BX_MEMTYPE_UC;
+#endif
+  }
 } bx_TLB_entry;
 
 #if BX_SUPPORT_X86_64
@@ -916,7 +951,6 @@ typedef struct {
 #endif
 
 #if BX_SUPPORT_FPU
-#include "i387.h"
 #include "xmm.h"
 #endif
 
@@ -1126,6 +1160,9 @@ public: // for now...
   bx_bool in_smm_vmx_guest;
   Bit64u  vmcsptr;
   bx_hostpageaddr_t vmcshostptr;
+#if BX_SUPPORT_MEMTYPE
+  BxMemtype vmcs_memtype;
+#endif
   Bit64u  vmxonptr;
   
   VMCS_CACHE vmcs;
@@ -1137,6 +1174,9 @@ public: // for now...
   bx_bool svm_gif; /* global interrupt enable flag, when zero all external interrupt disabled */
   bx_phy_address  vmcbptr;
   bx_hostpageaddr_t vmcbhostptr;
+#if BX_SUPPORT_MEMTYPE
+  BxMemtype vmcb_memtype;
+#endif
   VMCB_CACHE vmcb;
 
 // make SVM integration easier
@@ -1261,6 +1301,9 @@ public: // for now...
   Bit32u     espPageWindowSize;
   const Bit8u *espHostPtr;
   bx_phy_address pAddrStackPage; // Guest physical address of current stack page
+#if BX_SUPPORT_MEMTYPE
+  BxMemtype espPageMemtype;
+#endif
 
 #if BX_CPU_LEVEL >= 4 && BX_SUPPORT_ALIGNMENT_CHECK
   unsigned alignment_check_mask;
@@ -1278,11 +1321,33 @@ public: // for now...
   bx_bool trace_reg;
   bx_bool trace_mem;
   bx_bool mode_break;
-#if BX_SUPPORT_VMX
+#if BX_SUPPORT_VMX || BX_SUPPORT_SVM
   bx_bool vmexit_break;
 #endif
   unsigned show_flag;
   bx_guard_found_t guard_found;
+#endif
+
+#if BX_INSTRUMENTATION
+  // store far branch CS:EIP pair for instrumentation purposes
+  // unfortunatelly prev_rip CPU field cannot be used as is because it
+  // could be overwritten by task switch which could happen as result
+  // of the far branch
+  struct {
+    Bit16u prev_cs;
+    bx_address prev_rip;
+  } far_branch;
+
+#define FAR_BRANCH_PREV_CS (BX_CPU_THIS_PTR far_branch.prev_cs)
+#define FAR_BRANCH_PREV_RIP (BX_CPU_THIS_PTR far_branch.prev_rip)
+
+#define BX_INSTR_FAR_BRANCH_ORIGIN() { \
+  BX_CPU_THIS_PTR far_branch.prev_cs = BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value; \
+  BX_CPU_THIS_PTR far_branch.prev_rip = PREV_RIP; \
+}
+
+#else
+#define BX_INSTR_FAR_BRANCH_ORIGIN()
 #endif
 
   // for paging
@@ -1321,6 +1386,10 @@ public: // for now...
                               // is greated than 2 (the maximum possible for
                               // normal cases) it is a native pointer and is used
                               // for a direct write access.
+#if BX_SUPPORT_MEMTYPE
+    BxMemtype memtype1;       // memory type of the page 1
+    BxMemtype memtype2;       // memory type of the page 2
+#endif
   } address_xlation;
 
   BX_SMF void setEFlags(Bit32u val) BX_CPP_AttrRegparmN(1);
@@ -4441,9 +4510,43 @@ public: // for now...
     BX_CPU_THIS_PTR espPageWindowSize = 0;
   }
 
-  BX_SMF bx_bool write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len) BX_CPP_AttrRegparmN(3);
-  BX_SMF bx_bool read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len) BX_CPP_AttrRegparmN(3);
+  BX_SMF bx_bool write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len, bx_bool align = BX_FALSE) BX_CPP_AttrRegparmN(4);
+  BX_SMF bx_bool read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len, bx_bool align = BX_FALSE) BX_CPP_AttrRegparmN(4);
   BX_SMF bx_bool execute_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len) BX_CPP_AttrRegparmN(3);
+
+  BX_SMF Bit8u read_linear_byte(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit16u read_linear_word(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit32u read_linear_dword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit64u read_linear_qword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+#if BX_CPU_LEVEL >= 6
+  BX_SMF void read_linear_xmmword(unsigned seg, bx_address off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_linear_xmmword_aligned(unsigned seg, bx_address off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+#if BX_SUPPORT_AVX
+  BX_SMF void read_linear_ymmword(unsigned seg, bx_address off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_linear_ymmword_aligned(unsigned seg, bx_address off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#if BX_SUPPORT_EVEX
+  BX_SMF void read_linear_zmmword(unsigned seg, bx_address off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_linear_zmmword_aligned(unsigned seg, bx_address off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#endif
+
+  BX_SMF void write_linear_byte(unsigned seg, bx_address offset, Bit8u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_word(unsigned seg, bx_address offset, Bit16u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_dword(unsigned seg, bx_address offset, Bit32u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_qword(unsigned seg, bx_address offset, Bit64u data) BX_CPP_AttrRegparmN(3);
+#if BX_CPU_LEVEL >= 6
+  BX_SMF void write_linear_xmmword(unsigned seg, bx_address offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_xmmword_aligned(unsigned seg, bx_address offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+#if BX_SUPPORT_AVX
+  BX_SMF void write_linear_ymmword(unsigned seg, bx_address off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_ymmword_aligned(unsigned seg, bx_address off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#if BX_SUPPORT_EVEX
+  BX_SMF void write_linear_zmmword(unsigned seg, bx_address off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_linear_zmmword_aligned(unsigned seg, bx_address off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#endif
 
   BX_SMF Bit8u read_virtual_byte_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
   BX_SMF Bit16u read_virtual_word_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
@@ -4453,12 +4556,12 @@ public: // for now...
   BX_SMF void read_virtual_xmmword_32(unsigned seg, Bit32u off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
   BX_SMF void read_virtual_xmmword_aligned_32(unsigned seg, Bit32u off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
 #if BX_SUPPORT_AVX
-  BX_SMF void read_virtual_ymmword_32(unsigned seg, Bit32u off, BxPackedYmmRegister *data);
-  BX_SMF void read_virtual_ymmword_aligned_32(unsigned seg, Bit32u off, BxPackedYmmRegister *data);
+  BX_SMF void read_virtual_ymmword_32(unsigned seg, Bit32u off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_virtual_ymmword_aligned_32(unsigned seg, Bit32u off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
 #endif
 #if BX_SUPPORT_EVEX
-  BX_SMF void read_virtual_zmmword_32(unsigned seg, Bit32u off, BxPackedZmmRegister *data);
-  BX_SMF void read_virtual_zmmword_aligned_32(unsigned seg, Bit32u off, BxPackedZmmRegister *data);
+  BX_SMF void read_virtual_zmmword_32(unsigned seg, Bit32u off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_virtual_zmmword_aligned_32(unsigned seg, Bit32u off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
 #endif
 #endif
 
@@ -4470,62 +4573,71 @@ public: // for now...
   BX_SMF void write_virtual_xmmword_32(unsigned seg, Bit32u offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
   BX_SMF void write_virtual_xmmword_aligned_32(unsigned seg, Bit32u offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
 #if BX_SUPPORT_AVX
-  BX_SMF void write_virtual_ymmword_32(unsigned seg, Bit32u off, const BxPackedYmmRegister *data);
-  BX_SMF void write_virtual_ymmword_aligned_32(unsigned seg, Bit32u off, const BxPackedYmmRegister *data);
+  BX_SMF void write_virtual_ymmword_32(unsigned seg, Bit32u off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_ymmword_aligned_32(unsigned seg, Bit32u off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
 #endif
 #if BX_SUPPORT_EVEX
-  BX_SMF void write_virtual_zmmword_32(unsigned seg, Bit32u off, const BxPackedZmmRegister *data);
-  BX_SMF void write_virtual_zmmword_aligned_32(unsigned seg, Bit32u off, const BxPackedZmmRegister *data);
+  BX_SMF void write_virtual_zmmword_32(unsigned seg, Bit32u off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_zmmword_aligned_32(unsigned seg, Bit32u off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
 #endif
 #endif
+
+  BX_SMF Bit8u read_virtual_byte(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit16u read_virtual_word(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit32u read_virtual_dword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit64u read_virtual_qword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+#if BX_CPU_LEVEL >= 6
+  BX_SMF void read_virtual_xmmword(unsigned seg, bx_address off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_virtual_xmmword_aligned(unsigned seg, bx_address off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+#if BX_SUPPORT_AVX
+  BX_SMF void read_virtual_ymmword(unsigned seg, bx_address off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_virtual_ymmword_aligned(unsigned seg, bx_address off, BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#if BX_SUPPORT_EVEX
+  BX_SMF void read_virtual_zmmword(unsigned seg, bx_address off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void read_virtual_zmmword_aligned(unsigned seg, bx_address off, BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#endif
+
+  BX_SMF void write_virtual_byte(unsigned seg, bx_address offset, Bit8u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_word(unsigned seg, bx_address offset, Bit16u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_dword(unsigned seg, bx_address offset, Bit32u data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_qword(unsigned seg, bx_address offset, Bit64u data) BX_CPP_AttrRegparmN(3);
+#if BX_CPU_LEVEL >= 6
+  BX_SMF void write_virtual_xmmword(unsigned seg, bx_address offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_xmmword_aligned(unsigned seg, bx_address offset, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
+#if BX_SUPPORT_AVX
+  BX_SMF void write_virtual_ymmword(unsigned seg, bx_address off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_ymmword_aligned(unsigned seg, bx_address off, const BxPackedYmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#if BX_SUPPORT_EVEX
+  BX_SMF void write_virtual_zmmword(unsigned seg, bx_address off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+  BX_SMF void write_virtual_zmmword_aligned(unsigned seg, bx_address off, const BxPackedZmmRegister *data) BX_CPP_AttrRegparmN(3);
+#endif
+#endif
+
+  BX_SMF Bit8u read_RMW_linear_byte(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit16u read_RMW_linear_word(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit32u read_RMW_linear_dword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit64u read_RMW_linear_qword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
 
   BX_SMF Bit8u read_RMW_virtual_byte_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
   BX_SMF Bit16u read_RMW_virtual_word_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
   BX_SMF Bit32u read_RMW_virtual_dword_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
   BX_SMF Bit64u read_RMW_virtual_qword_32(unsigned seg, Bit32u offset) BX_CPP_AttrRegparmN(2);
 
-  BX_SMF void write_RMW_virtual_byte(Bit8u val8) BX_CPP_AttrRegparmN(1);
-  BX_SMF void write_RMW_virtual_word(Bit16u val16) BX_CPP_AttrRegparmN(1);
-  BX_SMF void write_RMW_virtual_dword(Bit32u val32) BX_CPP_AttrRegparmN(1);
-  BX_SMF void write_RMW_virtual_qword(Bit64u val64) BX_CPP_AttrRegparmN(1);
+  BX_SMF Bit8u read_RMW_virtual_byte(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit16u read_RMW_virtual_word(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit32u read_RMW_virtual_dword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+  BX_SMF Bit64u read_RMW_virtual_qword(unsigned seg, bx_address offset) BX_CPP_AttrRegparmN(2);
+
+  BX_SMF void write_RMW_linear_byte(Bit8u val8) BX_CPP_AttrRegparmN(1);
+  BX_SMF void write_RMW_linear_word(Bit16u val16) BX_CPP_AttrRegparmN(1);
+  BX_SMF void write_RMW_linear_dword(Bit32u val32) BX_CPP_AttrRegparmN(1);
+  BX_SMF void write_RMW_linear_qword(Bit64u val64) BX_CPP_AttrRegparmN(1);
 
 #if BX_SUPPORT_X86_64
-  BX_SMF void write_linear_byte(unsigned seg, Bit64u laddr, Bit8u data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void write_linear_word(unsigned seg, Bit64u laddr, Bit16u data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void write_linear_dword(unsigned seg, Bit64u laddr, Bit32u data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void write_linear_qword(unsigned seg, Bit64u laddr, Bit64u data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void write_linear_xmmword(unsigned seg, Bit64u laddr, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void write_linear_xmmword_aligned(unsigned seg, Bit64u laddr, const BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
-#if BX_SUPPORT_AVX
-  BX_SMF void write_linear_ymmword(unsigned seg, Bit64u laddr, const BxPackedYmmRegister *data);
-  BX_SMF void write_linear_ymmword_aligned(unsigned seg, Bit64u laddr, const BxPackedYmmRegister *data);
-#endif
-#if BX_SUPPORT_EVEX
-  BX_SMF void write_linear_zmmword(unsigned seg, Bit64u laddr, const BxPackedZmmRegister *data);
-  BX_SMF void write_linear_zmmword_aligned(unsigned seg, Bit64u laddr, const BxPackedZmmRegister *data);
-#endif
-
-  BX_SMF Bit8u read_linear_byte(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit16u read_linear_word(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit32u read_linear_dword(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit64u read_linear_qword(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF void read_linear_xmmword(unsigned seg, Bit64u off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
-  BX_SMF void read_linear_xmmword_aligned(unsigned seg, Bit64u off, BxPackedXmmRegister *data) BX_CPP_AttrRegparmN(3);
-#if BX_SUPPORT_AVX
-  BX_SMF void read_linear_ymmword(unsigned seg, Bit64u laddr, BxPackedYmmRegister *data);
-  BX_SMF void read_linear_ymmword_aligned(unsigned seg, Bit64u laddr, BxPackedYmmRegister *data);
-#endif
-#if BX_SUPPORT_EVEX
-  BX_SMF void read_linear_zmmword(unsigned seg, Bit64u laddr, BxPackedZmmRegister *data);
-  BX_SMF void read_linear_zmmword_aligned(unsigned seg, Bit64u laddr, BxPackedZmmRegister *data);
-#endif
-
-  BX_SMF Bit8u read_RMW_virtual_byte_64(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit16u read_RMW_virtual_word_64(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit32u read_RMW_virtual_dword_64(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-  BX_SMF Bit64u read_RMW_virtual_qword_64(unsigned seg, Bit64u laddr) BX_CPP_AttrRegparmN(2);
-
-  BX_SMF void read_RMW_linear_dqword_aligned_64(unsigned seg, Bit64u laddr, Bit64u *hi, Bit64u *lo);
+  BX_SMF void read_RMW_linear_dqword_aligned_64(unsigned seg, bx_address laddr, Bit64u *hi, Bit64u *lo);
   BX_SMF void write_RMW_linear_dqword(Bit64u hi, Bit64u lo);
 #endif
 
@@ -4538,225 +4650,7 @@ public: // for now...
   BX_SMF void write_new_stack_dword(bx_address laddr, unsigned curr_pl, Bit32u data);
   BX_SMF void write_new_stack_qword(bx_address laddr, unsigned curr_pl, Bit64u data);
 
-#if BX_SUPPORT_X86_64
-
-// write
-#define write_virtual_byte(seg, offset, data)     \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_byte(seg, get_laddr64(seg, offset), data) : \
-      write_virtual_byte_32(seg, (Bit32u) offset, data)
-
-#define write_virtual_word(seg, offset, data)     \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_word(seg, get_laddr64(seg, offset), data) : \
-      write_virtual_word_32(seg, (Bit32u) offset, data)
-
-#define write_virtual_dword(seg, offset, data)    \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_dword(seg, get_laddr64(seg, offset), data) : \
-      write_virtual_dword_32(seg, (Bit32u) offset, data)
-
-#define write_virtual_qword(seg, offset, data)    \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_qword(seg, get_laddr64(seg, offset), data) : \
-      write_virtual_qword_32(seg, (Bit32u) offset, data)
-
-#define write_virtual_xmmword(seg, offset, data)   \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_xmmword(seg, get_laddr64(seg, offset), (const BxPackedXmmRegister*)(data)) : \
-      write_virtual_xmmword_32(seg, (Bit32u) offset, (const BxPackedXmmRegister*)(data))
-
-#define write_virtual_xmmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_xmmword_aligned(seg, get_laddr64(seg, offset), (const BxPackedXmmRegister*)(data)) : \
-      write_virtual_xmmword_aligned_32(seg, (Bit32u) offset, (const BxPackedXmmRegister*)(data))
-
-#if BX_SUPPORT_AVX
-
-#define write_virtual_ymmword(seg, offset, data)   \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_ymmword(seg, get_laddr64(seg, offset), (const BxPackedYmmRegister*)(data)) : \
-      write_virtual_ymmword_32(seg, (Bit32u) offset, (const BxPackedYmmRegister*)(data))
-
-#define write_virtual_ymmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_ymmword_aligned(seg, get_laddr64(seg, offset), (const BxPackedYmmRegister*)(data)) : \
-      write_virtual_ymmword_aligned_32(seg, (Bit32u) offset, (const BxPackedYmmRegister*)(data))
-
-#endif
-
-#if BX_SUPPORT_EVEX
-
-#define write_virtual_zmmword(seg, offset, data)   \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_zmmword(seg, get_laddr64(seg, offset), (const BxPackedZmmRegister*)(data)) : \
-      write_virtual_zmmword_32(seg, (Bit32u) offset, (const BxPackedZmmRegister*)(data))
-
-#define write_virtual_zmmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      write_linear_zmmword_aligned(seg, get_laddr64(seg, offset), (const BxPackedZmmRegister*)(data)) : \
-      write_virtual_zmmword_aligned_32(seg, (Bit32u) offset, (const BxPackedZmmRegister*)(data))
-
-#endif
-
-// read
-#define read_virtual_byte(seg, offset)             \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ?  \
-      read_linear_byte(seg, get_laddr64(seg, offset)) : \
-      read_virtual_byte_32(seg, (Bit32u) offset)
-
-#define read_virtual_word(seg, offset)             \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ?  \
-      read_linear_word(seg, get_laddr64(seg, offset)) : \
-      read_virtual_word_32(seg, (Bit32u) offset)
-
-#define read_virtual_dword(seg, offset)             \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ?   \
-      read_linear_dword(seg, get_laddr64(seg, offset)) : \
-      read_virtual_dword_32(seg, (Bit32u) offset)
-
-#define read_virtual_qword(seg, offset)             \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ?   \
-      read_linear_qword(seg, get_laddr64(seg, offset)) : \
-      read_virtual_qword_32(seg, (Bit32u) offset)
-
-#define read_virtual_xmmword(seg, offset, data)    \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_xmmword(seg, get_laddr64(seg, offset), (BxPackedXmmRegister*)(data)) : \
-      read_virtual_xmmword_32(seg, (Bit32u) offset, (BxPackedXmmRegister*)(data))
-
-#define read_virtual_xmmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_xmmword_aligned(seg, get_laddr64(seg, offset), (BxPackedXmmRegister*)(data)) : \
-      read_virtual_xmmword_aligned_32(seg, (Bit32u) offset, (BxPackedXmmRegister*)(data))
-
-#if BX_SUPPORT_AVX
-
-#define read_virtual_ymmword(seg, offset, data)    \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_ymmword(seg, get_laddr64(seg, offset), (BxPackedYmmRegister*)(data)) : \
-      read_virtual_ymmword_32(seg, (Bit32u) offset, (BxPackedYmmRegister*)(data))
-
-#define read_virtual_ymmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_ymmword_aligned(seg, get_laddr64(seg, offset), (BxPackedYmmRegister*)(data)) : \
-      read_virtual_ymmword_aligned_32(seg, (Bit32u) offset, (BxPackedYmmRegister*)(data))
-
-#endif
-
-#if BX_SUPPORT_EVEX
-
-#define read_virtual_zmmword(seg, offset, data)    \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_zmmword(seg, get_laddr64(seg, offset), (BxPackedZmmRegister*)(data)) : \
-      read_virtual_zmmword_32(seg, (Bit32u) offset, (BxPackedZmmRegister*)(data))
-
-#define read_virtual_zmmword_aligned(seg, offset, data) \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_linear_zmmword_aligned(seg, get_laddr64(seg, offset), (BxPackedZmmRegister*)(data)) : \
-      read_virtual_zmmword_aligned_32(seg, (Bit32u) offset, (BxPackedZmmRegister*)(data))
-
-#endif
-
-// RMW
-#define read_RMW_virtual_byte(seg, offset)        \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_RMW_virtual_byte_64(seg, get_laddr64(seg, offset)) : \
-      read_RMW_virtual_byte_32(seg, (Bit32u) offset)
-
-#define read_RMW_virtual_word(seg, offset)        \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_RMW_virtual_word_64(seg, get_laddr64(seg, offset)) : \
-      read_RMW_virtual_word_32(seg, (Bit32u) offset)
-
-#define read_RMW_virtual_dword(seg, offset)       \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_RMW_virtual_dword_64(seg, get_laddr64(seg, offset)) : \
-      read_RMW_virtual_dword_32(seg, (Bit32u) offset)
-
-#define read_RMW_virtual_qword(seg, offset)       \
-  (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) ? \
-      read_RMW_virtual_qword_64(seg, get_laddr64(seg, offset)) : \
-      read_RMW_virtual_qword_32(seg, (Bit32u) offset)
-
-#else
-
-// write
-#define write_virtual_byte(seg, offset, data)  \
-  write_virtual_byte_32(seg, offset, data)
-#define write_virtual_word(seg, offset, data)  \
-  write_virtual_word_32(seg, offset, data)
-#define write_virtual_dword(seg, offset, data) \
-  write_virtual_dword_32(seg, offset, data)
-#define write_virtual_qword(seg, offset, data) \
-  write_virtual_qword_32(seg, offset, data)
-#define write_virtual_xmmword(seg, offset, data) \
-  write_virtual_xmmword_32(seg, offset, (const BxPackedXmmRegister*)(data))
-#define write_virtual_xmmword_aligned(seg, offset, data) \
-  write_virtual_xmmword_aligned_32(seg, offset, (const BxPackedXmmRegister*)(data))
-
-#if BX_SUPPORT_AVX
-
-#define write_virtual_ymmword(seg, offset, data) \
-  write_virtual_ymmword_32(seg, offset, (const BxPackedYmmRegister*)(data))
-#define write_virtual_ymmword_aligned(seg, offset, data) \
-  write_virtual_ymmword_aligned_32(seg, offset, (const BxPackedYmmRegister*)(data))
-
-#endif
-
-#if BX_SUPPORT_EVEX
-
-#define write_virtual_zmmword(seg, offset, data) \
-  write_virtual_zmmword_32(seg, offset, (const BxPackedZmmRegister*)(data))
-#define write_virtual_zmmword_aligned(seg, offset, data) \
-  write_virtual_zmmword_aligned_32(seg, offset, (const BxPackedZmmRegister*)(data))
-
-#endif
-
-// read
-#define read_virtual_byte(seg, offset)  \
-  read_virtual_byte_32(seg, offset)
-#define read_virtual_word(seg, offset)  \
-  read_virtual_word_32(seg, offset)
-#define read_virtual_dword(seg, offset) \
-  read_virtual_dword_32(seg, offset)
-#define read_virtual_qword(seg, offset) \
-  read_virtual_qword_32(seg, offset)
-#define read_virtual_xmmword(seg, offset, data) \
-  read_virtual_xmmword_32(seg, offset, (BxPackedXmmRegister*)(data))
-#define read_virtual_xmmword_aligned(seg, offset, data) \
-  read_virtual_xmmword_aligned_32(seg, offset, (BxPackedXmmRegister*)(data))
-
-#if BX_SUPPORT_AVX
-
-#define read_virtual_ymmword(seg, offset, data) \
-  read_virtual_ymmword_32(seg, offset, (BxPackedYmmRegister*)(data))
-#define read_virtual_ymmword_aligned(seg, offset, data) \
-  read_virtual_ymmword_aligned_32(seg, offset, (BxPackedYmmRegister*)(data))
-
-#endif
-
-#if BX_SUPPORT_EVEX
-
-#define read_virtual_zmmword(seg, offset, data) \
-  read_virtual_zmmword_32(seg, offset, (BxPackedZmmRegister*)(data))
-#define read_virtual_zmmword_aligned(seg, offset, data) \
-  read_virtual_zmmword_aligned_32(seg, offset, (BxPackedZmmRegister*)(data))
-
-#endif
-
-// RMW
-#define read_RMW_virtual_byte(seg, offset)  \
-  read_RMW_virtual_byte_32(seg, offset)
-#define read_RMW_virtual_word(seg, offset)  \
-  read_RMW_virtual_word_32(seg, offset)
-#define read_RMW_virtual_dword(seg, offset) \
-  read_RMW_virtual_dword_32(seg, offset)
-#define read_RMW_virtual_qword(seg, offset) \
-  read_RMW_virtual_qword_32(seg, offset)
-
-#endif
-
+  // dedicated optimized stack access methods
   BX_SMF void stack_write_byte(bx_address offset, Bit8u data) BX_CPP_AttrRegparmN(2);
   BX_SMF void stack_write_word(bx_address offset, Bit16u data) BX_CPP_AttrRegparmN(2);
   BX_SMF void stack_write_dword(bx_address offset, Bit32u data) BX_CPP_AttrRegparmN(2);
@@ -4769,6 +4663,7 @@ public: // for now...
 
   BX_SMF void stackPrefetch(bx_address offset, unsigned len) BX_CPP_AttrRegparmN(2);
 
+  // dedicated system linear read/write methods with no segment
   BX_SMF Bit8u  system_read_byte(bx_address laddr) BX_CPP_AttrRegparmN(1);
   BX_SMF Bit16u system_read_word(bx_address laddr) BX_CPP_AttrRegparmN(1);
   BX_SMF Bit32u system_read_dword(bx_address laddr) BX_CPP_AttrRegparmN(1);
@@ -4829,20 +4724,20 @@ public: // for now...
 
   // linear address for translate_linear expected to be canonical !
   BX_SMF bx_phy_address translate_linear(bx_TLB_entry *entry, bx_address laddr, unsigned user, unsigned rw);
-  BX_SMF bx_phy_address translate_linear_legacy(bx_address laddr, Bit32u &lpf_mask, Bit32u &combined_access, unsigned user, unsigned rw);
-  BX_SMF void update_access_dirty(bx_phy_address *entry_addr, Bit32u *entry, unsigned leaf, unsigned write);
+  BX_SMF bx_phy_address translate_linear_legacy(bx_address laddr, Bit32u &lpf_mask, unsigned user, unsigned rw);
+  BX_SMF void update_access_dirty(bx_phy_address *entry_addr, Bit32u *entry, BxMemtype *entry_memtype, unsigned leaf, unsigned write);
 #if BX_CPU_LEVEL >= 6
   BX_SMF bx_phy_address translate_linear_load_PDPTR(bx_address laddr, unsigned user, unsigned rw);
-  BX_SMF bx_phy_address translate_linear_PAE(bx_address laddr, Bit32u &lpf_mask, Bit32u &combined_access, unsigned user, unsigned rw);
+  BX_SMF bx_phy_address translate_linear_PAE(bx_address laddr, Bit32u &lpf_mask, unsigned user, unsigned rw);
   BX_SMF int check_entry_PAE(const char *s, Bit64u entry, Bit64u reserved, unsigned rw, bx_bool *nx_fault);
-  BX_SMF void update_access_dirty_PAE(bx_phy_address *entry_addr, Bit64u *entry, unsigned max_level, unsigned leaf, unsigned write);
+  BX_SMF void update_access_dirty_PAE(bx_phy_address *entry_addr, Bit64u *entry, BxMemtype *entry_memtype, unsigned max_level, unsigned leaf, unsigned write);
 #endif
 #if BX_SUPPORT_X86_64
-  BX_SMF bx_phy_address translate_linear_long_mode(bx_address laddr, Bit32u &lpf_mask, Bit32u &combined_access, unsigned user, unsigned rw);
+  BX_SMF bx_phy_address translate_linear_long_mode(bx_address laddr, Bit32u &lpf_mask, unsigned user, unsigned rw);
 #endif
 #if BX_SUPPORT_VMX >= 2
   BX_SMF bx_phy_address translate_guest_physical(bx_phy_address guest_paddr, bx_address guest_laddr, bx_bool guest_laddr_valid, bx_bool is_page_walk, unsigned rw);
-  BX_SMF void update_ept_access_dirty(bx_phy_address *entry_addr, Bit64u *entry, unsigned leaf, unsigned write);
+  BX_SMF void update_ept_access_dirty(bx_phy_address *entry_addr, Bit64u *entry, BxMemtype eptptr_memtype, unsigned leaf, unsigned write);
   BX_SMF bx_bool is_eptptr_valid(Bit64u eptptr);
 #endif
 #if BX_SUPPORT_SVM
@@ -4851,6 +4746,11 @@ public: // for now...
   BX_SMF bx_phy_address nested_walk_PAE(bx_phy_address guest_paddr, unsigned rw, bx_bool is_page_walk);
   BX_SMF bx_phy_address nested_walk_legacy(bx_phy_address guest_paddr, unsigned rw, bx_bool is_page_walk);
   BX_SMF bx_phy_address nested_walk(bx_phy_address guest_paddr, unsigned rw, bx_bool is_page_walk);
+#endif
+#if BX_SUPPORT_MEMTYPE
+  BX_SMF BxMemtype memtype_by_mtrr(bx_phy_address paddr) BX_CPP_AttrRegparmN(1);
+  BX_SMF BxMemtype memtype_by_pat(unsigned pat) BX_CPP_AttrRegparmN(1);
+  BX_SMF BxMemtype resolve_memtype(BxMemtype mtrr_memtype, BxMemtype pat_memtype = BX_MEMTYPE_WB) BX_CPP_AttrRegparmN(2);
 #endif
 
 #if BX_CPU_LEVEL >= 6
@@ -4861,14 +4761,11 @@ public: // for now...
   BX_SMF void inhibit_interrupts(unsigned mask);
   BX_SMF bx_bool interrupts_inhibited(unsigned mask);
   BX_SMF const char *strseg(bx_segment_reg_t *seg);
-  BX_SMF void interrupt(Bit8u vector, unsigned type, bx_bool push_error,
-                 Bit16u error_code);
+  BX_SMF void interrupt(Bit8u vector, unsigned type, bx_bool push_error, Bit16u error_code);
   BX_SMF void real_mode_int(Bit8u vector, bx_bool push_error, Bit16u error_code);
-  BX_SMF void protected_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_error,
-                 Bit16u error_code);
+  BX_SMF void protected_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_error, Bit16u error_code);
 #if BX_SUPPORT_X86_64
-  BX_SMF void long_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_error,
-                 Bit16u error_code);
+  BX_SMF void long_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_error, Bit16u error_code);
 #endif
   BX_SMF void exception(unsigned vector, Bit16u error_code)
                   BX_CPP_AttrNoReturn();
@@ -4945,6 +4842,10 @@ public: // for now...
   BX_SMF bx_bool relocate_apic(Bit64u val_64);
 #endif
 
+  BX_SMF void jmp_far16(bxInstruction_c *i, Bit16u cs_raw, Bit16u disp16);
+  BX_SMF void jmp_far32(bxInstruction_c *i, Bit16u cs_raw, Bit32u disp32);
+  BX_SMF void call_far16(bxInstruction_c *i, Bit16u cs_raw, Bit16u disp16);
+  BX_SMF void call_far32(bxInstruction_c *i, Bit16u cs_raw, Bit32u disp32);
   BX_SMF void task_gate(bxInstruction_c *i, bx_selector_t *selector, bx_descriptor_t *gate_descriptor, unsigned source);
   BX_SMF void jump_protected(bxInstruction_c *i, Bit16u cs, bx_address disp) BX_CPP_AttrRegparmN(3);
   BX_SMF void jmp_call_gate(bx_selector_t *selector, bx_descriptor_t *gate_descriptor) BX_CPP_AttrRegparmN(2);
@@ -5104,6 +5005,16 @@ public: // for now...
 #if BX_SUPPORT_X86_64
   BX_SMF Bit64u get_laddr64(unsigned seg, Bit64u offset);
 #endif
+
+  BX_SMF bx_address agen_read(unsigned seg, bx_address offset, unsigned len);
+  BX_SMF Bit32u agen_read32(unsigned seg, Bit32u offset, unsigned len);
+  BX_SMF bx_address agen_read_aligned(unsigned seg, bx_address offset, unsigned len);
+  BX_SMF Bit32u agen_read_aligned32(unsigned seg, Bit32u offset, unsigned len);
+
+  BX_SMF bx_address agen_write(unsigned seg, bx_address offset, unsigned len);
+  BX_SMF Bit32u agen_write32(unsigned seg, Bit32u offset, unsigned len);
+  BX_SMF bx_address agen_write_aligned(unsigned seg, bx_address offset, unsigned len);
+  BX_SMF Bit32u agen_write_aligned32(unsigned seg, Bit32u offset, unsigned len);
 
   DECLARE_EFLAG_ACCESSOR   (ID,  21)
   DECLARE_EFLAG_ACCESSOR   (VIP, 20)
@@ -5438,10 +5349,12 @@ BX_CPP_INLINE void BX_CPU_C::updateFetchModeMask(void)
 }
 
 #if BX_X86_DEBUGGER
-#define BX_HWDebugInstruction   0x00
-#define BX_HWDebugMemW          0x01
-#define BX_HWDebugIO            0x02
-#define BX_HWDebugMemRW         0x03
+enum {
+  BX_HWDebugInstruction = 0x00,
+  BX_HWDebugMemW        = 0x01,
+  BX_HWDebugIO          = 0x02,
+  BX_HWDebugMemRW       = 0x03
+};
 #endif
 
 BX_CPP_INLINE bx_address BX_CPU_C::get_segment_base(unsigned seg)
@@ -5478,6 +5391,128 @@ BX_CPP_INLINE bx_address BX_CPU_C::get_laddr(unsigned seg, bx_address offset)
 #endif
   return get_laddr32(seg, (Bit32u) offset);
 }
+
+BX_CPP_INLINE Bit32u BX_CPU_C::agen_read32(unsigned s, Bit32u offset, unsigned len)
+{
+  bx_segment_reg_t *seg = &BX_CPU_THIS_PTR sregs[s];
+
+  if (seg->cache.valid & SegAccessROK4G) {
+    return offset;
+  }
+
+  if (seg->cache.valid & SegAccessROK) {
+    if (offset <= (seg->cache.u.segment.limit_scaled-len+1)) {
+      return get_laddr32(s, offset);
+    }
+  }
+
+  if (!read_virtual_checks(seg, offset, len))
+    exception(int_number(s), 0);
+
+  return get_laddr32(s, offset);
+}
+
+BX_CPP_INLINE Bit32u BX_CPU_C::agen_read_aligned32(unsigned s, Bit32u offset, unsigned len)
+{
+  bx_segment_reg_t *seg = &BX_CPU_THIS_PTR sregs[s];
+
+  if (seg->cache.valid & SegAccessROK4G) {
+    return offset;
+  }
+
+  if (seg->cache.valid & SegAccessROK) {
+    if (offset <= (seg->cache.u.segment.limit_scaled-len+1)) {
+      return get_laddr32(s, offset);
+    }
+  }
+
+  if (!read_virtual_checks(seg, offset, len, true /* aligned */))
+    exception(int_number(s), 0);
+
+  return get_laddr32(s, offset);
+}
+
+BX_CPP_INLINE Bit32u BX_CPU_C::agen_write32(unsigned s, Bit32u offset, unsigned len)
+{
+  bx_segment_reg_t *seg = &BX_CPU_THIS_PTR sregs[s];
+
+  if (seg->cache.valid & SegAccessWOK4G) {
+    return offset;
+  }
+
+  if (seg->cache.valid & SegAccessWOK) {
+    if (offset <= (seg->cache.u.segment.limit_scaled-len+1)) {
+      return get_laddr32(s, offset);
+    }
+  }
+
+  if (!write_virtual_checks(seg, offset, len))
+    exception(int_number(s), 0);
+
+  return get_laddr32(s, offset);
+}
+
+BX_CPP_INLINE Bit32u BX_CPU_C::agen_write_aligned32(unsigned s, Bit32u offset, unsigned len)
+{
+  bx_segment_reg_t *seg = &BX_CPU_THIS_PTR sregs[s];
+
+  if (seg->cache.valid & SegAccessWOK4G) {
+    return offset;
+  }
+
+  if (seg->cache.valid & SegAccessWOK) {
+    if (offset <= (seg->cache.u.segment.limit_scaled-len+1)) {
+      return get_laddr32(s, offset);
+    }
+  }
+
+  if (!write_virtual_checks(seg, offset, len, true /* aligned */))
+    exception(int_number(s), 0);
+
+  return get_laddr32(s, offset);
+}
+
+BX_CPP_INLINE bx_address BX_CPU_C::agen_read(unsigned s, bx_address offset, unsigned len)
+{
+#if BX_SUPPORT_X86_64
+  if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) {
+    return get_laddr64(s, offset);
+  }
+#endif
+  return agen_read32(s, offset, len);
+}
+
+BX_CPP_INLINE bx_address BX_CPU_C::agen_read_aligned(unsigned s, bx_address offset, unsigned len)
+{
+#if BX_SUPPORT_X86_64
+  if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) {
+    return get_laddr64(s, offset);
+  }
+#endif
+  return agen_read_aligned32(s, offset, len);
+}
+
+BX_CPP_INLINE bx_address BX_CPU_C::agen_write(unsigned s, bx_address offset, unsigned len)
+{
+#if BX_SUPPORT_X86_64
+  if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) {
+    return get_laddr64(s, offset);
+  }
+#endif
+  return agen_write32(s, offset, len);
+}
+
+BX_CPP_INLINE bx_address BX_CPU_C::agen_write_aligned(unsigned s, bx_address offset, unsigned len)
+{
+#if BX_SUPPORT_X86_64
+  if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) {
+    return get_laddr64(s, offset);
+  }
+#endif
+  return agen_write_aligned32(s, offset, len);
+}
+
+#include "access.h"
 
 BX_CPP_INLINE Bit8u BX_CPU_C::get_reg8l(unsigned reg)
 {

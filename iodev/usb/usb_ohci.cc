@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ohci.cc 12488 2014-09-22 19:49:39Z vruppert $
+// $Id: usb_ohci.cc 12733 2015-05-02 08:42:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009       Benjamin D Lunt (fys at frontiernet net)
-//                2009-2014  The Bochs Project
+//                2009-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 /////////////////////////////////////////////////////////////////////////
 
-// Experimental USB OHCI adapter
+// USB OHCI adapter
 
 // Notes: See usb_uhci.cc
 
@@ -181,7 +181,7 @@ void bx_usb_ohci_c::init(void)
 
   BX_OHCI_THIS hub.devfunc = 0x00;
   DEV_register_pci_handlers(this, &BX_OHCI_THIS hub.devfunc, BX_PLUGIN_USB_OHCI,
-                            "Experimental USB OHCI");
+                            "USB OHCI");
 
   // initialize readonly registers
   init_pci_conf(0x11c1, 0x5803, 0x11, 0x0c0310, 0x00);
@@ -1188,7 +1188,7 @@ void bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
 bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
 {
   unsigned pid = 0, len = 0, len1, len2;
-  int r, ret = 0;
+  int ilen, r, ret = 0;
   char buf_str[1025], temp_str[17];
 
   // The td->cc field should be 111x if it hasn't been processed yet.
@@ -1215,8 +1215,11 @@ bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
     if ((TD_GET_CBP(td) & 0xFFFFF000) != (TD_GET_BE(td) & 0xFFFFF000))
       len = (TD_GET_BE(td) & 0xFFF) + 0x1001 - (TD_GET_CBP(td) & 0xFFF);
     else {
-      len = (TD_GET_BE(td) - TD_GET_CBP(td)) + 1;
-      if (len < 0) len = 0x1001 + len;
+      ilen = ((int)TD_GET_BE(td) - TD_GET_CBP(td)) + 1;
+      if (ilen < 0)
+        len = 0x1001 + len;
+      else
+        len = (unsigned)ilen;
     }
   } else
     len = 0;

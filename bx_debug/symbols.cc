@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: symbols.cc 11728 2013-06-26 18:07:01Z sshwarts $
+// $Id: symbols.cc 12590 2015-01-03 13:53:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2009  The Bochs Project
+//  Copyright (C) 2001-2014  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -282,7 +282,7 @@ int bx_dbg_symbol_command(const char* filename, bx_bool global, Bit32u offset)
   // The file format should be
   // address symbol (example '00002afe _StartLoseNT')
 
-  Bit32u context_id = (global) ? 0 : (BX_CPU(dbg_cpu)->cr3) >> 12;
+  Bit32u context_id = (global) ? 0 : ((Bit32u)BX_CPU(dbg_cpu)->cr3) >> 12;
 
   context_t* cntx = context_t::get_context(context_id);
 
@@ -316,6 +316,7 @@ int bx_dbg_symbol_command(const char* filename, bx_bool global, Bit32u offset)
         dbg_printf("%s:%d: missing symbol name\n", file.name, line_num);
       else
         dbg_printf("%s:%d: syntax error near '%s'\n", file.name, line_num, sym_name);
+      fclose(fp);
       return -1;
     }
     ++sym_name;
@@ -333,6 +334,7 @@ int bx_dbg_symbol_command(const char* filename, bx_bool global, Bit32u offset)
     }
     ++line_num;
   }
+  fclose(fp);
   return 0;
 }
 

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.h 12187 2014-02-15 00:23:36Z vruppert $
+// $Id: soundwin.h 12688 2015-03-17 20:55:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,18 +21,11 @@
 
 // This file (SOUNDWIN.H) written and donated by Josef Drexler
 
-#if defined(WIN32)
+#if BX_HAVE_SOUND_WIN
 
 #include <mmsystem.h>
 
-// uncomment one of the following two #defines
-//#define usesndPlaySnd
-#define usewaveOut
-
 #define BX_SOUND_WINDOWS_MAXSYSEXLEN  256    // maximum supported length of a sysex message
-
-#define BX_SOUND_WINDOWS_NBUF   64  // number of buffers for the output, must be power of 2 and >= 4
-#define BX_SOUND_WINDOWS_NMASK  (BX_SOUND_WINDOWS_NBUF - 1)
 
 #ifndef WAVEMAPPER
 #define WAVEMAPPER -1
@@ -164,76 +157,79 @@ typedef struct {
 
 #endif
 
-class bx_sound_windows_c : public bx_sound_lowlevel_c {
+class bx_soundlow_waveout_win_c : public bx_soundlow_waveout_c {
 public:
-  bx_sound_windows_c();
-  virtual ~bx_sound_windows_c();
+  bx_soundlow_waveout_win_c();
+  virtual ~bx_soundlow_waveout_win_c();
 
-  virtual int get_type() {return BX_SOUNDLOW_WIN;}
-
-  virtual int    waveready();
-  virtual int    midiready();
-
-  virtual int    openmidioutput(const char *mididev);
-  virtual int    sendmidicommand(int delta, int command, int length, Bit8u data[]);
-  virtual int    closemidioutput();
-
-  virtual int    openwaveoutput(const char *wavedev);
-  virtual int    startwaveplayback(int frequency, int bits, bx_bool stereo, int format);
-  virtual int    sendwavepacket(int length, Bit8u data[]);
-  virtual int    stopwaveplayback();
-  virtual int    closewaveoutput();
-
-  virtual int openwaveinput(const char *wavedev, sound_record_handler_t rh);
-  virtual int startwaverecord(int frequency, int bits, bx_bool stereo, int format);
-  virtual int getwavepacket(int length, Bit8u data[]);
-  virtual int stopwaverecord();
-  virtual int closewaveinput();
-
-  static void record_timer_handler(void *);
-  void record_timer(void);
-
+  virtual int openwaveoutput(const char *wavedev);
+  virtual int set_pcm_params(bx_pcm_param_t *param);
+  virtual int get_packetsize();
+  virtual int output(int length, Bit8u data[]);
 private:
-  struct bx_sound_waveinfo_struct {
-    int frequency;
-    int bits;
-    bx_bool stereo;
-    int format;
-  };
-
-  HMIDIOUT MidiOut;       // Midi output device
-  int MidiOpen;           // is it open?
   HWAVEOUT hWaveOut;      // Wave output device
   int WaveOutOpen;        // is it open?
-  HWAVEIN hWaveIn;        // Wave input device
-  int WaveInOpen;         // is it open?
 
   UINT WaveDevice;        // Wave device ID, for waveOutOpen
 
-  // some data for the wave buffers
-  HANDLE DataHandle;          // returned by GlobalAlloc()
-  Bit8u *DataPointer;         // returned by GlobalLock()
+  LPWAVEHDR WaveOutHdr;
+};
 
-  LPWAVEHDR WaveHeader[BX_SOUND_WINDOWS_NBUF];
-  LPSTR WaveData[BX_SOUND_WINDOWS_NBUF];
+class bx_soundlow_wavein_win_c : public bx_soundlow_wavein_c {
+public:
+  bx_soundlow_wavein_win_c();
+  virtual ~bx_soundlow_wavein_win_c();
+
+  virtual int openwaveinput(const char *wavedev, sound_record_handler_t rh);
+  virtual int startwaverecord(bx_pcm_param_t *param);
+  virtual int getwavepacket(int length, Bit8u data[]);
+  virtual int stopwaverecord();
+
+  static void record_timer_handler(void *);
+  void record_timer(void);
+private:
+  bx_pcm_param_t wavein_param;
+
+  HWAVEIN hWaveIn;        // Wave input device
+  int WaveInOpen;         // is it open?
+
   LPWAVEHDR WaveInHdr;
   LPSTR WaveInData;
   bx_bool recording;
-  int length[BX_SOUND_WINDOWS_NBUF];                // length of the data in the buffer
-  int needreopen;                                   // if the format has changed
-  int head,tailfull,tailplay;       // These are for three states of the buffers: empty, full, played
-  bx_sound_waveinfo_struct WaveInfo[2];             // format for the next buffer to be played
-  int iswaveready;
+
+  int recordnextpacket();
+};
+
+class bx_soundlow_midiout_win_c : public bx_soundlow_midiout_c {
+public:
+  bx_soundlow_midiout_win_c();
+  virtual ~bx_soundlow_midiout_win_c();
+
+  virtual int openmidioutput(const char *mididev);
+  virtual int midiready();
+  virtual int sendmidicommand(int delta, int command, int length, Bit8u data[]);
+  virtual int closemidioutput();
+
+private:
+  HMIDIOUT MidiOut;       // Midi output device
+  int MidiOpen;           // is it open?
 
   // and the midi buffer for the SYSEX messages
   LPMIDIHDR MidiHeader;
   LPSTR MidiData;
   int ismidiready;
 
-  int playnextbuffer();
-  int recordnextpacket();
   void checkmidiready();
-  void checkwaveready();
 };
 
-#endif  // defined(WIN32)
+class bx_sound_windows_c : public bx_sound_lowlevel_c {
+public:
+  bx_sound_windows_c();
+  virtual ~bx_sound_windows_c();
+
+  virtual bx_soundlow_waveout_c* get_waveout();
+  virtual bx_soundlow_wavein_c* get_wavein();
+  virtual bx_soundlow_midiout_c* get_midiout();
+};
+
+#endif  // BX_HAVE_SOUND_WIN

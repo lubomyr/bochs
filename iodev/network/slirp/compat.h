@@ -1,8 +1,14 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: compat.h 12264 2014-03-29 15:23:49Z vruppert $
+// $Id: compat.h 12732 2015-05-01 19:41:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
-/* Qemu compatibility defines */
+/*
+ * Qemu compatibility defines
+ *
+ * Copyright (c) 2003-2008  Fabrice Bellard
+ * Copyright (C) 2014-2015  The Bochs Project
+ */
+
 #ifndef SLIRP_COMPAT_H
 #define SLIRP_COMPAT_H 1
 
@@ -32,16 +38,6 @@ typedef Bit64s ssize_t;
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
-
-#ifndef container_of
-#ifndef _MSC_VER
-#define container_of(ptr, type, member) ({                      \
-        const typeof(((type *) 0)->member) *__mptr = (ptr);     \
-        (type *) ((char *) __mptr - offsetof(type, member));})
-#else
-#define container_of(ptr, type, member) ((type *)((char *)(ptr) -offsetof(type,member)))
-#endif
 #endif
 
 #ifndef MIN

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.h 11908 2013-10-23 21:18:19Z sshwarts $
+// $Id: instrument.h 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2012 Stanislav Shwartsman
+//   Copyright (c) 2009-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -57,7 +57,7 @@ void bx_instr_before_execution(unsigned cpu, bxInstruction_c *i);
 #define BX_INSTR_CNEAR_BRANCH_TAKEN(cpu_id, branch_eip, new_eip)
 #define BX_INSTR_CNEAR_BRANCH_NOT_TAKEN(cpu_id, branch_eip)
 #define BX_INSTR_UCNEAR_BRANCH(cpu_id, what, branch_eip, new_eip)
-#define BX_INSTR_FAR_BRANCH(cpu_id, what, new_cs, new_eip)
+#define BX_INSTR_FAR_BRANCH(cpu_id, what, prev_cs, prev_rip, new_cs, new_eip)
 
 /* decoding completed */
 #define BX_INSTR_OPCODE(cpu_id, i, opcode, len, is32, is64)
@@ -82,10 +82,10 @@ void bx_instr_before_execution(unsigned cpu, bxInstruction_c *i);
 #define BX_INSTR_REPEAT_ITERATION(cpu_id, i)
 
 /* linear memory access */
-#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, rw)
+#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, memtype, rw)
 
 /* physical memory access */
-#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, rw)
+#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, memtype, rw)
 
 /* feedback from device units */
 #define BX_INSTR_INP(addr, len)
@@ -120,7 +120,7 @@ void bx_instr_before_execution(unsigned cpu, bxInstruction_c *i);
 #define BX_INSTR_CNEAR_BRANCH_TAKEN(cpu_id, branch_eip, new_eip)
 #define BX_INSTR_CNEAR_BRANCH_NOT_TAKEN(cpu_id, branch_eip)
 #define BX_INSTR_UCNEAR_BRANCH(cpu_id, what, branch_eip, new_eip)
-#define BX_INSTR_FAR_BRANCH(cpu_id, what, new_cs, new_eip)
+#define BX_INSTR_FAR_BRANCH(cpu_id, what, prev_cs, prev_rip, new_cs, new_eip)
 
 /* decoding completed */
 #define BX_INSTR_OPCODE(cpu_id, i, opcode, len, is32, is64)
@@ -142,10 +142,10 @@ void bx_instr_before_execution(unsigned cpu, bxInstruction_c *i);
 #define BX_INSTR_REPEAT_ITERATION(cpu_id, i)
 
 /* linear memory access */
-#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, rw)
+#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, memtype, rw)
 
 /* physical memory access */
-#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, rw)
+#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, memtype, rw)
 
 /* feedback from device units */
 #define BX_INSTR_INP(addr, len)

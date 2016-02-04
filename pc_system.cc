@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pc_system.cc 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: pc_system.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -234,7 +234,7 @@ void bx_pc_system_c::register_state(void)
   bx_list_c *timers = new bx_list_c(list, "timer");
   for (unsigned i = 0; i < numTimers; i++) {
     char name[4];
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     bx_list_c *bxtimer = new bx_list_c(timers, name);
     BXRS_PARAM_BOOL(bxtimer, inUse, timer[i].inUse);
     BXRS_DEC_PARAM_FIELD(bxtimer, period, timer[i].period);
@@ -581,4 +581,12 @@ void bx_pc_system_c::setTimerParam(unsigned timerIndex, Bit32u param)
     BX_PANIC(("setTimerParam: timer %u OOB", timerIndex));
 #endif
   timer[timerIndex].param = param;
+}
+
+void bx_pc_system_c::isa_bus_delay(void)
+{
+  // Emulate 8 MHz ISA bus speed
+  if (m_ips > 4.0) {
+    tickn((Bit32u)(m_ips * 2.0));
+  }
 }

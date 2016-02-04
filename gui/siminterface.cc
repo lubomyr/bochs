@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.cc 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: siminterface.cc 12698 2015-03-29 14:27:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -503,7 +503,28 @@ int floppy_type_n_sectors[] = { -1, 80*2*15, 80*2*18, 80*2*36, 80*2*9, 40*2*9, 4
 const char *media_status_names[] = { "ejected", "inserted", NULL };
 const char *bochs_bootdisk_names[] = { "none", "floppy", "disk","cdrom", "network", NULL };
 
-const char *hdimage_mode_names[] = { 
+const char *sound_driver_names[] = {
+  "dummy",
+#if BX_HAVE_SOUND_ALSA
+  "alsa",
+#endif
+#if BX_HAVE_SOUND_OSS
+  "oss",
+#endif
+#if BX_HAVE_SOUND_OSX
+  "osx",
+#endif
+#if BX_HAVE_SOUND_SDL
+  "sdl",
+#endif
+#if BX_HAVE_SOUND_WIN
+  "win",
+#endif
+  "file",
+  NULL
+};
+
+const char *hdimage_mode_names[] = {
   "flat",
   "concat",
   "external",
@@ -516,6 +537,7 @@ const char *hdimage_mode_names[] = {
   "volatile",
   "vvfat",
   "vpc",
+  "vbox",
   NULL
 };
 
@@ -1162,6 +1184,8 @@ bx_bool bx_real_sim_c::restore_bochs_param(bx_list_c *root, const char *sr_path,
   char *ret, *ptr;
   int i, j, p;
   unsigned n;
+  double fvalue;
+  Bit64u value;
   bx_param_c *param = NULL;
   FILE *fp, *fp2;
 
@@ -1203,7 +1227,11 @@ bx_bool bx_real_sim_c::restore_bochs_param(bx_list_c *root, const char *sr_path,
               }
               switch (param->get_type()) {
                 case BXT_PARAM_NUM:
-                  if ((ptr[0] == '0') && (ptr[1] == 'x')) {
+                  if (((bx_param_num_c*)param)->get_base() == BASE_DOUBLE) {
+                    fvalue = strtod(ptr, NULL);
+                    memcpy(&value, &fvalue, sizeof(double));
+                    ((bx_param_num_c*)param)->set(value);
+                  } else if ((ptr[0] == '0') && (ptr[1] == 'x')) {
                     ((bx_param_num_c*)param)->set(strtoull(ptr, NULL, 16));
                   } else {
                     ((bx_param_num_c*)param)->set(strtoull(ptr, NULL, 10));
@@ -1297,6 +1325,7 @@ bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_
 {
   int i;
   Bit64s value;
+  double fvalue;
   char pname[BX_PATHNAME_LEN], tmpstr[BX_PATHNAME_LEN];
   FILE *fp2;
 
@@ -1310,7 +1339,10 @@ bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_
   switch (node->get_type()) {
     case BXT_PARAM_NUM:
       value = ((bx_param_num_c*)node)->get64();
-      if (((bx_param_num_c*)node)->get_base() == BASE_DEC) {
+      if (((bx_param_num_c*)node)->get_base() == BASE_DOUBLE) {
+        memcpy(&fvalue, &value, sizeof(double));
+        fprintf(fp, "%f\n", fvalue);
+      } else if (((bx_param_num_c*)node)->get_base() == BASE_DEC) {
         if (((bx_param_num_c*)node)->get_min() >= BX_MIN_BIT64U) {
           if ((Bit64u)((bx_param_num_c*)node)->get_max() > BX_MAX_BIT32U) {
             fprintf(fp, FMT_LL"u\n", value);

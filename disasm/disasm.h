@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: disasm.h 12528 2014-11-01 13:12:24Z sshwarts $
+// $Id: disasm.h 12697 2015-03-27 21:39:24Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2005-2014 Stanislav Shwartsman
@@ -40,7 +40,8 @@
 
 /* Instruction set attributes (duplicated in cpu.h) */
 enum {
-  IA_X87 = 0,                 /* FPU (X87) instruction */
+  IA_386 = 0,                 /* 386 or earlier instruction */
+  IA_X87,                     /* FPU (X87) instruction */
   IA_486,                     /* 486 new instruction */
   IA_PENTIUM,                 /* Pentium new instruction */
   IA_P6,                      /* P6 new instruction */

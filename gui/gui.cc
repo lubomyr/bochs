@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gui.cc 12514 2014-10-19 08:54:16Z vruppert $
+// $Id: gui.cc 12594 2015-01-07 16:17:40Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -509,6 +509,7 @@ void bx_gui_c::snapshot_handler(void)
       BX_INFO(("GFX snapshot: %u x %u x %u bpp (%u bytes)", BX_GUI_THIS guest_xres,
                BX_GUI_THIS guest_yres, BX_GUI_THIS guest_bpp, ilen));
     } else {
+      close(fd);
       BX_ERROR(("snapshot button failed: cannot allocate memory"));
       return;
     }

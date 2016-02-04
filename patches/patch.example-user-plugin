@@ -147,12 +147,12 @@ diff -urN ../bochs/user-plugin/Makefile.in ./user-plugin/Makefile.in
 +###########################################
 +testdev.o: testdev.@CPP_SUFFIX@ ../iodev/iodev.h ../bochs.h ../config.h ../osdep.h \
 +  ../bx_debug/debug.h ../config.h ../osdep.h ../bxversion.h \
-+  ../gui/siminterface.h ../memory/memory-bochs.h ../pc_system.h ../plugin.h \
++  ../gui/siminterface.h ../memory/memory.h ../pc_system.h ../plugin.h \
 +  ../extplugin.h ../ltdl-bochs.h ../gui/gui.h ../gui/textconfig.h \
 +  ../gui/keymap.h ../instrument/stubs/instrument.h testdev.h
 +testdev.lo: testdev.@CPP_SUFFIX@ ../iodev/iodev.h ../bochs.h ../config.h ../osdep.h \
 +  ../bx_debug/debug.h ../config.h ../osdep.h ../bxversion.h \
-+  ../gui/siminterface.h ../memory/memory-bochs.h ../pc_system.h ../plugin.h \
++  ../gui/siminterface.h ../memory/memory.h ../pc_system.h ../plugin.h \
 +  ../extplugin.h ../ltdl-bochs.h ../gui/gui.h ../gui/textconfig.h \
 +  ../gui/keymap.h ../instrument/stubs/instrument.h testdev.h
 diff -urN ../bochs/user-plugin/testdev.cc ./user-plugin/testdev.cc

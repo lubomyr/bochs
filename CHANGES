@@ -1,3 +1,53 @@
+Changes in 2.6.8 (May 3, 2015):
+
+- CPU / CPUDB
+  - Bugfixes for CPU emulation correctness (critical bugfix for x86-64 emulation)
+  - Memory type calculation support for Bochs debugger and instrumentation,
+    to enable configure with --enable-memtype option.
+  - CPUDB: Added Pentium (P54C) configuration to CPUDB
+  - CPUDB: Added Broadwell ULT configuration to CPUDB
+  - Updated definition of instrumentation callbacks, see description in
+    instrumentation.txt / Fixed instrumentation examples
+
+- Configure and compile
+  - Configure option --enable-fast-function-calls now also used for MSVC nmake.
+  - Some configure fixes for the GTK debugger support.
+
+- GUI and display libraries
+  - The VGA update timer mode now can be selected with the 'vga' option.
+  - Release all pressed keys when the simwindow gets back the keyboard focus.
+  - Win32 gui: Captured mouse cursor now really trapped in window.
+  - SDL2: Implemented yes/no dialog (e.g. for VVFAT commit).
+  - Some fixes for wxWidgets 3.0 and unicode version compatiblity.
+  - Full save/restore support for enhanced gui debugger settings (window+font).
+  - Added debugger support for the term gui using a pseudo-terminal.
+
+- I/O Devices
+  - Hard drive
+    - Added Oracle(tm) VM VirtualBox image support (VDI version 1.1)
+    - Re-enable "bulk I/O" repeat speedups extension.
+    - Some lowlevel cdrom code fixes for Windows and Linux.
+  - Sound
+    - SB16: Fixed OPL chip detection by implementing ISA bus delay.
+    - SB16: Ported OPL3 emulation from DOSBox and partly removed legacy code.
+    - ES1370: Added MIDI UART output support.
+    - ES1370: Fixed critical bug that made Win9x drivers crash.
+    - Major rewrite of the lowlevel sound code.
+      - Added mixer thread support (required for all modules except 'sdl').
+      - New mixer and SDL mixer are polling data from the PCM output buffers,
+        the PC speaker beep generator and the OPL3 FM generator.
+      - PCM format conversion to 16 bit signed little endian.
+      - Added sound 'file' module for VOC, WAV, MID and raw data output
+        and added dual output support (device+file) in midi/wave mode 3.
+      - Added capability to set up the sound driver per service.
+  - Floppy
+    - Fixed "Read ID" command for single-sided media (patch by Ben Lunt).
+
+- ROM BIOS
+  - Fixed keyboard scancode processing after keyboard intercept.
+  - Fixed rombios32 code to avoid incorrect ACPI table detection.
+
+-------------------------------------------------------------------------
 Changes in 2.6.7 (November 2, 2014):
 
 - CPU / CPUDB
@@ -86,7 +136,7 @@ Detailed change log :
     The optimization require to compile Bochs with at least -O2 optimization level on gcc.
 
 - Bochs Debugger and Instrumentation
-  - Added disam for Bochs internal instruction representation, especially useful for instrumentation
+  - Added disasm for Bochs internal instruction representation, especially useful for instrumentation
   - Updated definition of instrumentation callbacks, see description in
     instrumentation.txt / Fixed instrumentation examples
   - added capability to use the gui debugger output window as a log viewer

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wx.cc 12444 2014-07-27 14:47:55Z vruppert $
+// $Id: wx.cc 12714 2015-04-11 10:21:03Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -141,6 +141,7 @@ BEGIN_EVENT_TABLE(MyPanel, wxPanel)
   EVT_TIMER(-1, MyPanel::OnTimer)
   EVT_PAINT(MyPanel::OnPaint)
   EVT_MOUSE_EVENTS(MyPanel::OnMouse)
+  EVT_KILL_FOCUS(MyPanel::OnKillFocus)
 END_EVENT_TABLE()
 
 MyPanel::MyPanel(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
@@ -326,18 +327,30 @@ void MyPanel::OnMouse(wxMouseEvent& event)
   // will move the cursor to (mouseSavedX, mouseSavedY).
 }
 
+void MyPanel::OnKillFocus(wxFocusEvent& event)
+{
+  // Send the request to release all keys as a key event
+  wxCriticalSectionLocker lock(event_thread_lock);
+  if (num_events < MAX_EVENTS) {
+    event_queue[num_events].type = BX_ASYNC_EVT_KEY;
+    event_queue[num_events].u.key.bx_key = BX_KEY_NBKEYS | BX_KEY_RELEASED;
+    event_queue[num_events].u.key.raw_scancode = false;
+    num_events++;
+  }
+}
+
 void MyPanel::MyRefresh()
 {
-  IFDBG_VGA (wxLogDebug (wxT ("set needRefresh=true")));
+  IFDBG_VGA(wxLogDebug(wxT("set needRefresh=true")));
   needRefresh = true;
 }
 
 void MyPanel::OnKeyDown(wxKeyEvent& event)
 {
   wxCriticalSectionLocker lock(event_thread_lock);
-  if(num_events < MAX_EVENTS) {
+  if (num_events < MAX_EVENTS) {
     event_queue[num_events].type = BX_ASYNC_EVT_KEY;
-    fillBxKeyEvent (event, event_queue[num_events].u.key, false);
+    fillBxKeyEvent(event, event_queue[num_events].u.key, false);
     num_events++;
   }
 }
@@ -346,9 +359,9 @@ void MyPanel::OnKeyDown(wxKeyEvent& event)
 void MyPanel::OnKeyUp(wxKeyEvent& event)
 {
   wxCriticalSectionLocker lock(event_thread_lock);
-  if(num_events < MAX_EVENTS) {
+  if (num_events < MAX_EVENTS) {
     event_queue[num_events].type = BX_ASYNC_EVT_KEY;
-    fillBxKeyEvent (event, event_queue[num_events].u.key, true);
+    fillBxKeyEvent(event, event_queue[num_events].u.key, true);
     num_events++;
   }
 }
@@ -840,8 +853,8 @@ bx_bool MyPanel::fillBxKeyEvent(wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool rele
     case WXK_ALT:                  bx_key = BX_KEY_ALT_L;        break;
     case WXK_MENU:                 bx_key = BX_KEY_MENU;         break;
     case WXK_PAUSE:                bx_key = BX_KEY_PAUSE;        break;
-    case WXK_PRIOR:                bx_key = BX_KEY_PAGE_UP;      break;
-    case WXK_NEXT:                 bx_key = BX_KEY_PAGE_DOWN;    break;
+    case WXK_PAGEUP:               bx_key = BX_KEY_PAGE_UP;      break;
+    case WXK_PAGEDOWN:             bx_key = BX_KEY_PAGE_DOWN;    break;
     case WXK_END:                  bx_key = BX_KEY_END;          break;
     case WXK_HOME:                 bx_key = BX_KEY_HOME;         break;
     case WXK_LEFT:                 bx_key = BX_KEY_LEFT;         break;
@@ -885,14 +898,8 @@ bx_bool MyPanel::fillBxKeyEvent(wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool rele
     case WXK_NUMPAD_UP:            bx_key = BX_KEY_KP_UP;        break;
     case WXK_NUMPAD_RIGHT:         bx_key = BX_KEY_KP_RIGHT;     break;
     case WXK_NUMPAD_DOWN:          bx_key = BX_KEY_KP_DOWN;      break;
-    case WXK_NUMPAD_PRIOR:         bx_key = BX_KEY_KP_PAGE_UP;   break;
-#if WXK_NUMPAD_PAGEUP != WXK_NUMPAD_PRIOR
     case WXK_NUMPAD_PAGEUP:        bx_key = BX_KEY_KP_PAGE_UP;   break;
-#endif
-    case WXK_NUMPAD_NEXT:          bx_key = BX_KEY_KP_PAGE_DOWN; break;
-#if WXK_NUMPAD_PAGEDOWN != WXK_NUMPAD_NEXT
     case WXK_NUMPAD_PAGEDOWN:      bx_key = BX_KEY_KP_PAGE_DOWN; break;
-#endif
     case WXK_NUMPAD_END:           bx_key = BX_KEY_KP_END;       break;
     case WXK_NUMPAD_BEGIN:         bx_key = BX_KEY_KP_HOME;      break;
     case WXK_NUMPAD_INSERT:        bx_key = BX_KEY_KP_INSERT;    break;
@@ -1053,7 +1060,7 @@ void bx_wx_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 
 void bx_wx_gui_c::handle_events(void)
 {
-  bx_bool quit_sim = 0;
+  unsigned tb_button = 0;
   { // critical section start
     wxCriticalSectionLocker lock(event_thread_lock);
     Bit32u bx_key = 0;
@@ -1062,12 +1069,12 @@ void bx_wx_gui_c::handle_events(void)
         case BX_ASYNC_EVT_TOOLBAR:
           switch (event_queue[i].u.toolbar.button) {
             case BX_TOOLBAR_RESET: reset_handler(); break;
-            case BX_TOOLBAR_POWER: quit_sim = 1; break;
-            case BX_TOOLBAR_SAVE_RESTORE: save_restore_handler(); break;
+            case BX_TOOLBAR_POWER: tb_button = 1; break;
+            case BX_TOOLBAR_SAVE_RESTORE: tb_button = 2; break;
             case BX_TOOLBAR_COPY: copy_handler(); break;
             case BX_TOOLBAR_PASTE: paste_handler(); break;
             case BX_TOOLBAR_SNAPSHOT: snapshot_handler(); break;
-            case BX_TOOLBAR_USER: userbutton_handler(); break;
+            case BX_TOOLBAR_USER: tb_button = 3; break;
             default:
               wxLogDebug (wxT ("unknown toolbar id %d"), event_queue[i].u.toolbar.button);
           }
@@ -1141,9 +1148,14 @@ void bx_wx_gui_c::handle_events(void)
             }
             if (released) bx_key |= BX_KEY_RELEASED;
           }
-          // event contains BX_KEY_* codes: use gen_scancode
-          IFDBG_KEY (wxLogDebug (wxT ("sending key event 0x%02x", bx_key)));
-          DEV_kbd_gen_scancode(bx_key);
+          if ((bx_key & 0xff) < BX_KEY_NBKEYS) {
+            // event contains BX_KEY_* codes: use gen_scancode
+            IFDBG_KEY(wxLogDebug(wxT("sending key event 0x%02x", bx_key)));
+            DEV_kbd_gen_scancode(bx_key);
+          } else {
+            // value BX_KEY_NBKEYS forces sending release for all pressed keys
+            DEV_kbd_release_keys();
+          }
           break;
         case BX_ASYNC_EVT_MOUSE:
           DEV_mouse_motion(
@@ -1155,13 +1167,20 @@ void bx_wx_gui_c::handle_events(void)
         default:
           wxLogError (wxT ("handle_events received unhandled event type %d in queue"), (int)event_queue[i].type);
       }
-      if (quit_sim) break;
+      if (tb_button == 1) break;
     }
     num_events = 0;
   } // critical section end
-  if (quit_sim) {
-    // power_handler() never returns, so it must be placed outside of the critical section
+  // These button handlers must be placed outside of the critical section
+  if (tb_button == 1) {
+    // power_handler() never returns.
     power_handler();
+  } else if (tb_button == 2) {
+    // save_restore_handler() calls a dialog.
+    save_restore_handler();
+  } else if (tb_button == 3) {
+    // userbutton_handler() also calls a dialog.
+    userbutton_handler();
   }
 }
 

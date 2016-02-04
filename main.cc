@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: main.cc 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: main.cc 12628 2015-02-01 11:46:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -183,7 +183,7 @@ static void carbonFatalDialog(const char *error, const char *exposition)
 #endif
 
 #if BX_DEBUGGER
-void print_tree(bx_param_c *node, int level)
+void print_tree(bx_param_c *node, int level, bx_bool xml)
 {
   int i;
   char tmpstr[BX_PATHNAME_LEN];
@@ -194,43 +194,62 @@ void print_tree(bx_param_c *node, int level)
       dbg_printf("NULL pointer\n");
       return;
   }
+
+  if (xml)
+    dbg_printf("<%s>", node->get_name());
+  else
+    dbg_printf("%s = ", node->get_name());
+
   switch (node->get_type()) {
     case BXT_PARAM_NUM:
       if (((bx_param_num_c*)node)->get_base() == BASE_DEC) {
-        dbg_printf("%s = " FMT_LL "d (number)\n", node->get_name(), ((bx_param_num_c*)node)->get64());
+        dbg_printf("" FMT_LL "d", ((bx_param_num_c*)node)->get64());
+        if (! xml) dbg_printf(" (number)");
       } else {
-        dbg_printf("%s = 0x" FMT_LL "x (hex number)\n", node->get_name(), ((bx_param_num_c*)node)->get64());
+        dbg_printf("0x" FMT_LL "x", ((bx_param_num_c*)node)->get64());
+        if (! xml) dbg_printf(" (hex number)");
       }
       break;
     case BXT_PARAM_BOOL:
-      dbg_printf("%s = %s (boolean)\n", node->get_name(), ((bx_param_bool_c*)node)->get()?"true":"false");
+      dbg_printf("%s", ((bx_param_bool_c*)node)->get()?"true":"false");
+      if (! xml) dbg_printf(" (boolean)");
       break;
     case BXT_PARAM_ENUM:
-      dbg_printf("%s = '%s' (enum)\n", node->get_name(), ((bx_param_enum_c*)node)->get_selected());
+      dbg_printf("'%s'", ((bx_param_enum_c*)node)->get_selected());
+      if (! xml) dbg_printf(" (enum)");
       break;
     case BXT_PARAM_STRING:
       ((bx_param_string_c*)node)->sprint(tmpstr, BX_PATHNAME_LEN, 0);
       if (((bx_param_string_c*)node)->get_options() & bx_param_string_c::RAW_BYTES) {
-        dbg_printf("%s = '%s' (raw byte string)\n", node->get_name(), tmpstr);
+        dbg_printf("'%s'", tmpstr);
+        if (! xml) dbg_printf(" (raw byte string)");
       } else {
-        dbg_printf("%s = '%s' (string)\n", node->get_name(), tmpstr);
+        dbg_printf("'%s'", tmpstr);
+        if (! xml) dbg_printf(" (string)");
       }
       break;
     case BXT_LIST:
       {
-        dbg_printf("%s = \n", node->get_name());
+        dbg_printf("\n");
         bx_list_c *list = (bx_list_c*)node;
         for (i=0; i < list->get_size(); i++) {
-          print_tree(list->get(i), level+1);
+          print_tree(list->get(i), level+1, xml);
+        }
+        if (xml) {
+          for (i=0; i<level; i++)
+            dbg_printf("  ");
         }
         break;
       }
     case BXT_PARAM_DATA:
-      dbg_printf("%s = 'size=%d' (binary data)\n", node->get_name(), ((bx_shadow_data_c*)node)->get_size());
+      dbg_printf("'binary data size=%d'", ((bx_shadow_data_c*)node)->get_size());
       break;
     default:
-      dbg_printf("%s (unknown parameter type)\n", node->get_name());
+      dbg_printf("(unknown parameter type)");
   }
+
+  if (xml) dbg_printf("</%s>", node->get_name());
+  dbg_printf("\n");
 }
 #endif
 
@@ -827,6 +846,9 @@ int bx_init_main(int argc, char *argv[])
         BX_PLUGIN_PATH));
     setenv("LTDL_LIBRARY_PATH", BX_PLUGIN_PATH, 1);
   }
+#endif
+#endif  /* if BX_PLUGINS */
+#if BX_HAVE_GETENV && BX_HAVE_SETENV
   if (getenv("BXSHARE") != NULL) {
     BX_INFO (("BXSHARE is set to '%s'", getenv("BXSHARE")));
   } else {
@@ -837,7 +859,6 @@ int bx_init_main(int argc, char *argv[])
 #else
   // we don't have getenv or setenv.  Do nothing.
 #endif
-#endif  /* if BX_PLUGINS */
 
   // initialize plugin system. This must happen before we attempt to
   // load any modules.

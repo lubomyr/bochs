@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci_ide.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: pci_ide.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2014  The Bochs Project
@@ -144,7 +144,7 @@ void bx_pci_ide_c::register_state(void)
   new bx_shadow_data_c(list, "buffer1", BX_PIDE_THIS s.bmdma[1].buffer, 0x20000);
 
   for (unsigned i=0; i<2; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     bx_list_c *ctrl = new bx_list_c(list, name);
     BXRS_PARAM_BOOL(ctrl, cmd_ssbm, BX_PIDE_THIS s.bmdma[i].cmd_ssbm);
     BXRS_PARAM_BOOL(ctrl, cmd_rwcon, BX_PIDE_THIS s.bmdma[i].cmd_rwcon);
@@ -310,7 +310,7 @@ void bx_pci_ide_c::timer()
     // To avoid buffer overflow reset buffer pointers and copy data if necessary
     count = BX_PIDE_THIS s.bmdma[channel].buffer_top - BX_PIDE_THIS s.bmdma[channel].buffer_idx;
     if (count > 0) {
-      memcpy(BX_PIDE_THIS s.bmdma[channel].buffer, BX_PIDE_THIS s.bmdma[channel].buffer_idx, count);
+      memmove(BX_PIDE_THIS s.bmdma[channel].buffer, BX_PIDE_THIS s.bmdma[channel].buffer_idx, count);
     }
     BX_PIDE_THIS s.bmdma[channel].buffer_top = BX_PIDE_THIS s.bmdma[channel].buffer + count;
     BX_PIDE_THIS s.bmdma[channel].buffer_idx = BX_PIDE_THIS s.bmdma[channel].buffer;

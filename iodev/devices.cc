@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.cc 12339 2014-05-26 17:04:02Z vruppert $
+// $Id: devices.cc 12594 2015-01-07 16:17:40Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -105,7 +105,7 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   const char def_name[] = "Default";
   const char *vga_ext;
 
-  BX_DEBUG(("Init $Id: devices.cc 12339 2014-05-26 17:04:02Z vruppert $"));
+  BX_DEBUG(("Init $Id: devices.cc 12594 2015-01-07 16:17:40Z sshwarts $"));
   mem = newmem;
 
   /* set builtin default handlers, will be overwritten by the real default handler */
@@ -1185,6 +1185,7 @@ void bx_pci_device_stub_c::load_pci_rom(const char *path)
   }
   ret = fstat(fd, &stat_buf);
   if (ret) {
+    close(fd);
     BX_PANIC(("couldn't stat PCI ROM image file '%s'.", path));
     return;
   }

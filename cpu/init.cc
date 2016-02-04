@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: init.cc 12518 2014-10-22 17:49:12Z sshwarts $
+// $Id: init.cc 12697 2015-03-27 21:39:24Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -49,6 +49,7 @@ BX_CPU_C::BX_CPU_C(unsigned id): bx_cpuid(id)
   for (unsigned n=0;n<BX_ISA_EXTENSIONS_ARRAY_SIZE;n++)
     ia_extensions_bitmask[n] = 0;
 
+  ia_extensions_bitmask[0] = (1 << BX_ISA_386);
   if (BX_SUPPORT_FPU)
     ia_extensions_bitmask[0] = (1 << BX_ISA_X87);
 
@@ -181,7 +182,7 @@ void BX_CPU_C::register_state(void)
   bx_list_c *cpu = new bx_list_c(SIM->get_bochs_root(), name, name);
 
   for (n=0;n<BX_ISA_EXTENSIONS_ARRAY_SIZE;n++) {
-    sprintf(name, "ia_extensions_bitmask_%d", n);
+    sprintf(name, "ia_extensions_bitmask_%u", n);
     new bx_shadow_num_c(cpu, name, &ia_extensions_bitmask[n], BASE_HEX);
   }
 
@@ -363,20 +364,20 @@ void BX_CPU_C::register_state(void)
   BXRS_HEX_PARAM_FIELD(MSR, mtrrphysbase7, msr.mtrrphys[14]);
   BXRS_HEX_PARAM_FIELD(MSR, mtrrphysmask7, msr.mtrrphys[15]);
 
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix64k_00000, msr.mtrrfix64k_00000);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix16k_80000, msr.mtrrfix16k[0]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix16k_a0000, msr.mtrrfix16k[1]);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix64k, msr.mtrrfix64k.u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix16k_80000, msr.mtrrfix16k[0].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix16k_a0000, msr.mtrrfix16k[1].u64);
 
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_c0000, msr.mtrrfix4k[0]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_c8000, msr.mtrrfix4k[1]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_d0000, msr.mtrrfix4k[2]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_d8000, msr.mtrrfix4k[3]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_e0000, msr.mtrrfix4k[4]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_e8000, msr.mtrrfix4k[5]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_f0000, msr.mtrrfix4k[6]);
-  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_f8000, msr.mtrrfix4k[7]);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_c0000, msr.mtrrfix4k[0].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_c8000, msr.mtrrfix4k[1].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_d0000, msr.mtrrfix4k[2].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_d8000, msr.mtrrfix4k[3].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_e0000, msr.mtrrfix4k[4].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_e8000, msr.mtrrfix4k[5].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_f0000, msr.mtrrfix4k[6].u64);
+  BXRS_HEX_PARAM_FIELD(MSR, mtrrfix4k_f8000, msr.mtrrfix4k[7].u64);
 
-  BXRS_HEX_PARAM_FIELD(MSR, pat, msr.pat);
+  BXRS_HEX_PARAM_FIELD(MSR, pat, msr.pat.u64);
   BXRS_HEX_PARAM_FIELD(MSR, mtrr_deftype, msr.mtrr_deftype);
 #endif
 #if BX_CONFIGURE_MSRS
@@ -470,7 +471,7 @@ void BX_CPU_C::register_state(void)
   BXRS_PARAM_BOOL(tlb, split_large, TLB.split_large);
 #endif
   for (n=0; n<BX_TLB_SIZE; n++) {
-    sprintf(name, "entry%d", n);
+    sprintf(name, "entry%u", n);
     bx_list_c *tlb_entry = new bx_list_c(tlb, name);
     BXRS_HEX_PARAM_FIELD(tlb_entry, lpf, TLB.entry[n].lpf);
     BXRS_HEX_PARAM_FIELD(tlb_entry, lpf_mask, TLB.entry[n].lpf_mask);
@@ -726,7 +727,7 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR ldtr.selector.ti    = 0;
   BX_CPU_THIS_PTR ldtr.selector.rpl   = 0;
 
-  BX_CPU_THIS_PTR ldtr.cache.valid    = 1; /* valid */
+  BX_CPU_THIS_PTR ldtr.cache.valid    = SegValidCache; /* valid */
   BX_CPU_THIS_PTR ldtr.cache.p        = 1; /* present */
   BX_CPU_THIS_PTR ldtr.cache.dpl      = 0; /* field not used */
   BX_CPU_THIS_PTR ldtr.cache.segment  = 0; /* system segment */
@@ -742,7 +743,7 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR tr.selector.ti    = 0;
   BX_CPU_THIS_PTR tr.selector.rpl   = 0;
 
-  BX_CPU_THIS_PTR tr.cache.valid    = 1; /* valid */
+  BX_CPU_THIS_PTR tr.cache.valid    = SegValidCache; /* valid */
   BX_CPU_THIS_PTR tr.cache.p        = 1; /* present */
   BX_CPU_THIS_PTR tr.cache.dpl      = 0; /* field not used */
   BX_CPU_THIS_PTR tr.cache.segment  = 0; /* system segment */
@@ -870,14 +871,13 @@ void BX_CPU_C::reset(unsigned source)
     for (n=0; n<16; n++)
       BX_CPU_THIS_PTR msr.mtrrphys[n] = 0;
 
-    BX_CPU_THIS_PTR msr.mtrrfix64k_00000 = 0; // all fix range MTRRs undefined according to manual
-    BX_CPU_THIS_PTR msr.mtrrfix16k[0] = 0;
-    BX_CPU_THIS_PTR msr.mtrrfix16k[1] = 0;
-
+    BX_CPU_THIS_PTR msr.mtrrfix64k = (Bit64u) 0; // all fix range MTRRs undefined according to manual
+    BX_CPU_THIS_PTR msr.mtrrfix16k[0] = (Bit64u) 0;
+    BX_CPU_THIS_PTR msr.mtrrfix16k[1] = (Bit64u) 0;
     for (n=0; n<8; n++)
-      BX_CPU_THIS_PTR msr.mtrrfix4k[n] = 0;
+      BX_CPU_THIS_PTR msr.mtrrfix4k[n] = (Bit64u) 0;
 
-    BX_CPU_THIS_PTR msr.pat = BX_CONST64(0x0007040600070406);
+    BX_CPU_THIS_PTR msr.pat = (Bit64u) BX_CONST64(0x0007040600070406);
     BX_CPU_THIS_PTR msr.mtrr_deftype = 0;
   }
 #endif
@@ -904,6 +904,9 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR espPageBias = 0;
   BX_CPU_THIS_PTR espPageWindowSize = 0;
   BX_CPU_THIS_PTR espHostPtr = NULL;
+#if BX_SUPPORT_MEMTYPE
+  BX_CPU_THIS_PTR espPageMemtype = BX_MEMTYPE_UC;
+#endif
 
 #if BX_DEBUGGER
   BX_CPU_THIS_PTR stop_reason = STOP_NO_REASON;
@@ -956,7 +959,7 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR in_vmx = BX_CPU_THIS_PTR in_vmx_guest = 0;
   BX_CPU_THIS_PTR in_smm_vmx = BX_CPU_THIS_PTR in_smm_vmx_guest = 0;
   BX_CPU_THIS_PTR vmcsptr = BX_CPU_THIS_PTR vmxonptr = BX_INVALID_VMCSPTR;
-  BX_CPU_THIS_PTR vmcshostptr = 0;
+  set_VMCSPTR(BX_CPU_THIS_PTR vmcsptr);
   if (source == BX_RESET_HARDWARE) {
     /* enable VMX, should be done in BIOS instead */
     BX_CPU_THIS_PTR msr.ia32_feature_ctrl =
@@ -969,6 +972,9 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR svm_gif = 1;
   BX_CPU_THIS_PTR vmcbptr = 0;
   BX_CPU_THIS_PTR vmcbhostptr = 0;
+#if BX_SUPPORT_MEMTYPE
+  BX_CPU_THIS_PTR vmcb_memtype = BX_MEMTYPE_UC;
+#endif
 #endif
 
 #if BX_SUPPORT_VMX || BX_SUPPORT_SVM
@@ -1080,6 +1086,12 @@ void BX_CPU_C::sanity_checks(void)
     BX_PANIC(("data type Bit32u or Bit32s is not of length 4 bytes!"));
   if (sizeof(Bit64u) != 8  ||  sizeof(Bit64s) != 8)
     BX_PANIC(("data type Bit64u or Bit64u is not of length 8 bytes!"));
+
+  if (sizeof(void*) != sizeof(bx_ptr_equiv_t))
+    BX_PANIC(("data type bx_ptr_equiv_t is not equivalent to 'void*' pointer"));
+
+  if (sizeof(int) < 4)
+    BX_PANIC(("Bochs assumes that 'int' type is at least 4 bytes wide!"));
 
   BX_DEBUG(("#(%u)all sanity checks passed!", BX_CPU_ID));
 }

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_ivy_bridge_3770K.cc 12506 2014-10-15 14:25:08Z sshwarts $
+// $Id: corei7_ivy_bridge_3770K.cc 12642 2015-02-12 20:18:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2013-2014 Stanislav Shwartsman
+//   Copyright (c) 2013-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -43,59 +43,54 @@ corei7_ivy_bridge_3770k_t::corei7_ivy_bridge_3770k_t(BX_CPU_C *cpu): bx_cpuid_t(
 
   BX_INFO(("WARNING: RDRAND would not produce true random numbers !"));
 
-  static Bit8u supported_extensions[] = {
-      BX_ISA_X87,
-      BX_ISA_486,
-      BX_ISA_PENTIUM,
-      BX_ISA_P6,
-      BX_ISA_MMX,
-      BX_ISA_SYSENTER_SYSEXIT,
-      BX_ISA_CLFLUSH,
-      BX_ISA_DEBUG_EXTENSIONS,
-      BX_ISA_VME,
-      BX_ISA_PSE,
-      BX_ISA_PAE,
-      BX_ISA_PGE,
+  enable_cpu_extension(BX_ISA_X87);
+  enable_cpu_extension(BX_ISA_486);
+  enable_cpu_extension(BX_ISA_PENTIUM);
+  enable_cpu_extension(BX_ISA_P6);
+  enable_cpu_extension(BX_ISA_MMX);
+  enable_cpu_extension(BX_ISA_SYSENTER_SYSEXIT);
+  enable_cpu_extension(BX_ISA_CLFLUSH);
+  enable_cpu_extension(BX_ISA_DEBUG_EXTENSIONS);
+  enable_cpu_extension(BX_ISA_VME);
+  enable_cpu_extension(BX_ISA_PSE);
+  enable_cpu_extension(BX_ISA_PAE);
+  enable_cpu_extension(BX_ISA_PGE);
 #if BX_PHY_ADDRESS_LONG
-      BX_ISA_PSE36,
+  enable_cpu_extension(BX_ISA_PSE36);
 #endif
-      BX_ISA_MTRR,
-      BX_ISA_PAT,
-      BX_ISA_XAPIC,
-      BX_ISA_X2APIC,
-      BX_ISA_LONG_MODE,
-      BX_ISA_LM_LAHF_SAHF,
-      BX_ISA_CMPXCHG16B,
-      BX_ISA_NX,
-      BX_ISA_PCID,
-      BX_ISA_TSC_DEADLINE,
-      BX_ISA_SSE,
-      BX_ISA_SSE2,
-      BX_ISA_SSE3,
-      BX_ISA_SSSE3,
-      BX_ISA_SSE4_1,
-      BX_ISA_SSE4_2,
-      BX_ISA_POPCNT,
+  enable_cpu_extension(BX_ISA_MTRR);
+  enable_cpu_extension(BX_ISA_PAT);
+  enable_cpu_extension(BX_ISA_XAPIC);
+  enable_cpu_extension(BX_ISA_X2APIC);
+  enable_cpu_extension(BX_ISA_LONG_MODE);
+  enable_cpu_extension(BX_ISA_LM_LAHF_SAHF);
+  enable_cpu_extension(BX_ISA_CMPXCHG16B);
+  enable_cpu_extension(BX_ISA_NX);
+  enable_cpu_extension(BX_ISA_PCID);
+  enable_cpu_extension(BX_ISA_TSC_DEADLINE);
+  enable_cpu_extension(BX_ISA_SSE);
+  enable_cpu_extension(BX_ISA_SSE2);
+  enable_cpu_extension(BX_ISA_SSE3);
+  enable_cpu_extension(BX_ISA_SSSE3);
+  enable_cpu_extension(BX_ISA_SSE4_1);
+  enable_cpu_extension(BX_ISA_SSE4_2);
+  enable_cpu_extension(BX_ISA_POPCNT);
 #if BX_SUPPORT_MONITOR_MWAIT
-      BX_ISA_MONITOR_MWAIT,
+  enable_cpu_extension(BX_ISA_MONITOR_MWAIT);
 #endif
 #if BX_SUPPORT_VMX >= 2
-      BX_ISA_VMX,
+  enable_cpu_extension(BX_ISA_VMX);
 #endif
-   /* BX_ISA_SMX, */
-      BX_ISA_RDTSCP,
-      BX_ISA_XSAVE,
-      BX_ISA_XSAVEOPT,
-      BX_ISA_AES_PCLMULQDQ,
-      BX_ISA_AVX,
-      BX_ISA_AVX_F16C,
-      BX_ISA_FSGSBASE,
-      BX_ISA_SMEP,
-      BX_ISA_RDRAND,
-      BX_ISA_EXTENSION_LAST
-  };
-
-  register_cpu_extensions(supported_extensions);
+//enable_cpu_extension(BX_ISA_SMX);
+  enable_cpu_extension(BX_ISA_RDTSCP);
+  enable_cpu_extension(BX_ISA_XSAVE);
+  enable_cpu_extension(BX_ISA_XSAVEOPT);
+  enable_cpu_extension(BX_ISA_AES_PCLMULQDQ);
+  enable_cpu_extension(BX_ISA_AVX);
+  enable_cpu_extension(BX_ISA_AVX_F16C);
+  enable_cpu_extension(BX_ISA_FSGSBASE);
+  enable_cpu_extension(BX_ISA_SMEP);
+  enable_cpu_extension(BX_ISA_RDRAND);
 }
 
 void corei7_ivy_bridge_3770k_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
@@ -226,21 +221,12 @@ void corei7_ivy_bridge_3770k_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) con
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
+  unsigned max_leaf = 0xD;
   static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
-    leaf->eax = 0x2;
-  else
-    leaf->eax = 0xD;
+    max_leaf = 0x2;
 
-  // CPUID vendor string (e.g. GenuineIntel, AuthenticAMD, CentaurHauls, ...)
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(max_leaf, vendor_string, leaf);
 }
 
 // leaf 0x00000001 //
@@ -651,10 +637,7 @@ void corei7_ivy_bridge_3770k_t::get_ext_cpuid_leaf_0(cpuid_function_t *leaf) con
   // EBX: reserved
   // EDX: reserved
   // ECX: reserved
-  leaf->eax = 0x80000008;
-  leaf->ebx = 0;
-  leaf->edx = 0; // Reserved for Intel
-  leaf->ecx = 0;
+  get_leaf_0(0x80000008, NULL, leaf);
 }
 
 // leaf 0x80000001 //

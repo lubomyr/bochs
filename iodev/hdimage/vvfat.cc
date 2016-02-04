@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vvfat.cc 12255 2014-03-23 09:19:44Z vruppert $
+// $Id: vvfat.cc 12590 2015-01-03 13:53:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 // Virtual VFAT image support (shadows a local directory)
@@ -1096,8 +1096,8 @@ bx_bool vvfat_image_t::read_sector_from_file(const char *path, Bit8u *buffer, Bi
     return 0;
   int offset = sector * 0x200;
   if (::lseek(fd, offset, SEEK_SET) != offset) {
-    return 0;
     ::close(fd);
+    return 0;
   }
   int result = ::read(fd, buffer, 0x200);
   ::close(fd);
@@ -1448,7 +1448,7 @@ bx_bool vvfat_image_t::write_file(const char *path, direntry_t *entry, bx_bool c
   int fd;
   Bit32u csize, fsize, fstart, cur, next, rsvd_clusters, bad_cluster;
   Bit64u offset;
-  Bit8u *buffer;
+  Bit8u *buffer = NULL;
 #ifndef WIN32
   struct tm tv;
   struct utimbuf ut;
@@ -1553,7 +1553,8 @@ bx_bool vvfat_image_t::write_file(const char *path, direntry_t *entry, bx_bool c
     CloseHandle(hFile);
   }
 #endif
-
+  if(buffer)
+    free(buffer);
   return 1;
 }
 

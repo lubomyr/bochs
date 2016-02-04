@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundsdl.h 12383 2014-06-23 19:37:58Z vruppert $
+// $Id: soundsdl.h 12672 2015-02-23 21:32:34Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012  The Bochs Project
+//  Copyright (C) 2012-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,26 +21,35 @@
 // Lowlevel sound output support for SDL written by Volker Ruppert
 
 
-#if BX_WITH_SDL || BX_WITH_SDL2
+#if BX_HAVE_SOUND_SDL
 
 #include "bochs.h"
+#include <SDL_audio.h>
+
+// the waveout class
+
+class bx_soundlow_waveout_sdl_c : public bx_soundlow_waveout_c {
+public:
+  bx_soundlow_waveout_sdl_c();
+  virtual ~bx_soundlow_waveout_sdl_c();
+
+  virtual int openwaveoutput(const char *wavedev);
+  virtual int set_pcm_params(bx_pcm_param_t *param);
+  virtual int sendwavepacket(int length, Bit8u data[], bx_pcm_param_t *src_param);
+
+  virtual void unregister_wave_callback(int callback_id);
+  virtual bx_bool mixer_common(Bit8u *buffer, int len);
+private:
+  bx_bool WaveOpen;
+  SDL_AudioSpec fmt;
+};
 
 class bx_sound_sdl_c : public bx_sound_lowlevel_c {
 public:
   bx_sound_sdl_c();
-  virtual ~bx_sound_sdl_c();
+  virtual ~bx_sound_sdl_c() {}
 
-  virtual int get_type() {return BX_SOUNDLOW_SDL;}
-
-  virtual int    waveready();
-
-  virtual int    openwaveoutput(const char *wavedev);
-  virtual int    startwaveplayback(int frequency, int bits, bx_bool stereo, int format);
-  virtual int    sendwavepacket(int length, Bit8u data[]);
-  virtual int    stopwaveplayback();
-  virtual int    closewaveoutput();
-private:
-  bx_bool WaveOpen;
+  virtual bx_soundlow_waveout_c* get_waveout();
 };
 
-#endif  // BX_WITH_SDL || BX_WITH_SDL2
+#endif  // BX_HAVE_SOUND_SDL

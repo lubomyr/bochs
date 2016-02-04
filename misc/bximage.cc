@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bximage.cc 12364 2014-06-07 07:32:06Z vruppert $
+// $Id: bximage.cc 12690 2015-03-20 18:01:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2013  The Bochs Project
-//  Copyright (C) 2013-2014  Volker Ruppert
+//  Copyright (C) 2013-2015  Volker Ruppert
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -116,7 +116,7 @@ char bx_filename_1[512];
 char bx_filename_2[512];
 
 const char *EOF_ERR = "ERROR: End of input";
-const char *svnid = "$Id: bximage.cc 12364 2014-06-07 07:32:06Z vruppert $";
+const char *svnid = "$Id: bximage.cc 12690 2015-03-20 18:01:52Z vruppert $";
 const char *divider = "========================================================================";
 const char *main_menu_prompt =
 "\n"
@@ -514,8 +514,7 @@ void create_sparse_image(const char *filename, Bit64u size)
 
   Bit8u *padding = new Bit8u[padtopagesize];
   memset(padding, 0, padtopagesize);
-  if (padding == NULL)
-    fatal("ERROR: The disk image is not complete - could not create padding!");
+
   if (bx_write_image(fd, sizesofar, padding, padtopagesize) != padtopagesize) {
     close(fd);
     fatal("ERROR: The disk image is not complete - could not write padding!");
@@ -1223,7 +1222,7 @@ int CDECL main(int argc, char *argv[])
         image_overwrite_check(bx_filename_1);
         if (bx_hdimage == 0) {
           sprintf(bochsrc_line, "floppya: image=\"%s\", status=inserted", bx_filename_1);
-          printf("\nCreating floppy image '%s' with %d sectors\n", bx_filename_1, fdsize_sectors[bx_fdsize_idx]);
+          printf("\nCreating floppy image '%s' with %u sectors\n", bx_filename_1, fdsize_sectors[bx_fdsize_idx]);
           create_flat_image(bx_filename_1, fdsize_sectors[bx_fdsize_idx] * 512);
         } else {
           int heads = 16, spt = 63;
@@ -1234,7 +1233,7 @@ int CDECL main(int argc, char *argv[])
           Bit64u cyl = (Bit64u)(hdsize/16.0/63.0/512.0);
           if (cyl >= (1 << BX_MAX_CYL_BITS))
             fatal("ERROR: number of cylinders out of range !\n");
-          printf("\nCreating hard disk image '%s' with CHS="FMT_LL"d/%d/%d\n",
+          printf("\nCreating hard disk image '%s' with CHS=" FMT_LL "d/%d/%d\n",
                  bx_filename_1, cyl, heads, spt);
           hdsize = cyl * heads * spt * 512;
           create_hard_disk_image(bx_filename_1, imgmode, hdsize);
@@ -1300,10 +1299,10 @@ int CDECL main(int argc, char *argv[])
         } else {
           if (hdimage->get_capabilities() & HDIMAGE_AUTO_GEOMETRY) {
             Bit64u cyl = (Bit64u)(hdimage->hd_size/16.0/63.0/512.0);
-            printf("geometry = "FMT_LL"d/16/63 ("FMT_LL"d MB)\n\n", cyl,
+            printf("geometry = " FMT_LL "d/16/63 (" FMT_LL "d MB)\n\n", cyl,
                    hdimage->hd_size >> 20);
           } else {
-            printf("geometry = %d/%d/%d ("FMT_LL"d MB)\n\n", hdimage->cylinders,
+            printf("geometry = %d/%d/%d (" FMT_LL "d MB)\n\n", hdimage->cylinders,
                    hdimage->heads, hdimage->spt, hdimage->hd_size >> 20);
           }
           hdimage->close();

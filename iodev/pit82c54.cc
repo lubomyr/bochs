@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pit82c54.cc 11714 2013-06-14 19:08:51Z vruppert $
+// $Id: pit82c54.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2013  The Bochs Project
@@ -211,7 +211,7 @@ void pit_82C54::register_state(bx_param_c *parent)
   char name[4];
 
   for (unsigned i=0; i<3; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     bx_list_c *tim = new bx_list_c(parent, name);
     new bx_shadow_bool_c(tim, "GATE", &counter[i].GATE);
     new bx_shadow_bool_c(tim, "OUTpin", &counter[i].OUTpin);

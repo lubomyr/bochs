@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.cc 12367 2014-06-09 07:14:23Z vruppert $
+// $Id: hdimage.cc 12698 2015-03-29 14:27:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@
 #include "config.h"
 #include "misc/bxcompat.h"
 #include "osdep.h"
+#include "misc/bswap.h"
 #else
 #include "iodev.h"
 #include "cdrom.h"
@@ -41,6 +42,7 @@
 #include "vmware4.h"
 #include "vvfat.h"
 #include "vpc-img.h"
+#include "vbox.h"
 
 #if BX_HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -135,6 +137,10 @@ device_image_t* bx_hdimage_ctl_c::init_image(Bit8u image_mode, Bit64u disk_size,
 
     case BX_HDIMAGE_MODE_VPC:
       hdimage = new vpc_image_t();
+      break;
+
+    case BX_HDIMAGE_MODE_VBOX:
+      hdimage = new vbox_image_t();
       break;
 
     default:
@@ -253,6 +259,8 @@ int hdimage_detect_image_mode(const char *pathname)
     result = BX_HDIMAGE_MODE_GROWING;
   } else if (vpc_image_t::check_format(fd, image_size) >= HDIMAGE_FORMAT_OK) {
     result = BX_HDIMAGE_MODE_VPC;
+  } else if (vbox_image_t::check_format(fd, image_size) >= HDIMAGE_FORMAT_OK) {
+    result = BX_HDIMAGE_MODE_VBOX;
   } else if (flat_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
     result = BX_HDIMAGE_MODE_FLAT;
   }
@@ -401,7 +409,10 @@ bx_bool hdimage_copy_file(const char *src, const char *dst)
     | O_BINARY
 #endif
     , S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP);
-  if (fd2 < 0) return 0;
+  if (fd2 < 0) {
+    ::close(fd1);
+    return 0;
+  }
   offset = 0;
   size = 0x20000;
   buf = (char*)malloc(size);
@@ -468,7 +479,7 @@ int flat_image_t::open(const char* _pathname, int flags)
   if ((fd = hdimage_open_file(pathname, flags, &hd_size, &mtime)) < 0) {
     return -1;
   }
-  BX_INFO(("hd_size: "FMT_LL"u", hd_size));
+  BX_INFO(("hd_size: " FMT_LL "u", hd_size));
   if (hd_size <= 0) BX_PANIC(("size of disk image not detected / invalid"));
   if ((hd_size % 512) != 0) BX_PANIC(("size of disk image must be multiple of 512 bytes"));
   return fd;
@@ -604,7 +615,7 @@ int concat_image_t::open(const char* _pathname0, int flags)
   thismax = length_table[0]-1;
   seek_was_last_op = 0;
   hd_size = start_offset;
-  BX_INFO(("hd_size: "FMT_LL"u", hd_size));
+  BX_INFO(("hd_size: " FMT_LL "u", hd_size));
   return 0; // success.
 }
 

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: amd_k6_2_chomper.cc 12505 2014-10-15 08:04:38Z sshwarts $
+// $Id: amd_k6_2_chomper.cc 12642 2015-02-12 20:18:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -36,32 +36,28 @@ amd_k6_2_chomper_t::amd_k6_2_chomper_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
 
   BX_INFO(("WARNING: 3DNow! is not implemented yet !"));
 
-  static Bit8u supported_extensions[] = {
-      BX_ISA_X87,
-      BX_ISA_486,
-      BX_ISA_PENTIUM,
-      BX_ISA_MMX,
-      BX_ISA_SYSCALL_SYSRET_LEGACY,
-      BX_ISA_3DNOW,
-      BX_ISA_DEBUG_EXTENSIONS,
-      BX_ISA_VME,
+  enable_cpu_extension(BX_ISA_X87);
+  enable_cpu_extension(BX_ISA_486);
+  enable_cpu_extension(BX_ISA_PENTIUM);
+  enable_cpu_extension(BX_ISA_MMX);
+  enable_cpu_extension(BX_ISA_SYSCALL_SYSRET_LEGACY);
+  enable_cpu_extension(BX_ISA_3DNOW);
+  enable_cpu_extension(BX_ISA_DEBUG_EXTENSIONS);
+  enable_cpu_extension(BX_ISA_VME);
+  enable_cpu_extension(BX_ISA_PSE);
 #if BX_PHY_ADDRESS_LONG
-      BX_ISA_PSE36,
+  enable_cpu_extension(BX_ISA_PSE36);
 #endif
-      BX_ISA_PSE,
-      BX_ISA_EXTENSION_LAST
-  };
-
-  register_cpu_extensions(supported_extensions);
 }
 
 void amd_k6_2_chomper_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
 {
   static const char* brand_string = "AMD-K6(tm) 3D processor\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+  static const char* magic_string = "NexGenerationAMD";
 
   switch(function) {
   case 0x8FFFFFFF:
-    get_cpuid_hidden_level(leaf);
+    get_cpuid_hidden_level(leaf, magic_string);
     return;
   case 0x80000000:
     get_ext_cpuid_leaf_0(leaf);
@@ -92,23 +88,7 @@ void amd_k6_2_chomper_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpu
 // leaf 0x00000000 //
 void amd_k6_2_chomper_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "AuthenticAMD";
-
-  // EAX: highest std function understood by CPUID
-  // EBX: vendor ID string
-  // EDX: vendor ID string
-  // ECX: vendor ID string
-  leaf->eax = 0x1;
-
-  // CPUID vendor string (e.g. GenuineIntel, AuthenticAMD, CentaurHauls, ...)
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(0x1, "AuthenticAMD", leaf);
 }
 
 // leaf 0x00000001 //
@@ -187,10 +167,7 @@ void amd_k6_2_chomper_t::get_ext_cpuid_leaf_0(cpuid_function_t *leaf) const
   // EBX: reserved
   // EDX: reserved
   // ECX: reserved
-  leaf->eax = 0x80000005;
-  leaf->ebx = 0;
-  leaf->ecx = 0;
-  leaf->edx = 0;
+  get_leaf_0(0x80000005, NULL, leaf);
 }
 
 // leaf 0x80000001 //
@@ -269,31 +246,10 @@ void amd_k6_2_chomper_t::get_ext_cpuid_leaf_5(cpuid_function_t *leaf) const
   leaf->edx = 0x20020220;
 }
 
-// leaf 0x8FFFFFFF //
-void amd_k6_2_chomper_t::get_cpuid_hidden_level(cpuid_function_t *leaf) const
-{
-  static const char* magic_string = "NexGenerationAMD";
-  
-  memcpy(&(leaf->eax), magic_string     , 4);
-  memcpy(&(leaf->ebx), magic_string +  4, 4);
-  memcpy(&(leaf->ecx), magic_string +  8, 4);
-  memcpy(&(leaf->edx), magic_string + 12, 4);
-
-#ifdef BX_BIG_ENDIAN
-  leaf->eax = bx_bswap32(leaf->eax);
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
-}
-
 void amd_k6_2_chomper_t::dump_cpuid(void) const
 {
   bx_cpuid_t::dump_cpuid(0x1, 0x5);
-
-  struct cpuid_function_t leaf;
-  get_cpuid_leaf(0x8fffffff, 0x00000000, &leaf);
-  BX_INFO(("CPUID[0x8fffffff]: %08x %08x %08x %08x", leaf.eax, leaf.ebx, leaf.ecx, leaf.edx));
+  dump_cpuid_leaf(0x8fffffff);
 }
 
 bx_cpuid_t *create_amd_k6_2_chomper_cpuid(BX_CPU_C *cpu) { return new amd_k6_2_chomper_t(cpu); }

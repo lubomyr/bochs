@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: textconfig.cc 12482 2014-09-01 16:47:26Z vruppert $
+// $Id: textconfig.cc 12594 2015-01-07 16:17:40Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2013  The Bochs Project
@@ -631,6 +631,7 @@ int bx_write_rc(char *rc)
       strcpy(oldrc, "none");
   } else {
     strncpy(oldrc, rc, CI_PATH_LENGTH);
+    oldrc[sizeof(oldrc) - 1] = '\0';
   }
   while (1) {
     if (ask_string("Save configuration to what file?  To cancel, type 'none'.\n[%s] ", oldrc, newrc) < 0) return -1;

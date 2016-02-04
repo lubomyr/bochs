@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32_enh_dbg_osdep.cc 12523 2014-10-31 19:35:57Z vruppert $
+// $Id: win32_enh_dbg_osdep.cc 12543 2014-11-06 19:02:34Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -1222,6 +1222,7 @@ bx_bool NewFont()
     cF.hwndOwner = hY;
     cF.lpLogFont = &mylf;
     cF.Flags = CF_SCREENFONTS | CF_EFFECTS | CF_INITTOLOGFONTSTRUCT;
+    mylf.lfItalic = 0;
     if (ChooseFont(&cF) == FALSE)
         return FALSE;
 
@@ -1813,10 +1814,14 @@ bx_bool OSInit()
     if (hY == NULL)
         return FALSE;
     if (windowInit) {
-      MoveWindow(hY, rY.left, rY.top, rY.right-rY.left, rY.bottom-rY.top, TRUE);
+      if ((rY.left >= 0) && (rY.top >= 0)) {
+        MoveWindow(hY, rY.left, rY.top, rY.right-rY.left, rY.bottom-rY.top, TRUE);
+      } else {
+        ShowWindow(hY, SW_MAXIMIZE);
+      }
     }
-    *CustomFont = DefFont;  // create the deffont with modded attributes (bold, italic)
     if (!fontInit) {
+      *CustomFont = DefFont;  // create the deffont with modded attributes (bold, italic)
       HDC hdc = GetDC(hY);
       memset(&mylf, 0, sizeof(LOGFONT));
       mylf.lfWeight = FW_NORMAL;
@@ -1824,6 +1829,8 @@ bx_bool OSInit()
       GetTextMetrics(hdc, &tm);
       ReleaseDC(hY, hdc);
       mylf.lfHeight = -(tm.tmHeight);     // request a TOTAL font height of tmHeight
+    } else {
+      *CustomFont = CreateFontIndirect(&mylf);
     }
     // create a bold version of the deffont
     mylf.lfWeight = FW_BOLD;
@@ -1834,6 +1841,13 @@ bx_bool OSInit()
     // create an italic version of the deffont (turn off bold)
     mylf.lfWeight = FW_NORMAL;
     CustomFont[2] = CreateFontIndirect(&mylf);
+    if (fontInit) {
+      CallWindowProc(wListView,hL[REG_WND],WM_SETFONT,(WPARAM)*CustomFont,MAKELPARAM(TRUE,0));
+      CallWindowProc(wListView,hL[ASM_WND],WM_SETFONT,(WPARAM)*CustomFont,MAKELPARAM(TRUE,0));
+      CallWindowProc(wListView,hL[DUMP_WND],WM_SETFONT,(WPARAM)*CustomFont,MAKELPARAM(TRUE,0));
+      CallWindowProc(*wEdit,hE_I,WM_SETFONT,(WPARAM)*CustomFont,MAKELPARAM(TRUE,0));
+      SendMessage(hS_S,WM_SETFONT,(WPARAM)*CustomFont,MAKELPARAM(TRUE,0));
+    }
     return TRUE;
 }
 
@@ -1912,7 +1926,6 @@ bx_bool ParseOSSettings(const char *param, const char *value)
     free(val2);
     return 1;
   }
-  // TODO: handle more win32-specific settings here
   return 0;
 }
 
@@ -1924,7 +1937,6 @@ void WriteOSSettings(FILE *fd)
     GetWindowRect(hY, &rY);
   }
   fprintf(fd, "MainWindow = %d, %d, %d, %d\n", rY.left, rY.top, rY.right, rY.bottom);
-  // TODO: handle more win32-specific settings here
 }
 
 #endif

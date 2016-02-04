@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: serial_raw.h 11638 2013-02-23 15:15:59Z vruppert $
+// $Id: serial_raw.h 12575 2014-12-23 17:13:29Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2013  The Bochs Project
+//  Copyright (C) 2004-2014  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -91,6 +91,7 @@ public:
     OVERLAPPED thread_ovl;
     unsigned thread_rxdata_count;
     Bit16s thread_rxdata_buffer[THREAD_RX_BUFSIZE];
+    CRITICAL_SECTION serialCS;
 #endif
 #endif
 };

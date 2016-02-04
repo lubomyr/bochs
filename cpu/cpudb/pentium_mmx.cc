@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pentium_mmx.cc 12505 2014-10-15 08:04:38Z sshwarts $
+// $Id: pentium_mmx.cc 12642 2015-02-12 20:18:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -34,21 +34,16 @@ pentium_mmx_t::pentium_mmx_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   if (BX_CPU_LEVEL < 5)
     BX_PANIC(("Pentium MMX should be compiled with BX_CPU_LEVEL=5 or higher"));
 
-  static Bit8u supported_extensions[] = {
-      BX_ISA_X87,
-      BX_ISA_486,
-      BX_ISA_PENTIUM,
-      BX_ISA_MMX,
-      BX_ISA_DEBUG_EXTENSIONS,
-      BX_ISA_VME,
+  enable_cpu_extension(BX_ISA_X87);
+  enable_cpu_extension(BX_ISA_486);
+  enable_cpu_extension(BX_ISA_PENTIUM);
+  enable_cpu_extension(BX_ISA_MMX);
+  enable_cpu_extension(BX_ISA_DEBUG_EXTENSIONS);
+  enable_cpu_extension(BX_ISA_VME);
 #if BX_PHY_ADDRESS_LONG
-      BX_ISA_PSE36,
+  enable_cpu_extension(BX_ISA_PSE36);
 #endif
-      BX_ISA_PSE,
-      BX_ISA_EXTENSION_LAST
-  };
-
-  register_cpu_extensions(supported_extensions);
+  enable_cpu_extension(BX_ISA_PSE);
 }
 
 void pentium_mmx_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
@@ -67,23 +62,7 @@ void pentium_mmx_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_fu
 // leaf 0x00000000 //
 void pentium_mmx_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
-  // EAX: highest std function understood by CPUID
-  // EBX: vendor ID string
-  // EDX: vendor ID string
-  // ECX: vendor ID string
-  leaf->eax = 0x1;
-
-  // CPUID vendor string (e.g. GenuineIntel, AuthenticAMD, CentaurHauls, ...)
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(0x1, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //

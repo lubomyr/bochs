@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: phenomx3_8650_toliman.cc 12505 2014-10-15 08:04:38Z sshwarts $
+// $Id: phenomx3_8650_toliman.cc 12642 2015-02-12 20:18:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2012-2014 Stanislav Shwartsman
+//   Copyright (c) 2012-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -43,53 +43,48 @@ phenom_8650_toliman_t::phenom_8650_toliman_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   if (! BX_SUPPORT_MONITOR_MWAIT)
     BX_INFO(("WARNING: MONITOR/MWAIT support is not compiled in !"));
 
-  static Bit8u supported_extensions[] = {
-      BX_ISA_X87,
-      BX_ISA_486,
-      BX_ISA_PENTIUM,
-      BX_ISA_MMX,
-      BX_ISA_3DNOW,
-      BX_ISA_SYSCALL_SYSRET_LEGACY,
-      BX_ISA_SYSENTER_SYSEXIT,
-      BX_ISA_P6,
-      BX_ISA_SSE,
-      BX_ISA_SSE2,
-      BX_ISA_SSE3,
+  enable_cpu_extension(BX_ISA_X87);
+  enable_cpu_extension(BX_ISA_486);
+  enable_cpu_extension(BX_ISA_PENTIUM);
+  enable_cpu_extension(BX_ISA_MMX);
+  enable_cpu_extension(BX_ISA_3DNOW);
+  enable_cpu_extension(BX_ISA_SYSCALL_SYSRET_LEGACY);
+  enable_cpu_extension(BX_ISA_SYSENTER_SYSEXIT);
+  enable_cpu_extension(BX_ISA_P6);
+  enable_cpu_extension(BX_ISA_SSE);
+  enable_cpu_extension(BX_ISA_SSE2);
+  enable_cpu_extension(BX_ISA_SSE3);
 #if BX_SUPPORT_MONITOR_MWAIT
-      BX_ISA_MONITOR_MWAIT,
+  enable_cpu_extension(BX_ISA_MONITOR_MWAIT);
 #endif
-      BX_ISA_CLFLUSH,
-      BX_ISA_POPCNT,
-      BX_ISA_LZCNT,
-      BX_ISA_SSE4A,
-      BX_ISA_DEBUG_EXTENSIONS,
-      BX_ISA_VME,
-      BX_ISA_PSE,
-      BX_ISA_PAE,
-      BX_ISA_PGE,
+  enable_cpu_extension(BX_ISA_CLFLUSH);
+  enable_cpu_extension(BX_ISA_POPCNT);
+  enable_cpu_extension(BX_ISA_LZCNT);
+  enable_cpu_extension(BX_ISA_SSE4A);
+  enable_cpu_extension(BX_ISA_DEBUG_EXTENSIONS);
+  enable_cpu_extension(BX_ISA_VME);
+  enable_cpu_extension(BX_ISA_PSE);
+  enable_cpu_extension(BX_ISA_PAE);
+  enable_cpu_extension(BX_ISA_PGE);
 #if BX_PHY_ADDRESS_LONG
-      BX_ISA_PSE36,
+  enable_cpu_extension(BX_ISA_PSE36);
 #endif
-      BX_ISA_MTRR,
-      BX_ISA_PAT,
-      BX_ISA_XAPIC,
-      BX_ISA_LONG_MODE,
-      BX_ISA_LM_LAHF_SAHF,
-      BX_ISA_NX,
-      BX_ISA_FFXSR,
-      BX_ISA_CMPXCHG16B,
-      BX_ISA_1G_PAGES,
-      BX_ISA_MISALIGNED_SSE,
-      BX_ISA_RDTSCP,
+  enable_cpu_extension(BX_ISA_MTRR);
+  enable_cpu_extension(BX_ISA_PAT);
+  enable_cpu_extension(BX_ISA_XAPIC);
+  enable_cpu_extension(BX_ISA_LONG_MODE);
+  enable_cpu_extension(BX_ISA_LM_LAHF_SAHF);
+  enable_cpu_extension(BX_ISA_NX);
+  enable_cpu_extension(BX_ISA_FFXSR);
+  enable_cpu_extension(BX_ISA_CMPXCHG16B);
+  enable_cpu_extension(BX_ISA_1G_PAGES);
+  enable_cpu_extension(BX_ISA_MISALIGNED_SSE);
+  enable_cpu_extension(BX_ISA_RDTSCP);
 #if BX_SUPPORT_SVM
-      BX_ISA_SVM,
+  enable_cpu_extension(BX_ISA_SVM);
 #endif
-      BX_ISA_ALT_MOV_CR8,
-      BX_ISA_XAPIC_EXT,
-      BX_ISA_EXTENSION_LAST
-  };
-
-  register_cpu_extensions(supported_extensions);
+  enable_cpu_extension(BX_ISA_ALT_MOV_CR8);
+  enable_cpu_extension(BX_ISA_XAPIC_EXT);
 }
 
 void phenom_8650_toliman_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
@@ -170,27 +165,12 @@ void phenom_8650_toliman_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
+  unsigned max_leaf = BX_SUPPORT_MONITOR_MWAIT ? 0x5 : 0x1;
   static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt) {
-    leaf->eax = 0x1;
-  }
-  else {
-#if BX_SUPPORT_MONITOR_MWAIT
-    leaf->eax = 0x5;
-#else
-    leaf->eax = 0x1;
-#endif
-  }
+  if (cpuid_limit_winnt)
+    max_leaf = 0x1;
 
-  // CPUID vendor string (e.g. GenuineIntel, AuthenticAMD, CentaurHauls, ...)
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(max_leaf, vendor_string, leaf);
 }
 
 // leaf 0x00000001 //
@@ -352,21 +332,7 @@ void phenom_8650_toliman_t::get_std_cpuid_leaf_5(cpuid_function_t *leaf) const
 // leaf 0x80000000 //
 void phenom_8650_toliman_t::get_ext_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "AuthenticAMD";
-
-  // EAX: highest extended function understood by CPUID
-  // EBX: reserved
-  // EDX: reserved
-  // ECX: reserved
-  leaf->eax = 0x8000001A;
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(0x8000001A, "AuthenticAMD", leaf);
 }
 
 // leaf 0x80000001 //

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dbg_main.cc 12481 2014-08-31 20:05:25Z sshwarts $
+// $Id: dbg_main.cc 12667 2015-02-22 21:26:26Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -323,6 +323,7 @@ reparse:
     {
         if ((*tmp_buf_prev != '\n') && (*tmp_buf_prev != 0)) {
           strncpy(tmp_buf, tmp_buf_prev, sizeof(tmp_buf_prev));
+          tmp_buf[sizeof(tmp_buf) - 1] = '\0';
           goto reparse;
         }
     }
@@ -372,13 +373,14 @@ void bx_get_command(void)
 
   char prompt[256];
   if (bx_infile_stack_index == 0) {
-    sprintf(prompt, "<bochs:%d> ", bx_infile_stack[bx_infile_stack_index].lineno);
+    sprintf(prompt, "<bochs:%u> ", bx_infile_stack[bx_infile_stack_index].lineno);
   }
   if (SIM->has_debug_gui() && bx_infile_stack_index == 0) {
     // wait for gui debugger to send another debugger command
     charptr_ret = SIM->debug_get_next_command();
     if (charptr_ret) {
       strncpy(tmp_buf, charptr_ret, sizeof(tmp_buf));
+      tmp_buf[sizeof(tmp_buf) - 2] = '\0';
       strcat(tmp_buf, "\n");
       // The returned string was allocated in wxmain.cc by "new char[]".
       // Free it with delete[].
@@ -395,7 +397,8 @@ void bx_get_command(void)
     // beware, returns NULL on end of file
     if (charptr_ret && strlen(charptr_ret) > 0) {
       add_history(charptr_ret);
-      strcpy(tmp_buf, charptr_ret);
+      strncpy(tmp_buf, charptr_ret, sizeof(tmp_buf));
+      tmp_buf[sizeof(tmp_buf) - 2] = '\0';
       strcat(tmp_buf, "\n");
       free(charptr_ret);
       charptr_ret = &tmp_buf[0];
@@ -468,6 +471,7 @@ int bx_nest_infile(char *path)
   }
 
   if ((bx_infile_stack_index+1) >= BX_INFILE_DEPTH) {
+    fclose(tmp_fp);
     dbg_printf("%s: source files nested too deeply\n", argv0);
     return(0);
   }
@@ -631,18 +635,19 @@ void bx_dbg_check_memory_watchpoints(unsigned cpu, bx_phy_address phy, unsigned 
   }
 }
 
-void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned pl, unsigned rw, Bit8u *data)
+extern const char *get_memtype_name(BxMemtype memtype);
+
+void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw, Bit8u *data)
 {
   bx_dbg_check_memory_watchpoints(cpu, phy, len, rw);
 
   if (! BX_CPU(cpu)->trace_mem)
     return;
 
-  dbg_printf("[CPU%d %s]: LIN 0x" FMT_ADDRX " PHY 0x" FMT_PHY_ADDRX " (len=%d, pl=%d)",
+  dbg_printf("[CPU%d %s]: LIN 0x" FMT_ADDRX " PHY 0x" FMT_PHY_ADDRX " (len=%d, %s)",
      cpu, 
      (rw == BX_WRITE) ? "WR" : "RD",
-     lin, phy,
-     len, pl);
+     lin, phy, len, get_memtype_name(memtype));
 
   if (len == 1) {
      Bit8u val8 = *data;
@@ -694,7 +699,7 @@ void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, 
   dbg_printf("\n");
 }
 
-void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, unsigned rw, unsigned access, Bit8u *data)
+void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw, unsigned access, Bit8u *data)
 {
   bx_dbg_check_memory_watchpoints(cpu, phy, len, rw);
 
@@ -727,11 +732,12 @@ void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, un
     "SMRAM"
   };
 
-  dbg_printf("[CPU%d %s]: PHY 0x" FMT_PHY_ADDRX " (len=%d)",
+  if (memtype > BX_MEMTYPE_INVALID) memtype = BX_MEMTYPE_INVALID;
+
+  dbg_printf("[CPU%d %s]: PHY 0x" FMT_PHY_ADDRX " (len=%d, %s)",
      cpu, 
      (rw == BX_WRITE) ? "WR" : "RD",
-     phy,
-     len);
+     phy, len, get_memtype_name(memtype));
 
   if (len == 1) {
      Bit8u val8 = *data;
@@ -874,9 +880,9 @@ void bx_dbg_print_avx_state(unsigned vlen)
     for(unsigned i=0;i<num_regs;i++) {
       dbg_printf("VMM[%02u]: ", i);
       for (int j=vlen-1;j >= 0; j--) {
-        sprintf(param_name, "SSE.xmm%02d_%d", i, j*2+1);
+        sprintf(param_name, "SSE.xmm%02u_%d", i, j*2+1);
         Bit64u hi = SIM->get_param_num(param_name, dbg_cpu_list)->get64();
-        sprintf(param_name, "SSE.xmm%02d_%d", i, j*2);
+        sprintf(param_name, "SSE.xmm%02u_%d", i, j*2);
         Bit64u lo = SIM->get_param_num(param_name, dbg_cpu_list)->get64();
         dbg_printf("%08x_%08x_%08x_%08x", GET32H(hi), GET32L(hi), GET32H(lo), GET32L(lo));
         if (j!=0) dbg_printf("_");
@@ -893,7 +899,7 @@ void bx_dbg_print_avx_state(unsigned vlen)
 #if BX_SUPPORT_EVEX
   if (BX_CPU(dbg_cpu)->is_cpu_extension_supported(BX_ISA_AVX512)) {
     for(unsigned i=0;i<8;i++) {
-      sprintf(param_name, "OPMASK.k%d", i);
+      sprintf(param_name, "OPMASK.k%u", i);
       Bit64u opmask = SIM->get_param_num(param_name, dbg_cpu_list)->get64();
       dbg_printf("K%d: %08x_%08x\n", i, GET32H(opmask), GET32L(opmask));
     }
@@ -1094,11 +1100,11 @@ void bx_dbg_info_segment_regs_command(void)
       (unsigned) sreg.des_l, (unsigned) sreg.valid);
 
   BX_CPU(dbg_cpu)->dbg_get_gdtr(&global_sreg);
-  dbg_printf("gdtr:base=0x"FMT_ADDRX", limit=0x%x\n",
+  dbg_printf("gdtr:base=0x" FMT_ADDRX ", limit=0x%x\n",
       global_sreg.base, (unsigned) global_sreg.limit);
 
   BX_CPU(dbg_cpu)->dbg_get_idtr(&global_sreg);
-  dbg_printf("idtr:base=0x"FMT_ADDRX", limit=0x%x\n",
+  dbg_printf("idtr:base=0x" FMT_ADDRX ", limit=0x%x\n",
       global_sreg.base, (unsigned) global_sreg.limit);
 }
 
@@ -1468,7 +1474,7 @@ void bx_dbg_tlb_lookup(bx_lin_address laddr)
   Bit32u index = BX_TLB_INDEX_OF(laddr, 0);
   char cpu_param_name[16];
   sprintf(cpu_param_name, "TLB.entry%d", index);
-  bx_dbg_show_param_command(cpu_param_name);
+  bx_dbg_show_param_command(cpu_param_name, 0);
 }
 
 unsigned dbg_show_mask = 0;
@@ -1575,17 +1581,17 @@ void bx_dbg_show_command(const char* arg)
   }
 }
 
-void bx_dbg_show_param_command(const char *param)
+void bx_dbg_show_param_command(const char *param, bx_bool xml)
 {
   dbg_printf("show param name: <%s>\n", param);
   bx_param_c *node = SIM->get_param(param, SIM->get_bochs_root());
   if (node) {
-    print_tree(node, 0);
+    print_tree(node, 0, xml);
   }
   else {
     node = SIM->get_param(param, dbg_cpu_list);
     if (node)
-      print_tree(node, 0);
+      print_tree(node, 0, xml);
     else
       dbg_printf("can't find param <%s> in global or default CPU tree\n", param);
   }
@@ -1732,18 +1738,18 @@ void bx_dbg_print_watchpoints(void)
   // print watch point info
   for (i = 0; i < num_read_watchpoints; i++) {
     if (BX_MEM(0)->dbg_fetch_mem(BX_CPU(dbg_cpu), read_watchpoint[i].addr, 2, buf))
-      dbg_printf("rd 0x"FMT_PHY_ADDRX" len=%d\t\t(%04x)\n",
+      dbg_printf("rd 0x" FMT_PHY_ADDRX " len=%d\t\t(%04x)\n",
           read_watchpoint[i].addr, read_watchpoint[i].len, (int)buf[0] | ((int)buf[1] << 8));
     else
-      dbg_printf("rd 0x"FMT_PHY_ADDRX" len=%d\t\t(read error)\n",
+      dbg_printf("rd 0x" FMT_PHY_ADDRX " len=%d\t\t(read error)\n",
           read_watchpoint[i].addr, read_watchpoint[i].len);
   }
   for (i = 0; i < num_write_watchpoints; i++) {
     if (BX_MEM(0)->dbg_fetch_mem(BX_CPU(dbg_cpu), write_watchpoint[i].addr, 2, buf))
-      dbg_printf("wr 0x"FMT_PHY_ADDRX" len=%d\t\t(%04x)\n",
+      dbg_printf("wr 0x" FMT_PHY_ADDRX " len=%d\t\t(%04x)\n",
           write_watchpoint[i].addr, write_watchpoint[i].len, (int)buf[0] | ((int)buf[1] << 8));
     else
-      dbg_printf("rd 0x"FMT_PHY_ADDRX" len=%d\t\t(read error)\n",
+      dbg_printf("rd 0x" FMT_PHY_ADDRX " len=%d\t\t(read error)\n",
           write_watchpoint[i].addr, write_watchpoint[i].len);
   }
 }
@@ -1992,7 +1998,7 @@ void bx_dbg_disassemble_current(int which_cpu, int print_time)
       dbg_printf("(%u) ", which_cpu);
 
     if (BX_CPU(which_cpu)->protected_mode()) {
-      dbg_printf("[0x"FMT_PHY_ADDRX"] %04x:" FMT_ADDRX " (%s): ",
+      dbg_printf("[0x" FMT_PHY_ADDRX "] %04x:" FMT_ADDRX " (%s): ",
         phy, BX_CPU(which_cpu)->guard_found.cs,
         BX_CPU(which_cpu)->guard_found.eip,
         bx_dbg_symbolic_address(BX_CPU(which_cpu)->cr3 >> 12,
@@ -2000,7 +2006,7 @@ void bx_dbg_disassemble_current(int which_cpu, int print_time)
            BX_CPU(which_cpu)->get_segment_base(BX_SEG_REG_CS)));
     }
     else { // Real & V86 mode
-      dbg_printf("[0x"FMT_PHY_ADDRX"] %04x:%04x (%s): ",
+      dbg_printf("[0x" FMT_PHY_ADDRX "] %04x:%04x (%s): ",
         phy, BX_CPU(which_cpu)->guard_found.cs,
         (unsigned) BX_CPU(which_cpu)->guard_found.eip,
         bx_dbg_symbolic_address(0,
@@ -2393,7 +2399,7 @@ void bx_dbg_info_bpoints_command(void)
     dbg_printf("pbreakpoint    ");
     dbg_printf("keep ");
     dbg_printf(bx_guard.iaddr.phy[i].enabled?"y   ":"n   ");
-    dbg_printf("0x"FMT_PHY_ADDRX"\n", bx_guard.iaddr.phy[i].addr);
+    dbg_printf("0x" FMT_PHY_ADDRX "\n", bx_guard.iaddr.phy[i].addr);
   }
 #endif
 }
@@ -3158,7 +3164,7 @@ void bx_dbg_print_descriptor64(Bit32u lo1, Bit32u hi1, Bit32u lo2, Bit32u hi2)
         break;
       default:
         // task, int, trap, or call gate.
-        dbg_printf("target=0x%04x:"FMT_ADDRX", DPL=%d", segment, offset, dpl);
+        dbg_printf("target=0x%04x:" FMT_ADDRX ", DPL=%d", segment, offset, dpl);
         break;
       }
     }
@@ -3667,7 +3673,7 @@ void bx_dbg_dump_table(void)
     return;
   }
 
-  printf("cr3: 0x"FMT_PHY_ADDRX"\n", (bx_phy_address)BX_CPU(dbg_cpu)->cr3);
+  printf("cr3: 0x" FMT_PHY_ADDRX "\n", (bx_phy_address)BX_CPU(dbg_cpu)->cr3);
 
   lin = 0;
   phy = 0;
@@ -3679,14 +3685,14 @@ void bx_dbg_dump_table(void)
     if(valid) {
       if((lin - start_lin) != (phy - start_phy)) {
         if(start_lin != 1)
-          dbg_printf("0x%08x-0x%08x -> 0x"FMT_PHY_ADDRX"-0x"FMT_PHY_ADDRX"\n",
+          dbg_printf("0x%08x-0x%08x -> 0x" FMT_PHY_ADDRX "-0x" FMT_PHY_ADDRX "\n",
             start_lin, lin - 1, start_phy, start_phy + (lin-1-start_lin));
         start_lin = lin;
         start_phy = phy;
       }
     } else {
       if(start_lin != 1)
-        dbg_printf("0x%08x-0x%08x -> 0x"FMT_PHY_ADDRX"-0x"FMT_PHY_ADDRX"\n",
+        dbg_printf("0x%08x-0x%08x -> 0x" FMT_PHY_ADDRX "-0x" FMT_PHY_ADDRX "\n",
           start_lin, lin - 1, start_phy, start_phy + (lin-1-start_lin));
       start_lin = 1;
       start_phy = 2;
@@ -3696,7 +3702,7 @@ void bx_dbg_dump_table(void)
     lin += 0x1000;
   }
   if(start_lin != 1)
-    dbg_printf("0x%08x-0x%08x -> 0x"FMT_PHY_ADDRX"-0x"FMT_PHY_ADDRX"\n",
+    dbg_printf("0x%08x-0x%08x -> 0x" FMT_PHY_ADDRX "-0x" FMT_PHY_ADDRX "\n",
          start_lin, 0xffffffff, start_phy, start_phy + (0xffffffff-start_lin));
 }
 

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32.cc 12469 2014-08-17 12:48:05Z vruppert $
+// $Id: win32.cc 12588 2014-12-30 16:31:17Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -77,6 +77,7 @@ IMPLEMENT_GUI_PLUGIN_CODE(win32)
 #define MOUSE_PRESSED       0x20000000
 #define HEADERBAR_CLICKED   0x08000000
 #define MOUSE_MOTION        0x22000000
+#define FOCUS_CHANGED       0x44000000
 #define BX_SYSKEY           (KF_UP|KF_REPEAT|KF_ALTDOWN)
 void enq_key_event(Bit32u, Bit32u);
 void enq_mouse_event(void);
@@ -91,11 +92,11 @@ struct QueueEvent {
 QueueEvent* deq_key_event(void);
 
 static QueueEvent keyevents[SCANCODE_BUFSIZE];
-static unsigned head=0, tail=0;
+static unsigned head = 0, tail = 0;
 static int mouse_button_state = 0;
-static int ms_xdelta=0, ms_ydelta=0, ms_zdelta=0;
-static int ms_lastx=0, ms_lasty=0;
-static int ms_savedx=0, ms_savedy=0;
+static int ms_xdelta = 0, ms_ydelta = 0, ms_zdelta = 0;
+static int ms_lastx = 0, ms_lasty = 0;
+static int ms_savedx = 0, ms_savedy = 0;
 static BOOL mouseCaptureMode, mouseCaptureNew, mouseToggleReq;
 static BOOL win32MouseModeAbsXY = 0;
 static HANDLE workerThread = 0;
@@ -477,59 +478,50 @@ Bit32u win32_to_bx_key[2][0x100] =
 VOID CALLBACK MyTimer(HWND,UINT,UINT,DWORD);
 #endif
 
+static void cursorWarped()
+{
+  POINT pt = { 0, 0 };
+
+  ClientToScreen(stInfo.simWnd, &pt);
+  SetCursorPos(pt.x + stretched_x / 2, pt.y + stretched_y / 2);
+  EnterCriticalSection(&stInfo.mouseCS);
+  ms_savedx = stretched_x / 2;
+  ms_savedy = stretched_y / 2;
+  LeaveCriticalSection(&stInfo.mouseCS);
+}
+
 static void processMouseXY(int x, int y, int z, int windows_state, int implied_state_change)
 {
   int bx_state;
   int old_bx_state;
   EnterCriticalSection(&stInfo.mouseCS);
-  bx_state=((windows_state & MK_LBUTTON) ? 1 : 0) + ((windows_state & MK_RBUTTON) ? 2 : 0) +
-           ((windows_state & MK_MBUTTON) ? 4 : 0);
-  old_bx_state=bx_state ^ implied_state_change;
-  if (old_bx_state!=mouse_button_state)
-  {
+  bx_state = ((windows_state & MK_LBUTTON) ? 1 : 0) + ((windows_state & MK_RBUTTON) ? 2 : 0) +
+             ((windows_state & MK_MBUTTON) ? 4 : 0);
+  old_bx_state = bx_state ^ implied_state_change;
+  if (old_bx_state != mouse_button_state) {
     /* Make up for missing message */
     BX_INFO(("&&&missing mouse state change"));
     EnterCriticalSection(&stInfo.keyCS);
     enq_mouse_event();
-    mouse_button_state=old_bx_state;
+    mouse_button_state = old_bx_state;
     enq_key_event(mouse_button_state, MOUSE_PRESSED);
     LeaveCriticalSection(&stInfo.keyCS);
   }
-  ms_ydelta=ms_savedy-y;
-  ms_xdelta=x-ms_savedx;
-  ms_zdelta=z;
-  ms_lastx=x;
-  ms_lasty=y;
-  if (bx_state!=mouse_button_state)
-  {
+  ms_ydelta = ms_savedy - y;
+  ms_xdelta = x - ms_savedx;
+  ms_zdelta = z;
+  ms_lastx = x;
+  ms_lasty = y;
+  if (bx_state!=mouse_button_state) {
     EnterCriticalSection(&stInfo.keyCS);
     enq_mouse_event();
-    mouse_button_state=bx_state;
+    mouse_button_state = bx_state;
     enq_key_event(mouse_button_state, MOUSE_PRESSED);
     LeaveCriticalSection(&stInfo.keyCS);
   }
-  LeaveCriticalSection(&stInfo.mouseCS);
-}
-
-static void resetDelta()
-{
-  EnterCriticalSection(&stInfo.mouseCS);
-  ms_savedx=ms_lastx;
-  ms_savedy=ms_lasty;
-  ms_ydelta=ms_xdelta=ms_zdelta=0;
-  LeaveCriticalSection(&stInfo.mouseCS);
-}
-
-static void cursorWarped()
-{
-  EnterCriticalSection(&stInfo.mouseCS);
-  EnterCriticalSection(&stInfo.keyCS);
-  enq_mouse_event();
-  LeaveCriticalSection(&stInfo.keyCS);
-  ms_lastx=stretched_x/2;
-  ms_lasty=stretched_y/2;
-  ms_savedx=ms_lastx;
-  ms_savedy=ms_lasty;
+  if (mouseCaptureMode && !win32MouseModeAbsXY) {
+    cursorWarped();
+  }
   LeaveCriticalSection(&stInfo.mouseCS);
 }
 
@@ -950,10 +942,9 @@ DWORD WINAPI UIThread(LPVOID)
     SetFocus(stInfo.simWnd);
 
     ShowCursor(!mouseCaptureMode);
-    POINT pt = { 0, 0 };
-    ClientToScreen(stInfo.simWnd, &pt);
-    SetCursorPos(pt.x + stretched_x/2, pt.y + stretched_y/2);
-    cursorWarped();
+    if (mouseCaptureMode && !win32MouseModeAbsXY) {
+      cursorWarped();
+    }
 
     hdc = GetDC(stInfo.simWnd);
     MemoryBitmap = CreateCompatibleBitmap(hdc, win32_max_xres, win32_max_yres);
@@ -1039,6 +1030,10 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     SetFocus(stInfo.simWnd);
     return 0;
 
+  case WM_KILLFOCUS:
+    enq_key_event(0, FOCUS_CHANGED);
+    return 0;
+
   case WM_CLOSE:
     SendMessage(stInfo.simWnd, WM_CLOSE, 0, 0);
     break;
@@ -1108,7 +1103,8 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 
 void SetMouseCapture()
 {
-  POINT pt = {0, 0};
+  POINT pt = { 0, 0 };
+  RECT  re;
 
   if (mouseToggleReq) {
     mouseCaptureMode = mouseCaptureNew;
@@ -1118,41 +1114,39 @@ void SetMouseCapture()
   }
   ShowCursor(!mouseCaptureMode);
   ShowCursor(!mouseCaptureMode);   // somehow one didn't do the trick (win98)
-  ClientToScreen(stInfo.simWnd, &pt);
-  SetCursorPos(pt.x + stretched_x/2, pt.y + stretched_y/2);
-  cursorWarped();
-  if (mouseCaptureMode)
+  if (mouseCaptureMode && !win32MouseModeAbsXY) {
+    cursorWarped();
+  }
+  if (mouseCaptureMode) {
+    ClientToScreen(stInfo.simWnd, &pt);
+    re.left = pt.x;
+    re.top = pt.y;
+    re.right = pt.x + stretched_x;
+    re.bottom = pt.y + stretched_y;
+    ClipCursor(&re);
     SetStatusText(0, szMouseDisable, TRUE);
-  else
+  } else {
+    ClipCursor(NULL);
     SetStatusText(0, szMouseEnable, TRUE);
+  }
 }
 
 LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
   HDC hdc, hdcMem;
   PAINTSTRUCT ps;
-  POINT pt;
   bx_bool mouse_toggle = 0;
   static BOOL mouseModeChange = FALSE;
 
   switch (iMsg) {
 
   case WM_CREATE:
-    SetTimer (hwnd, 1, 330, NULL);
+    SetTimer(hwnd, 1, 250, NULL);
     return 0;
 
   case WM_TIMER:
     if (mouseToggleReq && (GetActiveWindow() == stInfo.mainWnd)) {
       SetMouseCapture();
-    }
-    // If mouse escaped, bring it back
-    if (mouseCaptureMode && !win32MouseModeAbsXY)
-    {
-      pt.x = 0;
-      pt.y = 0;
-      ClientToScreen(hwnd, &pt);
-      SetCursorPos(pt.x + stretched_x/2, pt.y + stretched_y/2);
-      cursorWarped();
     }
     return 0;
 
@@ -1181,7 +1175,24 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     LeaveCriticalSection(&stInfo.drawCS);
     return 0;
 
+  case WM_SIZE:
+    if (mouseCaptureMode) {
+      POINT pt = { 0, 0 };
+      RECT  re;
+      ClientToScreen(stInfo.simWnd, &pt);
+      re.left = pt.x;
+      re.top = pt.y;
+      re.right = pt.x + stretched_x;
+      re.bottom = pt.y + stretched_y;
+      ClipCursor(&re);
+    }
+    break;
+
   case WM_MOUSEMOVE:
+    if ((LOWORD(lParam) == ms_savedx) && (HIWORD(lParam) == ms_savedy)) {
+      // Ignore mouse event generated by SetCursorPos().
+      return 0;
+    }
     if (!mouseModeChange) {
       processMouseXY(LOWORD(lParam), HIWORD(lParam), 0, (int) wParam, 0);
     }
@@ -1350,8 +1361,15 @@ void enq_key_event(Bit32u key, Bit32u press_release)
   static BOOL shift_pressed_l = FALSE;
   static BOOL shift_pressed_r = FALSE;
 
-  // Windows generates multiple keypresses when holding down these keys
-  if (press_release == BX_KEY_PRESSED) {
+  if (press_release == FOCUS_CHANGED) {
+    alt_pressed_l = FALSE;
+    alt_pressed_r = FALSE;
+    ctrl_pressed_l = FALSE;
+    ctrl_pressed_r = FALSE;
+    shift_pressed_l = FALSE;
+    shift_pressed_r = FALSE;
+  } else if (press_release == BX_KEY_PRESSED) {
+    // Windows generates multiple keypresses when holding down these keys
     switch (key) {
       case 0x1d:
         if (ctrl_pressed_l)
@@ -1423,8 +1441,7 @@ void enq_key_event(Bit32u key, Bit32u press_release)
 void enq_mouse_event(void)
 {
   EnterCriticalSection(&stInfo.mouseCS);
-  if (ms_xdelta || ms_ydelta || ms_zdelta)
-  {
+  if (ms_xdelta || ms_ydelta || ms_zdelta) {
     if (((tail+1) % SCANCODE_BUFSIZE) == head) {
       LeaveCriticalSection(&stInfo.mouseCS);
       BX_ERROR(("enq_scancode: buffer full"));
@@ -1439,9 +1456,9 @@ void enq_mouse_event(void)
       current.mouse_x = ms_xdelta;
       current.mouse_y = ms_ydelta;
     }
-    current.mouse_z=ms_zdelta;
-    current.mouse_button_state=mouse_button_state;
-    resetDelta();
+    current.mouse_z = ms_zdelta;
+    current.mouse_button_state = mouse_button_state;
+    ms_ydelta = ms_xdelta = ms_zdelta = 0;
     tail = (tail + 1) % SCANCODE_BUFSIZE;
   }
   LeaveCriticalSection(&stInfo.mouseCS);
@@ -1486,14 +1503,17 @@ void bx_win32_gui_c::handle_events(void)
   // Handle keyboard and mouse clicks
   EnterCriticalSection(&stInfo.keyCS);
   while (head != tail) {
-    QueueEvent* queue_event=deq_key_event();
-    if (! queue_event)
+    QueueEvent* queue_event = deq_key_event();
+    if (!queue_event)
       break;
     key = queue_event->key_event;
-    if (key==MOUSE_MOTION)
+    if (key == MOUSE_MOTION)
     {
       DEV_mouse_motion(queue_event->mouse_x, queue_event->mouse_y,
                        queue_event->mouse_z, queue_event->mouse_button_state, win32MouseModeAbsXY);
+    }
+    else if (key == FOCUS_CHANGED) {
+      DEV_kbd_release_keys();
     }
     // Check for mouse buttons first
     else if (key & MOUSE_PRESSED) {

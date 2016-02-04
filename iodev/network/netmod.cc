@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netmod.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: netmod.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -798,6 +798,7 @@ int tftp_send_data(Bit8u *buffer, unsigned block_nr, tftp_session_t *s)
   }
 
   if (fseek(fp, (block_nr - 1) * s->blksize_val, SEEK_SET) < 0) {
+    fclose(fp);
     return tftp_send_error(buffer, 3, "Block not seekable", s);
   }
 
@@ -837,12 +838,12 @@ int tftp_send_optack(Bit8u *buffer, tftp_session_t *s)
   }
   if (s->options & TFTP_OPTION_BLKSIZE) {
     *p++='b'; *p++='l'; *p++='k'; *p++='s'; *p++='i'; *p++='z'; *p++='e'; *p++='\0';
-    sprintf((char *)p, "%d", s->blksize_val);
+    sprintf((char *)p, "%u", s->blksize_val);
     p += strlen((const char *)p) + 1;
   }
   if (s->options & TFTP_OPTION_TIMEOUT) {
     *p++='t'; *p++='i'; *p++='m'; *p++='e'; *p++='o'; *p++='u'; *p++='t'; *p++='\0';
-    sprintf((char *)p, "%d", s->timeout_val);
+    sprintf((char *)p, "%u", s->timeout_val);
     p += strlen((const char *)p) + 1;
   }
   tftp_update_timestamp(s);
@@ -991,6 +992,7 @@ int process_tftp(bx_devmodel_c *netdev, const Bit8u *data, unsigned data_len, Bi
               return tftp_send_error(reply, 2, "Access violation", s);
             }
             if (fseek(fp, (block_nr - 1) * TFTP_BUFFER_SIZE, SEEK_SET) < 0) {
+              fclose(fp);
               return tftp_send_error(reply, 3, "Block not seekable", s);
             }
             fwrite(reply, 1, tftp_len, fp);

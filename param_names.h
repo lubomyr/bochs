@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: param_names.h 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: param_names.h 12681 2015-03-06 22:54:30Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2013  The Bochs Project
+//  Copyright (C) 2009-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -116,6 +116,7 @@
 #define BXPN_SCREENMODE                  "display.screenmode"
 #define BXPN_VGA_EXTENSION               "display.vga_extension"
 #define BXPN_VGA_UPDATE_FREQUENCY        "display.vga_update_frequency"
+#define BXPN_VGA_REALTIME                "display.vga_realtime"
 #define BXPN_VOODOO                      "display.voodoo"
 #define BXPN_KEYBOARD                    "keyboard_mouse.keyboard"
 #define BXPN_KBD_TYPE                    "keyboard_mouse.keyboard.type"
@@ -173,9 +174,12 @@
 #define BXPN_E1000                       "network.e1000"
 #define BXPN_E1000_ENABLED               "network.e1000.enabled"
 #define BXPN_SOUNDLOW                    "sound.lowlevel"
-#define BXPN_SOUND_DRIVER                "sound.lowlevel.driver"
+#define BXPN_SOUND_WAVEOUT_DRV           "sound.lowlevel.waveoutdrv"
 #define BXPN_SOUND_WAVEOUT               "sound.lowlevel.waveout"
+#define BXPN_SOUND_WAVEIN_DRV            "sound.lowlevel.waveindrv"
 #define BXPN_SOUND_WAVEIN                "sound.lowlevel.wavein"
+#define BXPN_SOUND_MIDIOUT_DRV           "sound.lowlevel.midioutdrv"
+#define BXPN_SOUND_MIDIOUT               "sound.lowlevel.midiout"
 #define BXPN_SOUND_SPEAKER               "sound.speaker"
 #define BXPN_SOUND_SB16                  "sound.sb16"
 #define BXPN_SOUND_ES1370                "sound.es1370"

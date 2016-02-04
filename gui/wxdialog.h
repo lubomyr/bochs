@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////
-// $Id: wxdialog.h 12109 2014-01-13 18:03:40Z vruppert $
+// $Id: wxdialog.h 12576 2014-12-23 19:30:03Z vruppert $
 ////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2014  The Bochs Project
@@ -53,7 +53,7 @@ void SetTextCtrl(wxTextCtrl *text, const char *format, int val);
 int GetTextCtrlInt(wxTextCtrl *text, bool *valid = NULL, bool complain=false, wxString complaint = wxT("Invalid integer!"));
 bool BrowseTextCtrl(wxTextCtrl *text,
     wxString prompt= wxT("Choose a file"),
-    long style=wxOPEN);
+    long style=wxFD_OPEN);
 wxChoice *makeLogOptionChoiceBox(wxWindow *parent, wxWindowID id, int evtype, bool includeNoChange = false);
 
 ////////////////////////////////////////////////////////////////////

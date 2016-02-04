@@ -1,5 +1,5 @@
 .\"Document Author:  Timothy R. Butler   -   tbutler@uninetsolutions.com"
-.TH bochsrc 5 "19 Oct 2014" "bochsrc" "The Bochs Project"
+.TH bochsrc 5 "2 May 2015" "bochsrc" "The Bochs Project"
 .\"SKIP_SECTION"
 .SH NAME
 bochsrc \- Configuration file for Bochs.
@@ -461,12 +461,20 @@ values are 'vbe' for Bochs VBE and 'cirrus' for Cirrus SVGA support.
 
 update_freq:
 
-This parameter specifies the number of display updates per second.
-The VGA update timer now uses the realtime engine and the default
-value is 5. This parameter can be changed at runtime.
+Specifies the number of display updates per second.
+This parameter can be changed at runtime. The default value is 5.
+
+realtime:
+
+If set to 1, the VGA timer is based on realtime, otherwise it is based on the
+ips setting. If the host is slow (low ips, update_freq) and the guest uses HLT
+appropriately, setting this to 0 and "clock: sync=none" may improve the
+responsiveness of the guest GUI when the guest is otherwise idle. The default
+value is 1.
 
 Examples:
-  vga: extension=cirrus, update_freq=10
+  vga: extension=none, update_freq=10, realtime=0
+  vga: extension=cirrus, update_freq=30
   vga: extension=vbe
 
 .TP
@@ -567,10 +575,10 @@ Examples:
 .TP
 .I "pci:"
 This option controls the presence of a PCI chipset in Bochs. Currently it only
-supports the i440FX chipset. You can also specify the devices connected to
-PCI slots. Up to 5 slots are available. For these combined PCI/ISA devices
-assigning to slot is mandatory if you want to emulate the PCI model: cirrus,
-ne2k and pcivga. These PCI-only devices are also supported, but they are
+supports the i430FX and i440FX chipsets. You can also specify the devices
+connected to PCI slots. Up to 5 slots are available. For these combined PCI/ISA
+devices assigning to slot is mandatory if you want to emulate the PCI model:
+cirrus, ne2k and pcivga. These PCI-only devices are also supported, but they are
 auto-assigned if you don't use the slot configuration: e1000, es1370, pcidev,
 pcipnic, usb_ohci and usb_xhci.
 
@@ -701,7 +709,7 @@ Examples:
 This defines the type and characteristics of all attached ata devices:
    type=       type of attached device [disk|cdrom]
    path=       path of the image
-   mode=       image mode [flat|concat|external|dll|sparse|vmware3|vmware4|undoable|growing|volatile|vpc|vvfat], only valid for disks
+   mode=       image mode [flat|concat|external|dll|sparse|vmware3|vmware4|undoable|growing|volatile|vpc|vbox|vvfat], only valid for disks
    cylinders=  only valid for disks
    heads=      only valid for disks
    spt=        only valid for disks
@@ -738,6 +746,7 @@ The mode option defines how the disk image is handled. Disks can be defined as:
   - growing : growing file
   - volatile : flat file with volatile redolog
   - vpc : fixed / dynamic size VirtualPC image
+  - vbox : fixed / dynamic size Oracle(tm) VM VirtualBox image (VDI version 1.1)
   - vvfat: local directory appears as read-only VFAT disk (with volatile redolog)
 
 The disk translation scheme (implemented in legacy int13 bios functions, and used by
@@ -924,15 +933,47 @@ Examples:
 
 .TP
 .I "sound:"
-This defines the lowlevel sound driver and the wave (PCM) input and
-output devices to be used by sound emulation devices. Possible values
-for the driver parameter are 'default', 'dummy' (no input/output),
-\&'alsa' (if present) and 'sdl' (if present). For some drivers the wave
-devices must be specified. If the 'wavein' parameter is not set, Bochs
-uses the 'waveout' device for input, too.
+This defines the lowlevel sound driver(s) for the wave (PCM) input / output
+and the MIDI output feature and (if necessary) the devices to be used.
+It can have several of the following properties.
+All properties are in the format sound: property=value
 
-Example:
-  sound: driver=default, waveout=/dev/dsp. wavein=
+waveoutdrv:
+  This defines the driver to be used for the waveout feature.
+  Possible values are 'file' (all wave data sent to file), 'dummy' (no
+  output) and the platform-dependant drivers 'alsa', 'oss', 'osx', 'sdl'
+  and 'win'.
+
+waveout:
+  This defines the device to be used for wave output (if necessary) or
+  the output file for the 'file' driver.
+
+waveindrv:
+  This defines the driver to be used for the wavein feature.
+  Possible values are 'dummy' (recording silence) and platform-dependent
+  drivers 'alsa', 'oss' and 'win'.
+
+wavein:
+  This defines the device to be used for wave output (if necessary).
+
+midioutdrv:
+  This defines the driver to be used for the MIDI output feature.
+  Possible values are 'file' (all MIDI data sent to file), 'dummy' (no
+  output) and platform-dependent drivers 'alsa', 'oss', 'osx' and 'win'.
+
+midiout:
+  This defines the device to be used for MIDI output (if necessary).
+
+driver:
+  This defines the driver to be used for all sound features with one
+  property. Possible values are 'default' (platform default) and all
+  other choices described above. Overriding one or more settings with
+  the specific driver parameter is possible.
+
+Example for one driver (uses platform-default):
+  sound: driver=default, waveout=/dev/dsp
+Example for different drivers:
+  sound: waveoutdrv=sdl, waveindrv=alsa, midioutdrv=dummy
 
 .TP
 .I "speaker:"
@@ -963,30 +1004,29 @@ enabled:
 
 midimode:
 
-  0 = No data should be output.
-  1 = output to device (system dependent - midi
-      denotes the device driver).
-  2 = SMF file output, including headers.
-  3 = Output  the midi  data stream to the file
-      (no  midi headers  and  no delta  times, just
-      command and data bytes).
+  This parameter specifies what to do with the MIDI output.
 
-midi:
+  0 = no output
+  1 = output to device specified with the sound option (system dependent)
+  2 = MIDI or raw data output to file (depends on file name extension)
+  3 = dual output (mode 1 and 2 at the same time)
 
-  The  filename is where the midi data is  sent.
-  This can  be  a device  or just a file if  you
-  want to record the midi data.
+midifile:
+
+  This is the file where the midi output is stored (midimode 2 or 3).
 
 wavemode:
 
-  0=no data
-  1=output to device (system dependent. wave denotes the device driver)
-  2=VOC file output, incl. headers
-  3=output the raw wave stream to the file
+  This parameter specifies what to do with the PCM output.
 
-wave:
+  0 = no output
+  1 = output to device specified with the sound option (system dependent)
+  2 = VOC, WAV or raw data output to file (depends on file name extension)
+  3 = dual output (mode 1 and 2 at the same time)
 
-  This is the file where the wave output is stored (wavemode 2 or 3)
+wavefile:
+
+  This is the file where the wave output is stored (wavemode 2 or 3).
 
 log:
 
@@ -1002,7 +1042,7 @@ loglevel:
   5 = All  errors and port  accesses plus a lot
       of extra information.
 
-It is possible to change the loglevel at runtime.
+  It is possible to change the loglevel at runtime.
 
 dmatimer:
 
@@ -1012,28 +1052,17 @@ value.  This  needs  a reasonably  correct   setting  for
 the  IPS  parameter of the CPU option.  It is possible to
 adjust the dmatimer at runtime.
 
-Example for output to OSS:
-  sb16: midimode=1, midi=/dev/midi00,
-  wavemode=1, wave=/dev/dsp, loglevel=2,
-  log=sb16.log, dmatimer=600000
-
-Example for output to ALSA:
-  sb16: midimode=1, midi=128:0,
-  wavemode=1, wave="",
-  log=sb16.log, dmatimer=600000
-
-.B NOTE:
-The  examples are wrapped onto three  lines for
-formatting  reasons, but  it should all be  on
-one line in the actual bochsrc file.
+Examples for output modes:
+  sb16: midimode=2, midifile="output.mid", wavemode=1 # MIDI to file
+  sb16: midimode=1, wavemode=3, wavefile="output.wav" # wave to file and device
 
 .TP
 .I "es1370:"
 This defines the ES1370 sound emulation (recording and playback - except
 DAC1+DAC2 output at the same time). The parameter 'enabled' controls the
-presence of the device. The 'wavemode' parameter can be used to redirect
-the output to a file (see SB16). The 'wavefile' parameter is similar to the
-\&'wave' parameter of the SB16 soundcard.
+presence of the device. The wave and MIDI output can be sent to device, file
+or both using the parameters 'wavemode', 'wavefile', 'midimode' and
+\&'midifile'. See the description of these parameters at the SB16 directive.
 
 Example for using 'sound' parameters:
   es1370: enabled=1, wavemode=1

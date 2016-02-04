@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ltdl.c 12044 2013-12-17 19:57:40Z vruppert $
+// $Id: ltdl.c 12590 2015-01-03 13:53:52Z sshwarts $
 //
 // NOTE: The ltdl library comes from the Libtool package.  Bochs uses
 // ltdl and libtool to build and load plugins.  The libtool
@@ -360,7 +360,7 @@ memmove (dest, src, size)
 	dest[i] = src[i];
       }
   else if (dest > src)
-    for (i = size -1; i >= 0; --i)
+    for (i = size -1; i < size; --i)
       {
 	dest[i] = src[i];
       }

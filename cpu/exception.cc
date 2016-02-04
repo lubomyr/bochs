@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: exception.cc 12497 2014-10-12 18:59:10Z sshwarts $
+// $Id: exception.cc 12570 2014-12-18 19:45:03Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2013  The Bochs Project
@@ -77,7 +77,7 @@ void BX_CPU_C::long_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_error
     exception(BX_GP_EXCEPTION, vector*8 + 2);
   }
 
-  // if software interrupt, then gate descripor DPL must be >= CPL,
+  // if software interrupt, then gate descriptor DPL must be >= CPL,
   // else #GP(vector * 8 + 2 + EXT)
   if (soft_int && gate_descriptor.dpl < CPL)
   {
@@ -281,7 +281,7 @@ void BX_CPU_C::protected_mode_int(Bit8u vector, unsigned soft_int, bx_bool push_
     exception(BX_GP_EXCEPTION, vector*8 + 2);
   }
 
-  // if software interrupt, then gate descripor DPL must be >= CPL,
+  // if software interrupt, then gate descriptor DPL must be >= CPL,
   // else #GP(vector * 8 + 2 + EXT)
   if (soft_int && gate_descriptor.dpl < CPL) {
     BX_ERROR(("interrupt(): soft_int && (gate.dpl < CPL)"));
@@ -741,7 +741,7 @@ void BX_CPU_C::interrupt(Bit8u vector, unsigned type, bx_bool push_error, Bit16u
   {
     RSP_SPECULATIVE;
 
-    // software interrupt can be redirefcted in v8086 mode
+    // software interrupt can be redirected in v8086 mode
     if (type != BX_SOFTWARE_INTERRUPT || !v8086_mode() || !v86_redirect_interrupt(vector))
     {
       if(real_mode()) {
@@ -825,14 +825,6 @@ struct BxExceptionInfo exceptions_info[BX_CPU_HANDLED_EXCEPTIONS] = {
 // error_code: if exception generates and error, push this error code
 void BX_CPU_C::exception(unsigned vector, Bit16u error_code)
 {
-  BX_INSTR_EXCEPTION(BX_CPU_ID, vector, error_code);
-
-#if BX_DEBUGGER
-  bx_dbg_exception(BX_CPU_ID, vector, error_code);
-#endif
-
-  BX_DEBUG(("exception(0x%02x): error_code=%04x", vector, error_code));
-
   unsigned exception_type = 0;
   unsigned exception_class = BX_EXCEPTION_CLASS_FAULT;
   bx_bool push_error = 0;
@@ -846,10 +838,22 @@ void BX_CPU_C::exception(unsigned vector, Bit16u error_code)
      BX_PANIC(("exception(%u): bad vector", vector));
   }
 
+  /* Excluding page faults and double faults, error_code may not have the
+   * least significant bit set correctly. This correction is applied first
+   * to make the change transparent to any instrumentation.
+   */
   if (vector != BX_PF_EXCEPTION && vector != BX_DF_EXCEPTION) {
     // Page faults have different format
     error_code = (error_code & 0xfffe) | BX_CPU_THIS_PTR EXT;
   }
+
+  BX_INSTR_EXCEPTION(BX_CPU_ID, vector, error_code);
+
+#if BX_DEBUGGER
+  bx_dbg_exception(BX_CPU_ID, vector, error_code);
+#endif
+
+  BX_DEBUG(("exception(0x%02x): error_code=%04x", vector, error_code));
 
 #if BX_SUPPORT_VMX
   VMexit_Event(BX_HARDWARE_EXCEPTION, vector, error_code, push_error);
@@ -874,7 +878,7 @@ void BX_CPU_C::exception(unsigned vector, Bit16u error_code)
       VMexit_TripleFault();
 #endif
 #if BX_DEBUGGER
-      // trap into debugger (similar as done when PANIC occured)
+      // trap into debugger (the same as when a PANIC occurs)
       bx_debug_break();
 #endif
       if (SIM->get_param_bool(BXPN_RESET_ON_TRIPLE_FAULT)->get()) {

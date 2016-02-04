@@ -1,4 +1,4 @@
-/* $Id: spoolpipe.c 10209 2011-02-24 22:05:47Z sshwarts $
+/* $Id: spoolpipe.c 12590 2015-01-03 13:53:52Z sshwarts $
  *
  * spoolpipe.c
  * by Carl Sopchak
@@ -50,8 +50,8 @@
 
 int infd, outfd;
 
-unsigned int delay = 60;  // default delay, in seconds
-unsigned int count_down = 0;
+int delay = 60;  // default delay, in seconds
+int count_down = 0;
 
 char buffer[BUF_SIZE];
 ssize_t readcnt, writecnt;

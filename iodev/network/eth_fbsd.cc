@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_fbsd.cc 11326 2012-08-08 15:38:33Z vruppert $
+// $Id: eth_fbsd.cc 12733 2015-05-02 08:42:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2011  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -199,7 +199,7 @@ bx_fbsd_pktmover_c::bx_fbsd_pktmover_c(const char *netif,
   if (ioctl(this->bpf_fd, BIOCSETIF, (caddr_t)&ifr) < 0) {
     BX_PANIC(("eth_freebsd: could not enable interface '%s': %s", netif, strerror(errno)));
     close(this->bpf_fd);
-    this->bpf_fd == -1;
+    this->bpf_fd = -1;
   }
 
   // Verify that the device is an ethernet.

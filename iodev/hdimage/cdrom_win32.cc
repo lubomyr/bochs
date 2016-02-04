@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cdrom_win32.cc 12411 2014-07-09 23:49:53Z vruppert $
+// $Id: cdrom_win32.cc 12729 2015-04-28 17:01:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -124,8 +124,10 @@ cdrom_win32_c::cdrom_win32_c(const char *dev)
 
 cdrom_win32_c::~cdrom_win32_c(void)
 {
-  if (hFile != INVALID_HANDLE_VALUE)
-    CloseHandle(hFile);
+  if (fd >= 0) {
+    if (hFile != INVALID_HANDLE_VALUE)
+      CloseHandle(hFile);
+  }
 }
 
 bx_bool cdrom_win32_c::insert_cdrom(const char *dev)
@@ -158,11 +160,12 @@ bx_bool cdrom_win32_c::insert_cdrom(const char *dev)
   }
   if (!isOldWindows) {
     hFile = CreateFile((char *)&drive, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, NULL);
-    if (hFile != INVALID_HANDLE_VALUE)
+    if (hFile != INVALID_HANDLE_VALUE) {
       fd = 1;
-    if (!using_file) {
-      DWORD lpBytesReturned;
-      DeviceIoControl(hFile, IOCTL_STORAGE_LOAD_MEDIA, NULL, 0, NULL, 0, &lpBytesReturned, NULL);
+      if (!using_file) {
+        DWORD lpBytesReturned;
+        DeviceIoControl(hFile, IOCTL_STORAGE_LOAD_MEDIA, NULL, 0, NULL, 0, &lpBytesReturned, NULL);
+      }
     }
   }
   if (fd < 0) {
@@ -172,7 +175,8 @@ bx_bool cdrom_win32_c::insert_cdrom(const char *dev)
 
   // I just see if I can read a sector to verify that a
   // CD is in the drive and readable.
-  return read_block(buffer, 0, 2048);
+  fd = (read_block(buffer, 0, 2048)) ? 1 : -1;
+  return (fd == 1);
 }
 
 void cdrom_win32_c::eject_cdrom()

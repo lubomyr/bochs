@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: e1000.cc 12499 2014-10-13 17:09:14Z vruppert $
+// $Id: e1000.cc 12709 2015-04-07 16:57:36Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Intel(R) 82540EM Gigabit Ethernet support (ported from QEMU)
@@ -12,7 +12,7 @@
 //  Copyright (c) 2007 Dan Aloni
 //  Copyright (c) 2004 Antony T Curtis
 //
-//  Copyright (C) 2011-2014  The Bochs Project
+//  Copyright (C) 2011-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -457,7 +457,7 @@ void bx_e1000_c::init(void)
 
   BX_E1000_THIS s.devfunc = 0x00;
   DEV_register_pci_handlers(this, &BX_E1000_THIS s.devfunc, BX_PLUGIN_E1000,
-                            "Experimental Intel(R) Gigabit Ethernet");
+                            "Intel(R) Gigabit Ethernet");
 
   // initialize readonly registers
   init_pci_conf(0x8086, 0x100e, 0x03, 0x020000, 0x00);
@@ -631,7 +631,7 @@ bx_bool bx_e1000_c::mem_read_handler(bx_phy_address addr, unsigned len,
                                      void *data, void *param)
 {
   Bit32u *data_ptr = (Bit32u*) data;
-  Bit8u  *data8_ptr;
+  Bit8u  *data8_ptr = (Bit8u*) data;
   Bit32u offset, value = 0;
   Bit16u index;
 
@@ -727,14 +727,16 @@ bx_bool bx_e1000_c::mem_read_handler(bx_phy_address addr, unsigned len,
           BX_DEBUG(("mem read from offset 0x%08x returns 0", offset));
         }
     }
+    BX_DEBUG(("val =  0x%08x", value));
+    *data_ptr = value;
   } else if ((len == 1) && (offset == E1000_STATUS)) {
     BX_DEBUG(("mem read from offset 0x%08x with len 1 -", offset));
     value = BX_E1000_THIS s.mac_reg[index] & 0xff;
+    BX_DEBUG(("val =  0x%02x", (Bit8u)value));
+    *data8_ptr = (Bit8u)value;
   } else {
     BX_DEBUG(("mem read from offset 0x%08x with len %d not implemented", offset, len));
   }
-  BX_DEBUG(("val =  0x%08x", value));
-  *data_ptr = value;
   return 1;
 }
 

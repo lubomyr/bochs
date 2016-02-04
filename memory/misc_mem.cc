@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc_mem.cc 12285 2014-04-20 12:50:05Z vruppert $
+// $Id: misc_mem.cc 12594 2015-01-07 16:17:40Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
+//  Copyright (C) 2001-2014  The Bochs Project
 //
 //  I/O memory handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -87,7 +87,7 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 {
   unsigned i, idx;
 
-  BX_DEBUG(("Init $Id: misc_mem.cc 12285 2014-04-20 12:50:05Z vruppert $"));
+  BX_DEBUG(("Init $Id: misc_mem.cc 12594 2015-01-07 16:17:40Z sshwarts $"));
 
   // accept only memory size which is multiply of 1M
   BX_ASSERT((host & 0xfffff) == 0);
@@ -158,12 +158,12 @@ void BX_MEM_C::read_block(Bit32u block)
   const Bit64u block_address = ((Bit64u)block)*BX_MEM_BLOCK_LEN;
 
   if (fseeko64(BX_MEM_THIS overflow_file, block_address, SEEK_SET))
-    BX_PANIC(("FATAL ERROR: Could not seek to 0x"FMT_LL"x in memory overflow file!", block_address));
+    BX_PANIC(("FATAL ERROR: Could not seek to 0x" FMT_LL "x in memory overflow file!", block_address));
 
   // We could legitimately get an EOF condition if we are reading the last bit of memory.ram
   if ((fread(BX_MEM_THIS blocks[block], BX_MEM_BLOCK_LEN, 1, BX_MEM_THIS overflow_file) != 1) && 
       (!feof(BX_MEM_THIS overflow_file))) 
-    BX_PANIC(("FATAL ERROR: Could not read from 0x"FMT_LL"x in memory overflow file!", block_address)); 
+    BX_PANIC(("FATAL ERROR: Could not read from 0x" FMT_LL "x in memory overflow file!", block_address)); 
 }
 #endif
 
@@ -399,9 +399,11 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
   ret = fstat(fd, &stat_buf);
   if (ret) {
     if (type < 2) {
+      close(fd);
       BX_PANIC(("ROM: couldn't stat ROM image file '%s'.", path));
     }
     else {
+      close(fd);
       BX_ERROR(("ROM: couldn't stat ROM image file '%s'.", path));
     }
     return;
@@ -522,6 +524,7 @@ void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress, Bit8u type)
   }
   ret = fstat(fd, &stat_buf);
   if (ret) {
+    close(fd);
     BX_PANIC(("RAM: couldn't stat RAM image file '%s'.", path));
     return;
   }
@@ -860,6 +863,13 @@ BX_MEM_C::unregisterMemoryHandlers(void *param, bx_phy_address begin_addr, bx_ph
   bx_bool ret = 1;
   BX_INFO(("Memory access handlers unregistered: 0x" FMT_PHY_ADDRX " - 0x" FMT_PHY_ADDRX, begin_addr, end_addr));
   for (Bit32u page_idx = (Bit32u)(begin_addr >> 20); page_idx <= (Bit32u)(end_addr >> 20); page_idx++) {
+    Bit16u bitmap = 0xffff;
+    if (begin_addr > (page_idx << 20)) {
+      bitmap &= (0xffff << ((begin_addr >> 16) & 0xf));
+    }
+    if (end_addr < ((page_idx + 1) << 20)) {
+      bitmap &= (0xffff >> (0x0f - ((end_addr >> 16) & 0xf)));
+    }
     struct memory_handler_struct *memory_handler = BX_MEM_THIS memory_handlers[page_idx];
     struct memory_handler_struct *prev = NULL;
     while (memory_handler &&
@@ -867,6 +877,7 @@ BX_MEM_C::unregisterMemoryHandlers(void *param, bx_phy_address begin_addr, bx_ph
          memory_handler->begin != begin_addr &&
          memory_handler->end != end_addr)
     {
+      memory_handler->bitmap &= ~bitmap;
       prev = memory_handler;
       memory_handler = memory_handler->next;
     }

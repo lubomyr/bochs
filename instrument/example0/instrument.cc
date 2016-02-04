@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.cc 11908 2013-10-23 21:18:19Z sshwarts $
+// $Id: instrument.cc 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2006-2012 Stanislav Shwartsman
+//   Copyright (c) 2006-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -49,7 +49,8 @@ static struct instruction_t {
     bx_address laddr;     // linear address
     bx_phy_address paddr; // physical address
     unsigned rw;          // BX_READ, BX_WRITE or BX_RW
-    unsigned size;        // 1 .. 32
+    unsigned size;        // 1 .. 64
+    unsigned memtype;
   } data_access[MAX_DATA_ACCESSES];
   bx_bool is_branch;
   bx_bool is_taken;
@@ -69,7 +70,7 @@ void bx_instr_initialize(unsigned cpu)
   if (instruction == NULL)
       instruction = new struct instruction_t[BX_SMP_PROCESSORS];
 
-  fprintf(stderr, "Initialize cpu %d\n", cpu);
+  fprintf(stderr, "Initialize cpu %u\n", cpu);
 }
 
 void bx_instr_reset(unsigned cpu, unsigned type)
@@ -88,8 +89,8 @@ void bx_print_instruction(unsigned cpu, const instruction_t *i)
   if(length != 0)
   {
     fprintf(stderr, "----------------------------------------------------------\n");
-    fprintf(stderr, "CPU %d: %s\n", cpu, disasm_tbuf);
-    fprintf(stderr, "LEN %d\tBYTES: ", length);
+    fprintf(stderr, "CPU %u: %s\n", cpu, disasm_tbuf);
+    fprintf(stderr, "LEN %u\tBYTES: ", length);
     for(n=0;n < length;n++) fprintf(stderr, "%02x", i->opcode[n]);
     if(i->is_branch)
     {
@@ -172,7 +173,7 @@ void bx_instr_ucnear_branch(unsigned cpu, unsigned what, bx_address branch_eip, 
   branch_taken(cpu, new_eip);
 }
 
-void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u new_cs, bx_address new_eip)
+void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u prev_cs, bx_address prev_eip, Bit16u new_cs, bx_address new_eip)
 {
   branch_taken(cpu, new_eip);
 }
@@ -201,7 +202,7 @@ void bx_instr_hwinterrupt(unsigned cpu, unsigned vector, Bit16u cs, bx_address e
   }
 }
 
-void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned rw)
+void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw)
 {
   if(!active || !instruction[cpu].ready) return;
 
@@ -212,6 +213,7 @@ void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsig
     instruction[cpu].data_access[index].paddr = phy;
     instruction[cpu].data_access[index].rw    = rw;
     instruction[cpu].data_access[index].size  = len;
+    instruction[cpu].data_access[index].memtype = memtype;
     instruction[cpu].num_data_accesses++;
     index++;
   }

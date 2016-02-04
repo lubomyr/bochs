@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundsdl.cc 12383 2014-06-23 19:37:58Z vruppert $
+// $Id: soundsdl.cc 12699 2015-03-29 15:53:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012-2013  The Bochs Project
+//  Copyright (C) 2012-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,26 +21,27 @@
 // Lowlevel sound output support for SDL written by Volker Ruppert
 
 #include "iodev.h"
-#include "soundmod.h"
+#include "soundlow.h"
 #include "soundsdl.h"
 
-#if (BX_WITH_SDL || BX_WITH_SDL2) && BX_SUPPORT_SOUNDLOW
+#if BX_HAVE_SOUND_SDL && BX_SUPPORT_SOUNDLOW
 
 #define LOG_THIS
 
 #include <SDL.h>
 
-#define BX_SOUND_SDL_BUFSIZE  BX_SOUNDLOW_WAVEPACKETSIZE * 8
+// SDL audio callback
 
-static struct {
-  int iptr;
-  int optr;
-  Bit8u data[BX_SOUND_SDL_BUFSIZE];
-} audio_buffer;
+void sdl_callback(void *thisptr, Bit8u *stream, int len)
+{
+  memset(stream, 0, len);
+  ((bx_soundlow_waveout_sdl_c*)thisptr)->mixer_common(stream, len);
+}
 
+// bx_soundlow_waveout_sdl_c class implemenzation
 
-bx_sound_sdl_c::bx_sound_sdl_c()
-    :bx_sound_lowlevel_c()
+bx_soundlow_waveout_sdl_c::bx_soundlow_waveout_sdl_c()
+    :bx_soundlow_waveout_c()
 {
   WaveOpen = 0;
   if (SDL_InitSubSystem(SDL_INIT_AUDIO)) {
@@ -50,53 +51,38 @@ bx_sound_sdl_c::bx_sound_sdl_c()
   }
 }
 
-bx_sound_sdl_c::~bx_sound_sdl_c()
+bx_soundlow_waveout_sdl_c::~bx_soundlow_waveout_sdl_c()
 {
+  if (pcm_callback_id >= 0) {
+    unregister_wave_callback(pcm_callback_id);
+    pcm_callback_id = -1;
+  }
+  WaveOpen = 0;
+  mixer_control = 0;
+  SDL_CloseAudio();
   SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
-
-int bx_sound_sdl_c::openwaveoutput(const char *wavedev)
+int bx_soundlow_waveout_sdl_c::openwaveoutput(const char *wavedev)
 {
-  WaveOpen = 1;
+  set_pcm_params(&real_pcm_param);
   return BX_SOUNDLOW_OK;
 }
 
-void sdl_callback(void *unused, Bit8u *stream, int len)
+int bx_soundlow_waveout_sdl_c::set_pcm_params(bx_pcm_param_t *param)
 {
-  int amount = audio_buffer.iptr - audio_buffer.optr;
-  if (amount < 0) {
-    amount += BX_SOUND_SDL_BUFSIZE;
-  }
-  if (amount > len) {
-    amount = len;
-  }
-  int tmplen = BX_SOUND_SDL_BUFSIZE - audio_buffer.optr;
-  if (amount <= tmplen) {
-    SDL_MixAudio(stream, &audio_buffer.data[audio_buffer.optr], amount, SDL_MIX_MAXVOLUME);
-    audio_buffer.optr += amount;
-  } else {
-    SDL_MixAudio(stream, &audio_buffer.data[audio_buffer.optr], tmplen, SDL_MIX_MAXVOLUME);
-    amount -= tmplen;
-    SDL_MixAudio(stream, &audio_buffer.data[0], amount, SDL_MIX_MAXVOLUME);
-    audio_buffer.optr = amount;
-  }
-}
+  int signeddata = param->format & 1;
 
-int bx_sound_sdl_c::startwaveplayback(int frequency, int bits, bx_bool stereo, int format)
-{
-  SDL_AudioSpec fmt;
-  int signeddata = format & 1;
+  BX_DEBUG(("set_pcm_params(): %u, %u, %u, %02x", param->samplerate, param->bits,
+            param->channels, param->format));
+  fmt.freq = param->samplerate;
 
-  BX_DEBUG(("startwaveplayback(%d, %d, %d, %x)", frequency, bits, stereo, format));
-  fmt.freq = frequency;
-
-  if (bits == 16) {
+  if (param->bits == 16) {
     if (signeddata == 1)
       fmt.format = AUDIO_S16;
     else
       fmt.format = AUDIO_U16;
-  } else if (bits == 8) {
+  } else if (param->bits == 8) {
     if (signeddata == 1)
       fmt.format = AUDIO_S8;
     else
@@ -104,72 +90,96 @@ int bx_sound_sdl_c::startwaveplayback(int frequency, int bits, bx_bool stereo, i
   } else
     return BX_SOUNDLOW_ERR;
 
-  fmt.channels = stereo + 1;
-  fmt.samples = frequency / 10;
+  fmt.channels = param->channels;
+  fmt.samples = fmt.freq / 10;
   fmt.callback = sdl_callback;
-  fmt.userdata = NULL;
+  fmt.userdata = this;
+  if (WaveOpen) {
+    SDL_CloseAudio();
+  } else {
+    pcm_callback_id = register_wave_callback(this, pcm_callback);
+  }
   if (SDL_OpenAudio(&fmt, NULL) < 0) {
     BX_PANIC(("SDL_OpenAudio() failed"));
+    WaveOpen = 0;
     return BX_SOUNDLOW_ERR;
+  } else {
+    WaveOpen = 1;
+    mixer_control = 1;
   }
-  audio_buffer.iptr = 0;
-  audio_buffer.optr = 0;
+  SDL_PauseAudio(0);
   return BX_SOUNDLOW_OK;
 }
 
-int bx_sound_sdl_c::waveready()
-{
-  int size;
-
-  if (WaveOpen) {
-    size = audio_buffer.optr - audio_buffer.iptr;
-    if (size <= 0) {
-      size += BX_SOUND_SDL_BUFSIZE;
-    }
-    if (size < BX_SOUNDLOW_WAVEPACKETSIZE) {
-      return BX_SOUNDLOW_ERR;
-    } else {
-      return BX_SOUNDLOW_OK;
-    }
-  } else {
-    return BX_SOUNDLOW_ERR;
-  }
-}
-
-int bx_sound_sdl_c::sendwavepacket(int length, Bit8u data[])
+int bx_soundlow_waveout_sdl_c::sendwavepacket(int length, Bit8u data[], bx_pcm_param_t *src_param)
 {
   int ret = BX_SOUNDLOW_OK;
-  int tmpsize;
+  int len2;
 
-  SDL_PauseAudio(1);
-  if (waveready() == BX_SOUNDLOW_OK) {
-    if ((audio_buffer.iptr + length) > BX_SOUND_SDL_BUFSIZE) {
-      tmpsize = BX_SOUND_SDL_BUFSIZE - audio_buffer.iptr;
-      memcpy(audio_buffer.data+audio_buffer.iptr, data, tmpsize);
-      memcpy(audio_buffer.data, data+tmpsize, length-tmpsize);
-      audio_buffer.iptr = length-tmpsize;
-    } else {
-      memcpy(audio_buffer.data+audio_buffer.iptr, data, length);
-      audio_buffer.iptr += length;
+  if (memcmp(src_param, &emu_pcm_param, sizeof(bx_pcm_param_t)) != 0) {
+    emu_pcm_param = *src_param;
+    cvt_mult = (src_param->bits == 8) ? 2 : 1;
+    if (src_param->channels == 1) cvt_mult <<= 1;
+    if (src_param->samplerate != real_pcm_param.samplerate) {
+      real_pcm_param.samplerate = src_param->samplerate;
+      set_pcm_params(&real_pcm_param);
     }
+  }
+  len2 = length * cvt_mult;
+  SDL_LockAudio();
+  if (WaveOpen) {
+    audio_buffer_t *newbuffer = new_audio_buffer(len2);
+    convert_pcm_data(data, length, newbuffer->data, len2, src_param);
   } else {
-    BX_ERROR(("SDL: audio buffer overflow"));
+    BX_ERROR(("SDL: audio not open"));
     ret = BX_SOUNDLOW_ERR;
   }
-  SDL_PauseAudio(0);
+  SDL_UnlockAudio();
   return ret;
 }
 
-int bx_sound_sdl_c::stopwaveplayback()
+bx_bool bx_soundlow_waveout_sdl_c::mixer_common(Bit8u *buffer, int len)
 {
-  SDL_CloseAudio();
-  return BX_SOUNDLOW_OK;
+  Bit32u len2 = 0;
+
+  Bit8u *tmpbuffer = (Bit8u*)malloc(len);
+  for (int i = 0; i < cb_count; i++) {
+    if (get_wave[i].cb != NULL) {
+      memset(tmpbuffer, 0, len);
+      len2 = get_wave[i].cb(get_wave[i].device, fmt.freq, tmpbuffer, len);
+      if (len2 > 0) {
+        SDL_MixAudio(buffer, tmpbuffer, len2, SDL_MIX_MAXVOLUME);
+      }
+    }
+  }
+  free(tmpbuffer);
+  return 1;
 }
 
-int bx_sound_sdl_c::closewaveoutput()
+void bx_soundlow_waveout_sdl_c::unregister_wave_callback(int callback_id)
 {
-  WaveOpen = 0;
-  return BX_SOUNDLOW_OK;
+  SDL_LockAudio();
+  if ((callback_id >= 0) && (callback_id < BX_MAX_WAVE_CALLBACKS)) {
+    get_wave[callback_id].device = NULL;
+    get_wave[callback_id].cb = NULL;
+  }
+  SDL_UnlockAudio();
 }
 
-#endif  // BX_WITH_SDL || BX_WITH_SDL2
+// bx_sound_sdl_c class implemenzation
+
+bx_sound_sdl_c::bx_sound_sdl_c()
+    :bx_sound_lowlevel_c()
+{
+  // nothing here yet
+}
+
+bx_soundlow_waveout_c* bx_sound_sdl_c::get_waveout()
+{
+  if (waveout == NULL) {
+    waveout = new bx_soundlow_waveout_sdl_c();
+  }
+  return waveout;
+}
+
+#endif  // BX_HAVE_SOUND_SDL

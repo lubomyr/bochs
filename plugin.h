@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: plugin.h 12383 2014-06-23 19:37:58Z vruppert $
+// $Id: plugin.h 12681 2015-03-06 22:54:30Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -164,6 +164,7 @@ extern "C" {
     (bx_devices.pluginKeyboard->gen_scancode(key))
 #define DEV_kbd_paste_bytes(bytes, count) \
     (bx_devices.pluginKeyboard->paste_bytes(bytes,count))
+#define DEV_kbd_release_keys() (bx_devices.pluginKeyboard->release_keys())
 
 ///////// hard drive macros
 #define DEV_hd_read_handler(a, b, c) \
@@ -254,16 +255,9 @@ extern "C" {
 #define DEV_usb_send_msg(a,b) bx_devices.pluginUsbDevCtl->usb_send_msg((void*)a,b)
 
 ///////// Sound module macros
-#define DEV_sound_get_module() \
-  ((bx_sound_lowlevel_c*)bx_devices.pluginSoundModCtl->get_module())
-#define DEV_soundmod_beep_on(a) bx_devices.pluginSoundModCtl->beep_on(a)
-#define DEV_soundmod_beep_off() bx_devices.pluginSoundModCtl->beep_off()
-#define DEV_soundmod_VOC_init_file(a) \
-  (bx_devices.pluginSoundModCtl->VOC_init_file(a))
-#define DEV_soundmod_VOC_write_block(a,b,c,d,e,f) \
-  (bx_devices.pluginSoundModCtl->VOC_write_block(a,b,c,d,e,f))
-#define DEV_soundmod_pcm_apply_volume(a,b,c,d,e,f) \
-  (bx_devices.pluginSoundModCtl->pcm_apply_volume(a,b,c,d,e,f))
+#define DEV_sound_get_waveout(a) (bx_devices.pluginSoundModCtl->get_waveout(a))
+#define DEV_sound_get_wavein() (bx_devices.pluginSoundModCtl->get_wavein())
+#define DEV_sound_get_midiout(a) (bx_devices.pluginSoundModCtl->get_midiout(a))
 
 ///////// Networking module macro
 #define DEV_net_init_module(a,b,c,d) \

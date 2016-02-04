@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: p4_prescott_celeron_336.cc 12505 2014-10-15 08:04:38Z sshwarts $
+// $Id: p4_prescott_celeron_336.cc 12642 2015-02-12 20:18:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -37,39 +37,34 @@ p4_prescott_celeron_336_t::p4_prescott_celeron_336_t(BX_CPU_C *cpu): bx_cpuid_t(
   if (! BX_SUPPORT_MONITOR_MWAIT)
     BX_INFO(("WARNING: MONITOR/MWAIT support is not compiled in !"));
 
-  static Bit8u supported_extensions[] = {
-      BX_ISA_X87,
-      BX_ISA_486,
-      BX_ISA_PENTIUM,
-      BX_ISA_MMX,
-      BX_ISA_P6,
-      BX_ISA_SYSENTER_SYSEXIT,
-      BX_ISA_SSE,
-      BX_ISA_SSE2,
-      BX_ISA_SSE3,
-      BX_ISA_SSSE3,
+  enable_cpu_extension(BX_ISA_X87);
+  enable_cpu_extension(BX_ISA_486);
+  enable_cpu_extension(BX_ISA_PENTIUM);
+  enable_cpu_extension(BX_ISA_MMX);
+  enable_cpu_extension(BX_ISA_P6);
+  enable_cpu_extension(BX_ISA_SYSENTER_SYSEXIT);
+  enable_cpu_extension(BX_ISA_SSE);
+  enable_cpu_extension(BX_ISA_SSE2);
+  enable_cpu_extension(BX_ISA_SSE3);
+  enable_cpu_extension(BX_ISA_SSSE3);
 #if BX_SUPPORT_MONITOR_MWAIT
-      BX_ISA_MONITOR_MWAIT,
+  enable_cpu_extension(BX_ISA_MONITOR_MWAIT);
 #endif
-      BX_ISA_CLFLUSH,
-      BX_ISA_DEBUG_EXTENSIONS,
-      BX_ISA_VME,
-      BX_ISA_PSE,
-      BX_ISA_PAE,
-      BX_ISA_PGE,
+  enable_cpu_extension(BX_ISA_CLFLUSH);
+  enable_cpu_extension(BX_ISA_DEBUG_EXTENSIONS);
+  enable_cpu_extension(BX_ISA_VME);
+  enable_cpu_extension(BX_ISA_PSE);
+  enable_cpu_extension(BX_ISA_PAE);
+  enable_cpu_extension(BX_ISA_PGE);
 #if BX_PHY_ADDRESS_LONG
-      BX_ISA_PSE36,
+  enable_cpu_extension(BX_ISA_PSE36);
 #endif
-      BX_ISA_MTRR,
-      BX_ISA_PAT,
-      BX_ISA_XAPIC,
-      BX_ISA_LONG_MODE,
-      BX_ISA_NX,
-      BX_ISA_CMPXCHG16B,
-      BX_ISA_EXTENSION_LAST
-  };
-
-  register_cpu_extensions(supported_extensions);
+  enable_cpu_extension(BX_ISA_MTRR);
+  enable_cpu_extension(BX_ISA_PAT);
+  enable_cpu_extension(BX_ISA_XAPIC);
+  enable_cpu_extension(BX_ISA_LONG_MODE);
+  enable_cpu_extension(BX_ISA_NX);
+  enable_cpu_extension(BX_ISA_CMPXCHG16B);
 }
 
 void p4_prescott_celeron_336_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
@@ -119,23 +114,7 @@ void p4_prescott_celeron_336_t::get_cpuid_leaf(Bit32u function, Bit32u subfuncti
 // leaf 0x00000000 //
 void p4_prescott_celeron_336_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
-  // EAX: highest std function understood by CPUID
-  // EBX: vendor ID string
-  // EDX: vendor ID string
-  // ECX: vendor ID string
-  leaf->eax = 0x3;
-
-  // CPUID vendor string (e.g. GenuineIntel, AuthenticAMD, CentaurHauls, ...)
-  memcpy(&(leaf->ebx), vendor_string,     4);
-  memcpy(&(leaf->edx), vendor_string + 4, 4);
-  memcpy(&(leaf->ecx), vendor_string + 8, 4);
-#ifdef BX_BIG_ENDIAN
-  leaf->ebx = bx_bswap32(leaf->ebx);
-  leaf->ecx = bx_bswap32(leaf->ecx);
-  leaf->edx = bx_bswap32(leaf->edx);
-#endif
+  get_leaf_0(0x3, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -302,10 +281,7 @@ void p4_prescott_celeron_336_t::get_ext_cpuid_leaf_0(cpuid_function_t *leaf) con
   // EBX: reserved
   // EDX: reserved
   // ECX: reserved
-  leaf->eax = 0x80000008;
-  leaf->ebx = 0;
-  leaf->edx = 0; // Reserved for Intel
-  leaf->ecx = 0;
+  get_leaf_0(0x80000008, NULL, leaf);
 }
 
 // leaf 0x80000001 //

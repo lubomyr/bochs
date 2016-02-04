@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: apic.cc 12481 2014-08-31 20:05:25Z sshwarts $
+// $Id: apic.cc 12615 2015-01-25 21:24:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2002-2014 Zwane Mwaikambo, Stanislav Shwartsman
@@ -1382,7 +1382,7 @@ void bx_local_apic_c::register_state(bx_param_c *parent)
 
   bx_list_c *LVT = new bx_list_c(lapic, "lvt");
   for (i=0; i<APIC_LVT_ENTRIES; i++) {
-    sprintf(name, "%d", i);
+    sprintf(name, "%u", i);
     new bx_shadow_num_c(LVT, name, &lvt[i], BASE_HEX);
   }
 

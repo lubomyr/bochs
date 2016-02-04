@@ -1,6 +1,6 @@
 %{
 /////////////////////////////////////////////////////////////////////////
-// $Id: lexer.l 12184 2014-02-11 20:51:18Z sshwarts $
+// $Id: lexer.l 12553 2014-11-15 22:03:52Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
@@ -228,6 +228,7 @@ fs              { bxlval.uval = BX_DBG_SREG_FS; return(BX_TOKEN_FS); }
 gs              { bxlval.uval = BX_DBG_SREG_GS; return(BX_TOKEN_GS); }
 k[0-7]          { EVEX_OPMASK_REG(bxtext[1] - '0'); }
 flags|eflags    { bxlval.uval = 0; return (BX_TOKEN_FLAGS); }
+xml             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_XML); }
 h|help          { bxlval.sval = strdup(bxtext); return(BX_TOKEN_HELP); }
 \?              |
 calc            { bxlval.sval = strdup(bxtext); return(BX_TOKEN_CALC); }

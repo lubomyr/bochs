@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.cc 11933 2013-11-11 18:14:10Z sshwarts $
+// $Id: instrument.cc 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2006-2012 Stanislav Shwartsman
+//   Copyright (c) 2006-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -39,7 +39,7 @@ void bx_instr_debug_cmd(const char *cmd) {}
 void bx_instr_cnear_branch_taken(unsigned cpu, bx_address branch_eip, bx_address new_eip) {}
 void bx_instr_cnear_branch_not_taken(unsigned cpu, bx_address branch_eip) {}
 void bx_instr_ucnear_branch(unsigned cpu, unsigned what, bx_address branch_eip, bx_address new_eip) {}
-void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u new_cs, bx_address new_eip) {}
+void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u prev_cs, bx_address prev_eip, Bit16u new_cs, bx_address new_eip) {}
 
 void bx_instr_opcode(unsigned cpu, bxInstruction_c *i, const Bit8u *opcode, unsigned len, bx_bool is32, bx_bool is64) {}
 
@@ -60,8 +60,8 @@ void bx_instr_inp(Bit16u addr, unsigned len) {}
 void bx_instr_inp2(Bit16u addr, unsigned len, unsigned val) {}
 void bx_instr_outp(Bit16u addr, unsigned len, unsigned val) {}
 
-void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned rw) {}
-void bx_instr_phy_access(unsigned cpu, bx_address phy, unsigned len, unsigned rw) {}
+void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned memtype, unsigned rw) {}
+void bx_instr_phy_access(unsigned cpu,                 bx_address phy, unsigned len, unsigned memtype, unsigned rw) {}
 
 void bx_instr_wrmsr(unsigned cpu, unsigned addr, Bit64u value) {}
 

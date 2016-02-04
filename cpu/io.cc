@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: io.cc 12516 2014-10-20 21:10:52Z sshwarts $
+// $Id: io.cc 12619 2015-01-26 20:01:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -218,7 +218,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSB16_YbDX(bxInstruction_c *i)
 
   value8 = BX_INP(DX, 1);
 
-  write_RMW_virtual_byte(value8);
+  write_RMW_linear_byte(value8);
 
   if (BX_CPU_THIS_PTR get_DF())
     DI--;
@@ -235,7 +235,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSB32_YbDX(bxInstruction_c *i)
   value8 = BX_INP(DX, 1);
 
   /* no seg override possible */
-  write_RMW_virtual_byte(value8);
+  write_RMW_linear_byte(value8);
 
   if (BX_CPU_THIS_PTR get_DF()) {
     RDI = EDI - 1;
@@ -251,11 +251,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSB32_YbDX(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSB64_YbDX(bxInstruction_c *i)
 {
   // trigger any segment or page faults before reading from IO port
-  Bit8u value8 = read_RMW_virtual_byte_64(BX_SEG_REG_ES, RDI);
+  Bit8u value8 = read_RMW_linear_byte(BX_SEG_REG_ES, RDI);
 
   value8 = BX_INP(DX, 1);
 
-  write_RMW_virtual_byte(value8);
+  write_RMW_linear_byte(value8);
 
   if (BX_CPU_THIS_PTR get_DF())
     RDI--;
@@ -297,7 +297,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSW16_YwDX(bxInstruction_c *i)
 
   value16 = BX_INP(DX, 2);
 
-  write_RMW_virtual_word(value16);
+  write_RMW_linear_word(value16);
 
   if (BX_CPU_THIS_PTR get_DF())
     DI -= 2;
@@ -336,7 +336,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSW32_YwDX(bxInstruction_c *i)
 
       value16 = BX_INP(DX, 2);
 
-      write_RMW_virtual_word(value16);
+      write_RMW_linear_word(value16);
     }
   }
   else
@@ -347,7 +347,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSW32_YwDX(bxInstruction_c *i)
 
     value16 = BX_INP(DX, 2);
 
-    write_RMW_virtual_word(value16);
+    write_RMW_linear_word(value16);
   }
 
   if (BX_CPU_THIS_PTR get_DF())
@@ -362,11 +362,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSW32_YwDX(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSW64_YwDX(bxInstruction_c *i)
 {
   // trigger any segment or page faults before reading from IO port
-  Bit16u value16 = read_RMW_virtual_word_64(BX_SEG_REG_ES, RDI);
+  Bit16u value16 = read_RMW_linear_word(BX_SEG_REG_ES, RDI);
 
   value16 = BX_INP(DX, 2);
 
-  write_RMW_virtual_word(value16);
+  write_RMW_linear_word(value16);
 
   if (BX_CPU_THIS_PTR get_DF())
     RDI -= 2;
@@ -408,7 +408,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSD16_YdDX(bxInstruction_c *i)
 
   value32 = BX_INP(DX, 4);
 
-  write_RMW_virtual_dword(value32);
+  write_RMW_linear_dword(value32);
 
   if (BX_CPU_THIS_PTR get_DF())
     DI -= 4;
@@ -424,7 +424,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSD32_YdDX(bxInstruction_c *i)
 
   value32 = BX_INP(DX, 4);
 
-  write_RMW_virtual_dword(value32);
+  write_RMW_linear_dword(value32);
 
   if (BX_CPU_THIS_PTR get_DF())
     RDI = EDI - 4;
@@ -438,11 +438,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSD32_YdDX(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::INSD64_YdDX(bxInstruction_c *i)
 {
   // trigger any segment or page faults before reading from IO port
-  Bit32u value32 = read_RMW_virtual_dword_64(BX_SEG_REG_ES, RDI);
+  Bit32u value32 = read_RMW_linear_dword(BX_SEG_REG_ES, RDI);
 
   value32 = BX_INP(DX, 4);
 
-  write_RMW_virtual_dword(value32);
+  write_RMW_linear_dword(value32);
 
   if (BX_CPU_THIS_PTR get_DF())
     RDI -= 4;

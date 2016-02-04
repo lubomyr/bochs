@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: proc_ctrl.cc 12508 2014-10-15 15:28:13Z sshwarts $
+// $Id: proc_ctrl.cc 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -673,7 +673,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::RDTSCP(bxInstruction_c *i)
 
   RAX = GET32L(ticks);
   RDX = GET32H(ticks);
-  RCX = MSR_TSC_AUX;
+  RCX = BX_CPU_THIS_PTR msr.tsc_aux;
 
 #endif
 
@@ -871,6 +871,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSENTER(bxInstruction_c *i)
 
   invalidate_prefetch_q();
 
+  BX_INSTR_FAR_BRANCH_ORIGIN();
+
   BX_CPU_THIS_PTR clear_VM();       // do this just like the book says to do
   BX_CPU_THIS_PTR clear_IF();
   BX_CPU_THIS_PTR clear_RF();
@@ -891,7 +893,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSENTER(bxInstruction_c *i)
   parse_selector(BX_CPU_THIS_PTR msr.sysenter_cs_msr & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-  BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+  BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 0;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -918,7 +920,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSENTER(bxInstruction_c *i)
   parse_selector((BX_CPU_THIS_PTR msr.sysenter_cs_msr + 8) & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-  BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid    = SegValidCache | SegAccessROK | SegAccessWOK;
+  BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid    = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p        = 1;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl      = 0;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment  = 1; /* data/code segment */
@@ -945,6 +947,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSENTER(bxInstruction_c *i)
   }
 
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSENTER,
+                      FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
 #endif
 
@@ -965,6 +968,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
 
   invalidate_prefetch_q();
 
+  BX_INSTR_FAR_BRANCH_ORIGIN();
+
 #if BX_SUPPORT_X86_64
   if (i->os64L()) {
     if (!IsCanonical(RDX)) {
@@ -979,7 +984,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
     parse_selector(((BX_CPU_THIS_PTR msr.sysenter_cs_msr + 32) & BX_SELECTOR_RPL_MASK) | 3,
             &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 3;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1000,7 +1005,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
     parse_selector(((BX_CPU_THIS_PTR msr.sysenter_cs_msr + 16) & BX_SELECTOR_RPL_MASK) | 3,
             &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 3;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1029,7 +1034,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
   parse_selector(((BX_CPU_THIS_PTR msr.sysenter_cs_msr + (i->os64L() ? 40:24)) & BX_SELECTOR_RPL_MASK) | 3,
             &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-  BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid    = SegValidCache | SegAccessROK | SegAccessWOK;
+  BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid    = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p        = 1;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl      = 3;
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment  = 1; /* data/code segment */
@@ -1044,6 +1049,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
 #endif
 
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSEXIT,
+                      FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
 #endif
 
@@ -1063,6 +1069,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
 
   invalidate_prefetch_q();
 
+  BX_INSTR_FAR_BRANCH_ORIGIN();
+
 #if BX_SUPPORT_X86_64
   if (long_mode())
   {
@@ -1070,17 +1078,17 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     R11 = read_eflags() & ~(EFlagsRFMask);
 
     if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64) {
-      temp_RIP = MSR_LSTAR;
+      temp_RIP = BX_CPU_THIS_PTR msr.lstar;
     }
     else {
-      temp_RIP = MSR_CSTAR;
+      temp_RIP = BX_CPU_THIS_PTR msr.cstar;
     }
 
     // set up CS segment, flat, 64-bit DPL=0
     parse_selector((MSR_STAR >> 32) & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 0;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1102,7 +1110,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     parse_selector(((MSR_STAR >> 32) + 8) & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl     = 0;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment = 1; /* data/code segment */
@@ -1114,7 +1122,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.u.segment.l            = 0;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.u.segment.avl          = 0; /* available for use by system */
 
-    writeEFlags(read_eflags() & ~MSR_FMASK & ~(EFlagsRFMask), EFlagsValidMask);
+    writeEFlags(read_eflags() & ~(BX_CPU_THIS_PTR msr.fmask) & ~(EFlagsRFMask), EFlagsValidMask);
     RIP = temp_RIP;
   }
   else
@@ -1129,7 +1137,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     parse_selector((MSR_STAR >> 32) & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 0;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1153,7 +1161,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     parse_selector(((MSR_STAR >> 32) + 8) & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl     = 0;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment = 1; /* data/code segment */
@@ -1174,6 +1182,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
   }
 
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSCALL,
+                      FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
 #endif
 
@@ -1198,6 +1207,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
 
   invalidate_prefetch_q();
 
+  BX_INSTR_FAR_BRANCH_ORIGIN();
+
 #if BX_SUPPORT_X86_64
   if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64)
   {
@@ -1211,7 +1222,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
       parse_selector((((MSR_STAR >> 48) + 16) & BX_SELECTOR_RPL_MASK) | 3,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 3;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1230,7 +1241,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
       parse_selector((MSR_STAR >> 48) | 3,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 3;
       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1253,7 +1264,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
     parse_selector((Bit16u)(((MSR_STAR >> 48) + 8) | 3),
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl     = 3;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment = 1;  /* data/code segment */
@@ -1268,7 +1279,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
     parse_selector((MSR_STAR >> 48) | 3,
                      &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.dpl     = 3;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.segment = 1;  /* data/code segment */
@@ -1290,7 +1301,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
     parse_selector((Bit16u)(((MSR_STAR >> 48) + 8) | 3),
                      &BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].selector);
 
-    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK;
+    BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.valid   = SegValidCache | SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.p       = 1;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl     = 3;
     BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.segment = 1;  /* data/code segment */
@@ -1305,6 +1316,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
   RIP = temp_RIP;
 
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSRET,
+                      FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
 #endif
 

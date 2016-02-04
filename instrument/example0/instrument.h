@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.h 11908 2013-10-23 21:18:19Z sshwarts $
+// $Id: instrument.h 12655 2015-02-19 20:23:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2006-2012 Stanislav Shwartsman
+//   Copyright (c) 2006-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -37,7 +37,7 @@ void bx_instr_reset(unsigned cpu, unsigned type);
 void bx_instr_cnear_branch_taken(unsigned cpu, bx_address branch_eip, bx_address new_eip);
 void bx_instr_cnear_branch_not_taken(unsigned cpu, bx_address branch_eip);
 void bx_instr_ucnear_branch(unsigned cpu, unsigned what, bx_address branch_eip, bx_address new_eip);
-void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u new_cs, bx_address new_eip);
+void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u prev_cs, bx_address prev_eip, Bit16u new_cs, bx_address new_eip);
 
 void bx_instr_before_execution(unsigned cpu, bxInstruction_c *i);
 void bx_instr_after_execution(unsigned cpu, bxInstruction_c *i);
@@ -46,7 +46,7 @@ void bx_instr_interrupt(unsigned cpu, unsigned vector);
 void bx_instr_exception(unsigned cpu, unsigned vector, unsigned error_code);
 void bx_instr_hwinterrupt(unsigned cpu, unsigned vector, Bit16u cs, bx_address eip);
 
-void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned rw);
+void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsigned len, unsigned memtype, unsigned rw);
 
 /* initialization/deinitialization of instrumentalization*/
 #define BX_INSTR_INIT_ENV() bx_instr_init_env()
@@ -67,7 +67,8 @@ void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsig
 #define BX_INSTR_CNEAR_BRANCH_TAKEN(cpu_id, branch_eip, new_eip) bx_instr_cnear_branch_taken(cpu_id, branch_eip, new_eip)
 #define BX_INSTR_CNEAR_BRANCH_NOT_TAKEN(cpu_id, branch_eip) bx_instr_cnear_branch_not_taken(cpu_id, branch_eip)
 #define BX_INSTR_UCNEAR_BRANCH(cpu_id, what, branch_eip, new_eip) bx_instr_ucnear_branch(cpu_id, what, branch_eip, new_eip)
-#define BX_INSTR_FAR_BRANCH(cpu_id, what, new_cs, new_eip) bx_instr_far_branch(cpu_id, what, new_cs, new_eip)
+#define BX_INSTR_FAR_BRANCH(cpu_id, what, prev_cs, prev_eip, new_cs, new_eip) \
+                       bx_instr_far_branch(cpu_id, what, prev_cs, prev_eip, new_cs, new_eip)
 
 /* decoding completed */
 #define BX_INSTR_OPCODE(cpu_id, i, opcode, len, is32, is64)
@@ -91,10 +92,10 @@ void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsig
 #define BX_INSTR_REPEAT_ITERATION(cpu_id, i)
 
 /* memory access */
-#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, rw) \
-                bx_instr_lin_access(cpu_id, lin, phy, len, rw)
+#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, memtype, rw) \
+                bx_instr_lin_access(cpu_id, lin, phy, len, memtype, rw)
 
-#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, rw)
+#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, memtype, rw)
 
 /* feedback from device units */
 #define BX_INSTR_INP(addr, len)
@@ -128,7 +129,7 @@ void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsig
 #define BX_INSTR_CNEAR_BRANCH_TAKEN(cpu_id, branch_eip, new_eip)
 #define BX_INSTR_CNEAR_BRANCH_NOT_TAKEN(cpu_id, branch_eip)
 #define BX_INSTR_UCNEAR_BRANCH(cpu_id, what, branch_eip, new_eip)
-#define BX_INSTR_FAR_BRANCH(cpu_id, what, new_cs, new_eip)
+#define BX_INSTR_FAR_BRANCH(cpu_id, what, prev_cs, prev_eip, new_cs, new_eip)
 
 /* decoding completed */
 #define BX_INSTR_OPCODE(cpu_id, i, opcode, len, is32, is64)
@@ -150,10 +151,10 @@ void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_phy_address phy, unsig
 #define BX_INSTR_REPEAT_ITERATION(cpu_id, i)
 
 /* linear memory access */
-#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, rw)
+#define BX_INSTR_LIN_ACCESS(cpu_id, lin, phy, len, memtype, rw)
 
 /* physical memory access */
-#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, rw)
+#define BX_INSTR_PHY_ACCESS(cpu_id, phy, len, memtype, rw)
 
 /* feedback from device units */
 #define BX_INSTR_INP(addr, len)

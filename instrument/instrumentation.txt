@@ -66,25 +66,25 @@ state.  The  callback  receives  monitored  memory  range and MWAIT flags as a
 parameters.
 
 
-	void bx_instr_cnear_branch_taken(unsigned cpu, bx_address branch_eip, bx_address new_eip);
+	void bx_instr_cnear_branch_taken(unsigned cpu, bx_address branch_rip, bx_address new_rip);
 
 The  callback  is  called  each time, when currently executed instruction is a
 conditional near branch and it is taken.
 
 
-	void bx_instr_cnear_branch_not_taken(unsigned cpu, bx_address branch_eip);
+	void bx_instr_cnear_branch_not_taken(unsigned cpu, bx_address branch_rip);
 
 The  callback  is  called  each time, when currently executed instruction is a
 conditional near branch and it is not taken.
 
 
-	void bx_instr_ucnear_branch(unsigned cpu, unsigned what, bx_address branch_eip, bx_address new_eip);
+	void bx_instr_ucnear_branch(unsigned cpu, unsigned what, bx_address branch_rip, bx_address new_rip);
 
 The  callback  is  called each time, when currently executed instruction is an
 unconditional near branch (always taken).
 
 
-	void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u new_cs, bx_address new_eip);
+	void bx_instr_far_branch(unsigned cpu, unsigned what, Bit16u prev_cs, bx_address prev_rip, Bit16u new_cs, bx_address new_rip);
 
 The  callback  is  called each time, when currently executed instruction is an
 unconditional far branch (always taken).
@@ -130,7 +130,7 @@ The  callback  is called each time, when Bochs simulator executes an interrupt
 The callback is called each time, when Bochs simulator executes an exception.
 
 
-	void bx_instr_hwinterrupt(unsigned cpu, unsigned vector, Bit16u cs, bx_address eip);
+	void bx_instr_hwinterrupt(unsigned cpu, unsigned vector, Bit16u cs, bx_address rip);
 
 The  callback  is  called  each time, when Bochs simulator executes a hardware
 interrupt.
@@ -209,7 +209,7 @@ instruction execution. In case of repeat instruction the callback will
 be called only once after all repeat iterations. 
 
 
-	void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned rw);
+	void bx_instr_lin_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned memtype, unsigned rw);
 
 The  callback  is  called  each  time,  when Bochs simulator executes a linear
 memory  access.  Note  that  no  page split accesses will be generated because
@@ -223,7 +223,7 @@ Currently  the  callback is not supported when repeat-speedups optimization is
 enabled.
 
 
-	void bx_instr_phy_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned rw);
+	void bx_instr_phy_access(unsigned cpu, bx_address lin, bx_address phy, unsigned len, unsigned memtype, unsigned rw);
 
 The  callback  is called  each  time, when Bochs simulator executes a physical
 memory  access.  Physical  accesses include memory  accesses generated  by the
@@ -248,7 +248,7 @@ Known problems:
 Feature requests:
 
 1. BX_INSTR_CNEAR_BRANCH_NOT_TAKEN callback should have an additional 
-   'not taken' new_EIP parameter.
+   'not taken' new_rip parameter.
 
 2. BX_INSTR_SMI, BX_INSTR_NMI, BX_INSTR_SIPI and other external events
    callbacks

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmware4.cc 11921 2013-11-03 07:41:29Z vruppert $
+// $Id: vmware4.cc 12690 2015-03-20 18:01:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -9,8 +9,8 @@
  * Author: Sharvil Nanavati
  * Contact: snrrrub@gmail.com
  *
- * Copyright (C) 2006 Sharvil Nanavati.
- * Copyright (C) 2006-2013  The Bochs Project
+ * Copyright (C) 2006       Sharvil Nanavati.
+ * Copyright (C) 2006-2015  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -36,6 +36,7 @@
 #include "config.h"
 #include "misc/bxcompat.h"
 #include "osdep.h"
+#include "misc/bswap.h"
 #else
 #include "iodev.h"
 #endif
