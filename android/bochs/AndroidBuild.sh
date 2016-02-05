@@ -18,7 +18,7 @@ fi
 if [ \! -f bochs/Makefile ] ; then
 env CFLAGS="-Ofast -ffast-math" \ 
 env LIBS="-lgnustl_static" \
-	../setEnvironment-armeabi-v7a.sh sh -c "cd bochs && ./configure --build=x86_64-unknown-linux-gnu --host=arm-linux-androideabi --with-sdl --enable-sb16 --enable-clgd54xx --disable-gameport --enable-repeat-speedups --enable-handlers-chaining --enable-ne2000 --enable-pnic --enable-e1000"
+	../setEnvironment-armeabi-v7a.sh sh -c "cd bochs && ./configure --build=x86_64-unknown-linux-gnu --host=arm-linux-androideabi --with-sdl --enable-sb16 --enable-clgd54xx --enable-voodoo --disable-gameport --enable-repeat-speedups --enable-handlers-chaining --enable-ne2000 --enable-pnic --enable-e1000 --enable-usb"
 fi
 
 make -C bochs && mv -f bochs/bochs libapplication-armeabi-v7a.so
