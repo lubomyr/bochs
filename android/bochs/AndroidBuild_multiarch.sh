@@ -18,7 +18,7 @@ if [ \! -f bochs-$1/Makefile ] ; then
 
 env CFLAGS="-Ofast -ffast-math" \ 
 env LIBS="-lgnustl_static" \
-	../setEnvironment-$1.sh sh -c "cd bochs-$1 && ./configure --build=x86_64-unknown-linux-gnu --host=$2 --with-sdl --enable-all-optimizations --enable-clgd54xx --enable-voodoo --enable-sb16 --disable-gameport --enable-ne2000 --enable-pnic --enable-e1000 --enable-usb"
+	../setEnvironment-$1.sh sh -c "cd bochs-$1 && ./configure --build=x86_64-unknown-linux-gnu --host=$2 --with-sdl --enable-all-optimizations --enable-clgd54xx --enable-voodoo --enable-sb16 --disable-gameport --enable-ne2000 --enable-usb"
 fi
 
 make -C bochs-$1 && mv -f bochs-$1/bochs libapplication-$1.so
