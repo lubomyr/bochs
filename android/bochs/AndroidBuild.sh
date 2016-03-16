@@ -1,25 +1,29 @@
 #!/bin/sh
 
-
 LOCAL_PATH=`dirname $0`
 LOCAL_PATH=`cd $LOCAL_PATH && pwd`
 
-ln -sf libsdl-1.2.so $LOCAL_PATH/../../../obj/local/$1/libSDL.so
-ln -sf libsdl-1.2.so $LOCAL_PATH/../../../obj/local/$1/libpthread.so
-ln -sf libsdl_image.so $LOCAL_PATH/../../../obj/local/$1/libSDL_image.so
-ln -sf libsdl_ttf.so $LOCAL_PATH/../../../obj/local/$1/libSDL_ttf.so
-
+export PATH=$LOCAL_PATH/..:$PATH # For our custom sdl-config
 
 if [ \! -f bochs/configure ] ; then
 	sh -c "cd bochs && ./bootstrap.sh"
 fi
 
-if [ \! -f bochs/Makefile ] ; then
+mkdir -p bin-$1
 
-env CFLAGS="-Ofast -ffast-math" \ 
-env LIBS="-lgnustl_static" \
-	../setEnvironment-$1.sh sh -c "cd bochs && ./configure --build=x86_64-unknown-linux-gnu --host=$2 --with-sdl --enable-all-optimizations --enable-large-ramfile --enable-clgd54xx --enable-voodoo --enable-sb16 --disable-gameport --enable-ne2000 --enable-usb"
+if [ \! -f bin-$1/Makefile ] ; then
+	env CFLAGS="-Ofast -ffast-math" \
+	env LIBS="-lgnustl_static" \
+		../setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
+		--build=x86_64-unknown-linux-gnu --host=$2 \
+		--with-sdl --enable-all-optimizations --enable-large-ramfile \
+		--enable-clgd54xx --enable-voodoo --enable-sb16 \
+		--disable-gameport --enable-ne2000 --enable-usb" || exit 1
 fi
 
-make -C bochs && mv -f bochs/bochs libapplication-$1.so
 
+# Fix a compilation error
+mkdir -p bin-$1/iodev/network/slirp
+
+
+make -j4 -C bin-$1 && mv -f bin-$1/bochs libapplication-$1.so
