@@ -20,7 +20,7 @@ if [ \! -f bin-$1/Makefile ] ; then
 		--enable-cpu-level=6 --enable-smp --enable-x86-64 --enable-avx \
 		--enable-sb16 --enable-es1370 \
 		--enable-ne2000 --enable-ne1000 \
-		--enable-cdlgd54xx --enable-voodoo \
+		--enable-clgd54xx --enable-voodoo \
 		--enable-all-optimizations \
 		--enable-usb --enable-usb-ohci \
 		--disable-gameport --disable-disasm --disable-docbook" || exit 1
