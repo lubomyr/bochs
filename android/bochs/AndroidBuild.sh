@@ -16,9 +16,14 @@ if [ \! -f bin-$1/Makefile ] ; then
 	env LIBS="-lgnustl_static" \
 		../setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
 		--build=x86_64-unknown-linux-gnu --host=$2 \
-		--with-sdl --enable-all-optimizations --enable-large-ramfile \
-		--enable-clgd54xx --enable-voodoo --enable-sb16 \
-		--disable-gameport --enable-ne2000 --enable-usb" || exit 1
+		--with-sdl \
+		--enable-cpu-level=6 --enable-smp --enable-x86-64 --enable-avx \
+		--enable-sb16 --enable-es1370 \
+		--enable-ne2000 --enable-ne1000 \
+		--enable-clgd54xx --enable-voodoo \
+		--enable-all-optimizations \
+		--enable-usb --enable-usb-ohci \
+		--disable-gameport --disable-disasm --disable-docbook" || exit 1
 fi
 
 
