@@ -1049,6 +1049,7 @@ void bx_sdl2_gui_c::dimension_update(unsigned x, unsigned y,
   if ((x == res_x) && (y == res_y)) return;
 
   #ifndef ANDROID
+  // This is not needed on Android
   if (((int)x > sdl_maxres.w) || ((int)y > sdl_maxres.h)) {
     BX_PANIC(("dimension_update(): resolution of out of display bounds"));
     return;
