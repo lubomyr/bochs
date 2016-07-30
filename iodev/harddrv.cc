@@ -3287,6 +3287,13 @@ bx_bool bx_hard_drive_c::set_cd_media_status(Bit32u handle, bx_bool status)
 
 bx_bool bx_hard_drive_c::bmdma_present(void)
 {
+  #if BX_SUPPORT_PCI
+    if (BX_HD_THIS pci_enabled) {
+      #ifndef ANDROID
+      return DEV_ide_bmdma_present();
+      #endif
+  }
+  #endif
   return 0;
 }
 
