@@ -431,11 +431,13 @@ void switch_to_fullscreen(void)
   SDL_FreeSurface(tmp);
 
   SDL_ShowCursor(0);
+#ifndef ANDROID
   if (sdl_grab==0) {
 	SDL_WM_GrabInput(SDL_GRAB_ON);
   	sdl_grab = 1;
   	bx_gui->toggle_mouse_enable();
   }
+#endif
   bx_gui->flush();
 }
 
