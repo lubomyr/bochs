@@ -29,6 +29,7 @@ git clone git://github.com/pelya/commandergenius androidsdl
 4) download bochs sources
 git clone git://github.com/lubomyr/bochs
 Copy folder ~/bochs/android/bochs into ~/androidsdl/project/jni/application
+Change symlink ~/androidsdl/project/jni/application/bochs/bochs to point to this bochs repository
 
 // Now we can build project (apk)
 cd ~/androidsdl
