@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundsdl.h 12672 2015-02-23 21:32:34Z vruppert $
+// $Id: soundsdl.h 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012-2015  The Bochs Project
+//  Copyright (C) 2012-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -35,21 +35,46 @@ public:
 
   virtual int openwaveoutput(const char *wavedev);
   virtual int set_pcm_params(bx_pcm_param_t *param);
-  virtual int sendwavepacket(int length, Bit8u data[], bx_pcm_param_t *src_param);
 
   virtual void unregister_wave_callback(int callback_id);
+
+  virtual void resampler(audio_buffer_t *inbuffer, audio_buffer_t *outbuffer);
   virtual bx_bool mixer_common(Bit8u *buffer, int len);
+
 private:
-  bx_bool WaveOpen;
+  bx_bool WaveOutOpen;
   SDL_AudioSpec fmt;
 };
 
+#if BX_HAVE_SDL2_AUDIO_CAPTURE
+class bx_soundlow_wavein_sdl2_c : public bx_soundlow_wavein_c {
+public:
+  bx_soundlow_wavein_sdl2_c();
+  virtual ~bx_soundlow_wavein_sdl2_c();
+
+  virtual int openwaveinput(const char *wavedev, sound_record_handler_t rh);
+  virtual int startwaverecord(bx_pcm_param_t *param);
+  virtual int getwavepacket(int length, Bit8u data[]);
+  virtual int stopwaverecord();
+
+  static void record_timer_handler(void *);
+  void record_timer(void);
+private:
+  bx_bool WaveInOpen;
+  SDL_AudioSpec fmt;
+  SDL_AudioDeviceID devID;
+};
+#endif
+
 class bx_sound_sdl_c : public bx_sound_lowlevel_c {
 public:
-  bx_sound_sdl_c();
+  bx_sound_sdl_c() : bx_sound_lowlevel_c("sdl") {}
   virtual ~bx_sound_sdl_c() {}
 
   virtual bx_soundlow_waveout_c* get_waveout();
-};
+#if BX_HAVE_SDL2_AUDIO_CAPTURE
+  virtual bx_soundlow_wavein_c* get_wavein();
+#endif
+} bx_sound_sdl;
 
 #endif  // BX_HAVE_SOUND_SDL

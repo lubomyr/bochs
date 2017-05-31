@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: avx_cvt.cc 12735 2015-05-02 19:54:48Z sshwarts $
+// $Id: avx_cvt.cc 12769 2015-05-16 21:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -341,7 +341,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VCVTPS2PH_WpsVpsIb(bxInstruction_c
     }
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
 
 #if BX_SUPPORT_EVEX
     if (len == BX_VL512)

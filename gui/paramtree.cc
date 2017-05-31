@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paramtree.cc 12684 2015-03-13 21:28:40Z vruppert $
+// $Id: paramtree.cc 13134 2017-03-18 19:28:02Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2010-2015  The Bochs Project
@@ -86,7 +86,7 @@ bx_param_c::~bx_param_c()
   delete [] description;
   delete [] ask_format;
   delete [] group_name;
-  if (dependent_list) delete dependent_list;
+  delete dependent_list;
 }
 
 void bx_param_c::set_description(const char *text)
@@ -232,8 +232,7 @@ void bx_param_num_c::set(Bit64s newval)
 {
   if (handler) {
     // the handler can override the new value and/or perform some side effect
-    val.number = newval;
-    (*handler)(this, 1, newval);
+    val.number = (*handler)(this, 1, newval);
   } else {
     // just set the value.  This code does not check max/min.
     val.number = newval;
@@ -278,6 +277,29 @@ void bx_param_num_c::set_enabled(int en)
   }
   bx_param_c::set_enabled(en);
   update_dependents();
+}
+
+int bx_param_num_c::parse_param(const char *value)
+{
+  if (value != NULL) {
+    if ((value[0] == '0') && (value[1] == 'x')) {
+      set(strtoul(value, NULL, 16));
+    } else {
+      if (value[strlen(value)-1] == 'K') {
+        set(1000 * strtoul(value, NULL, 10));
+      }
+      else if (value[strlen(value)-1] == 'M') {
+        set(1000000 * strtoul(value, NULL, 10));
+      }
+      else {
+        set(strtoul(value, NULL, 10));
+      }
+    }
+
+    return 1;
+  }
+
+  return 0;
 }
 
 // Signed 64 bit
@@ -517,6 +539,20 @@ bx_param_bool_c::bx_param_bool_c(bx_param_c *parent,
   set_type(BXT_PARAM_BOOL);
 }
 
+int bx_param_bool_c::parse_param(const char *value)
+{
+  if (value != NULL) {
+    if (!strcmp(value, "0") || !stricmp(value, "false")) {
+      set(0); return 1;
+    } 
+    if (!strcmp(value, "1") || !stricmp(value, "true")) {
+      set(1); return 1;
+    }
+  }
+
+  return 0;
+}
+
 bx_shadow_bool_c::bx_shadow_bool_c(bx_param_c *parent,
       const char *name,
       const char *label,
@@ -553,7 +589,7 @@ Bit64s bx_shadow_bool_c::get64()
 void bx_shadow_bool_c::set(Bit64s newval)
 {
   // only change the bitnum bit
-  Bit64s mask = 1 << bitnum;
+  Bit64s mask = BX_CONST64(1) << bitnum;
   *(val.pbool) &= ~mask;
   *(val.pbool) |= ((newval & 1) << bitnum);
   if (handler) {
@@ -586,9 +622,7 @@ bx_param_enum_c::bx_param_enum_c(bx_param_c *parent,
 
 bx_param_enum_c::~bx_param_enum_c()
 {
-  if (deps_bitmap != NULL) {
-    free(deps_bitmap);
-  }
+  delete [] deps_bitmap;
 }
 
 
@@ -598,19 +632,19 @@ void bx_param_enum_c::set(Bit64s val)
   update_dependents();
 }
 
-int bx_param_enum_c::find_by_name(const char *string)
+int bx_param_enum_c::find_by_name(const char *s)
 {
   const char **p;
   for (p=&choices[0]; *p; p++) {
-    if (!strcmp(string, *p))
+    if (!strcmp(s, *p))
       return p-choices;
   }
   return -1;
 }
 
-bx_bool bx_param_enum_c::set_by_name(const char *string)
+bx_bool bx_param_enum_c::set_by_name(const char *s)
 {
-  int n = find_by_name(string);
+  int n = find_by_name(s);
   if (n<0) return 0;
   set(n + min);
   return 1;
@@ -619,7 +653,7 @@ bx_bool bx_param_enum_c::set_by_name(const char *string)
 void bx_param_enum_c::set_dependent_list(bx_list_c *l, bx_bool enable_all)
 {
   dependent_list = l;
-  deps_bitmap = (Bit64u*)malloc((size_t)(sizeof(Bit64u) * (max - min + 1)));
+  deps_bitmap = new Bit64u[max - min + 1];
   for (int i=0; i<(max-min+1); i++) {
     if (enable_all) {
       deps_bitmap[i] = (1 << (l->get_size())) - 1;
@@ -669,6 +703,15 @@ void bx_param_enum_c::set_enabled(int en)
   }
   bx_param_c::set_enabled(en);
   update_dependents();
+}
+
+int bx_param_enum_c::parse_param(const char *value)
+{
+  if (value != NULL) {
+    return set_by_name(value);
+  }
+
+  return 0;
 }
 
 bx_param_string_c::bx_param_string_c(bx_param_c *parent,
@@ -723,8 +766,8 @@ bx_param_filename_c::bx_param_filename_c(bx_param_c *parent,
 
 bx_param_string_c::~bx_param_string_c()
 {
-  if (val != NULL) delete [] val;
-  if (initial_val != NULL) delete [] initial_val;
+  delete [] val;
+  delete [] initial_val;
 }
 
 void bx_param_string_c::reset()
@@ -790,16 +833,19 @@ void bx_param_string_c::set(const char *buf)
 
   if (options & RAW_BYTES) {
     memcpy(oldval, val, maxsize);
-    memcpy(val, buf, maxsize);
   } else {
     strncpy(oldval, val, maxsize);
     oldval[maxsize - 1] = 0;
-    strncpy(val, buf, maxsize);
-    val[maxsize - 1] = 0;
   }
   if (handler) {
     // the handler can return a different char* to be copied into the value
     buf = (*handler)(this, 1, oldval, buf, -1);
+  }
+  if (options & RAW_BYTES) {
+    memcpy(val, buf, maxsize);
+  } else {
+    strncpy(val, buf, maxsize);
+    val[maxsize - 1] = 0;
   }
   delete [] oldval;
   if (dependent_list != NULL) update_dependents();
@@ -829,6 +875,17 @@ bx_bool bx_param_string_c::isempty()
   } else {
     return ((strlen(val) == 0) || !strcmp(val, "none"));
   }
+}
+
+int bx_param_string_c::parse_param(const char *value)
+{
+  if (value != NULL) {
+    set(value);
+  } else {
+    set("");
+  }
+
+  return 1;
 }
 
 int bx_param_string_c::sprint(char *buf, int len, bx_bool dquotes)
@@ -863,19 +920,37 @@ int bx_param_string_c::sprint(char *buf, int len, bx_bool dquotes)
 bx_shadow_data_c::bx_shadow_data_c(bx_param_c *parent,
     const char *name,
     Bit8u *ptr_to_data,
-    Bit32u data_size)
+    Bit32u data_size,
+    bx_bool text_fmt)
   : bx_param_c(SIM->gen_param_id(), name, "")
 {
   set_type(BXT_PARAM_DATA);
   this->data_ptr = ptr_to_data;
   this->data_size = data_size;
+  this->text_fmt = text_fmt;
   if (parent) {
     BX_ASSERT(parent->get_type() == BXT_LIST);
     this->parent = (bx_list_c *)parent;
     this->parent->add(this);
   }
 }
-  
+
+Bit8u bx_shadow_data_c::get(Bit32u index)
+{
+  if (index < data_size) {
+    return data_ptr[index];
+  } else {
+    return 0;
+  }
+}
+
+void bx_shadow_data_c::set(Bit32u index, Bit8u value)
+{
+  if (index < data_size) {
+    data_ptr[index] = value;
+  }
+}
+
 bx_shadow_filedata_c::bx_shadow_filedata_c(bx_param_c *parent,
     const char *name, FILE **scratch_file_ptr_ptr)
   : bx_param_c(SIM->gen_param_id(), name, "")
@@ -938,6 +1013,7 @@ bx_list_c::bx_list_c(bx_param_c *parent, const char *name)
     this->parent = (bx_list_c *)parent;
     this->parent->add(this);
   }
+  this->restore_handler = NULL;
   init("");
 }
 
@@ -953,6 +1029,7 @@ bx_list_c::bx_list_c(bx_param_c *parent, const char *name, const char *title)
     this->parent = (bx_list_c *)parent;
     this->parent->add(this);
   }
+  this->restore_handler = NULL;
   init(title);
 }
 
@@ -970,6 +1047,7 @@ bx_list_c::bx_list_c(bx_param_c *parent, const char *name, const char *title, bx
     this->parent = (bx_list_c *)parent;
     this->parent->add(this);
   }
+  this->restore_handler = NULL;
   init(title);
 }
 
@@ -978,7 +1056,7 @@ bx_list_c::~bx_list_c()
   if (list != NULL) {
     clear();
   }
-  if (title != NULL) delete [] title;
+  delete [] title;
 }
 
 void bx_list_c::init(const char *list_title)
@@ -1021,17 +1099,11 @@ bx_list_c* bx_list_c::clone()
 
 void bx_list_c::add(bx_param_c *param)
 {
-  bx_listitem_t *item;
-
   if ((get_by_name(param->get_name()) != NULL) && (param->get_parent() == this)) {
     BX_PANIC(("parameter '%s' already exists in list '%s'", param->get_name(), this->get_name()));
     return;
   }
-  item = (bx_listitem_t*) malloc(sizeof(bx_listitem_t));
-  if (item == NULL) {
-    BX_PANIC(("bx_list_c::add(): malloc() failed"));
-    return;
-  }
+  bx_listitem_t *item = new bx_listitem_t;
   item->param = param;
   item->next = NULL;
   if (list == NULL) {
@@ -1093,7 +1165,7 @@ void bx_list_c::clear()
       delete temp->param;
     }
     next = temp->next;
-    free(temp);
+    delete temp;
     temp = next;
   }
   list = NULL;
@@ -1115,7 +1187,7 @@ void bx_list_c::remove(const char *name)
       } else {
         prev->next = item->next;
       }
-      free(item);
+      delete item;
       size--;
       break;
     } else {
@@ -1126,12 +1198,22 @@ void bx_list_c::remove(const char *name)
 
 void bx_list_c::set_runtime_param(int val)
 {
-  bx_listitem_t *item;
-
   runtime_param = val;
   if (runtime_param) {
-    for (item = list; item; item = item->next) {
+    for (bx_listitem_t * item = list; item; item = item->next) {
       item->param->set_runtime_param(1);
     }
   }
+}
+
+void bx_list_c::set_restore_handler(void *devptr, list_restore_handler restore)
+{
+  sr_devptr = devptr;
+  restore_handler = restore;
+}
+
+void bx_list_c::restore()
+{
+  if (restore_handler)
+    (*restore_handler)(sr_devptr, this);
 }

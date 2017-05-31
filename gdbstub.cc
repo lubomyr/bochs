@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gdbstub.cc 12569 2014-12-18 17:52:40Z vruppert $
+// $Id: gdbstub.cc 13102 2017-03-06 21:30:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project Team
+//  Copyright (C) 2002-2017  The Bochs Project Team
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -872,7 +872,7 @@ static void wait_for_connect(int portn)
   {
     BX_PANIC(("Failed to accept on socket"));
   }
-  close(listen_socket_fd);
+  closesocket(listen_socket_fd);
 
   protoent = getprotobyname ("tcp");
   if (!protoent)
@@ -919,4 +919,8 @@ void bx_gdbstub_init(void)
 
   /* CPU loop */
   bx_cpu.cpu_loop();
+
+#ifdef WIN32
+  WSACleanup();
+#endif
 }

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parallel.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: parallel.cc 13051 2017-01-28 09:52:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -102,7 +102,7 @@ Bit32s parport_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libparallel_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libparallel_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theParallelDevice = new bx_parallel_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theParallelDevice, BX_PLUGIN_PARALLEL);
@@ -144,6 +144,8 @@ bx_parallel_c::~bx_parallel_c()
     if (s[i].output != NULL)
       fclose(s[i].output);
   }
+  bx_list_c *misc_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_MISC);
+  misc_rt->remove("parport");
   SIM->get_bochs_root()->remove("parallel");
   BX_DEBUG(("Exit"));
 }
@@ -153,10 +155,10 @@ void bx_parallel_c::init(void)
   Bit16u ports[BX_PARPORT_MAXDEV] = {0x0378, 0x0278};
   Bit8u irqs[BX_PARPORT_MAXDEV] = {7, 5};
   char name[16], pname[20];
-  bx_list_c *base;
+  bx_list_c *base, *misc_rt = NULL, *menu = NULL;
   int count = 0;
 
-  BX_DEBUG(("Init $Id: parallel.cc 12615 2015-01-25 21:24:13Z sshwarts $"));
+  BX_DEBUG(("Init $Id: parallel.cc 13051 2017-01-28 09:52:09Z vruppert $"));
 
   for (unsigned i=0; i<BX_N_PARALLEL_PORTS; i++) {
     sprintf(pname, "ports.parallel.%d", i+1);
@@ -170,7 +172,7 @@ void bx_parallel_c::init(void)
       }
       DEV_register_iowrite_handler(this, write_handler, ports[i], name, 1);
       DEV_register_iowrite_handler(this, write_handler, ports[i]+2, name, 1);
-      BX_INFO (("parallel port %d at 0x%04x irq %d", i+1, ports[i], irqs[i]));
+      BX_INFO(("parallel port %d at 0x%04x irq %d", i+1, ports[i], irqs[i]));
       /* internal state */
       BX_PAR_THIS s[i].STATUS.error = 1;
       BX_PAR_THIS s[i].STATUS.slct  = 1;
@@ -187,6 +189,16 @@ void bx_parallel_c::init(void)
 
       BX_PAR_THIS s[i].initmode = 0;
       // virtual_printer() opens output file on demand
+      BX_PAR_THIS s[i].file = SIM->get_param_string("file", base);
+      BX_PAR_THIS s[i].file->set_handler(parport_file_param_handler);
+      // init runtime parameters
+      if (misc_rt == NULL) {
+        misc_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_MISC);
+        menu = new bx_list_c(misc_rt, "parport", "Parallel Port Runtime Options");
+        menu->set_options(menu->SHOW_PARENT | menu->USE_BOX_TITLE);
+      }
+      menu->add(BX_PAR_THIS s[i].file);
+      BX_PAR_THIS s[i].file_changed = 1;
       count++;
     }
   }
@@ -233,31 +245,26 @@ void bx_parallel_c::register_state(void)
 
 void bx_parallel_c::virtual_printer(Bit8u port)
 {
-  char pname[20];
-
   if (BX_PAR_THIS s[port].STATUS.slct) {
-    if (BX_PAR_THIS s[port].output == NULL) {
-      sprintf(pname, "ports.parallel.%d", port+1);
-      bx_list_c *base = (bx_list_c*) SIM->get_param(pname);
-      bx_param_string_c *fileparam = SIM->get_param_string("file", base);
-      if (!fileparam->isempty()) {
-        BX_PAR_THIS s[port].output = fopen(fileparam->getptr(), "wb");
+    if (BX_PAR_THIS s[port].file_changed) {
+      if (!BX_PAR_THIS s[port].file->isempty() && (BX_PAR_THIS s[port].output == NULL)) {
+        BX_PAR_THIS s[port].output = fopen(BX_PAR_THIS s[port].file->getptr(), "wb");
         if (!BX_PAR_THIS s[port].output)
           BX_ERROR(("Could not open '%s' to write parport%d output",
-                    fileparam->getptr(), port+1));
+                    BX_PAR_THIS s[port].file->getptr(), port+1));
       }
+      BX_PAR_THIS s[port].file_changed = 0;
     }
     if (BX_PAR_THIS s[port].output != NULL) {
       fputc(BX_PAR_THIS s[port].data, BX_PAR_THIS s[port].output);
-      fflush (BX_PAR_THIS s[port].output);
+      fflush(BX_PAR_THIS s[port].output);
     }
     if (BX_PAR_THIS s[port].CONTROL.irq == 1) {
       DEV_pic_raise_irq(BX_PAR_THIS s[port].IRQ);
     }
     BX_PAR_THIS s[port].STATUS.ack = 0;
     BX_PAR_THIS s[port].STATUS.busy = 1;
-  }
-  else {
+  } else {
     BX_ERROR(("data is valid, but printer is offline"));
   }
 }
@@ -439,4 +446,20 @@ void bx_parallel_c::write(Bit32u address, Bit32u value, unsigned io_len)
       }
       break;
   }
+}
+
+const char* bx_parallel_c::parport_file_param_handler(bx_param_string_c *param, int set,
+                                                      const char *oldval, const char *val,
+                                                      int maxlen)
+{
+  if ((set) && (strcmp(val, oldval))) {
+    int port = atoi((param->get_parent())->get_name()) - 1;
+    if (BX_PAR_THIS s[port].output != NULL) {
+      fclose(BX_PAR_THIS s[port].output);
+      BX_PAR_THIS s[port].output = NULL;
+    }
+    BX_PAR_THIS s[port].file_changed = 1;
+    // virtual_printer() re-opens the output file on demand
+  }
+  return val;
 }

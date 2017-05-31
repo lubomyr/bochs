@@ -1,13 +1,13 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hid.h 11384 2012-08-31 12:08:19Z vruppert $
+// $Id: usb_hid.h 13167 2017-03-31 21:32:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB HID emulation support (mouse and tablet) ported from QEMU
-// USB keypad emulation based on code by Benjamin D Lunt (fys at frontiernet net)
+// USB keypad emulation based on code by Benjamin D Lunt (fys [at] fysnet [dot] net)
 //
 // Copyright (c) 2005       Fabrice Bellard
 // Copyright (c) 2007       OpenMoko, Inc.  (andrew@openedhand.com)
-// Copyright (C) 2009-2012  The Bochs Project
+// Copyright (C) 2009-2017  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,17 +51,19 @@ private:
     Bit16s mouse_y;
     Bit8s mouse_z;
     Bit8u b_state;
-    Bit8u saved_key[8];
+    Bit32u saved_key;
     Bit8u key_pad_packet[8];
+    Bit8u idle;
+    bx_bool has_events;
   } s;
 
-  static bx_bool key_enq_static(void *dev, Bit8u *scan_code);
-  bx_bool key_enq(Bit8u *scan_code);
+  static bx_bool gen_scancode_static(void *dev, Bit32u key);
+  bx_bool gen_scancode(Bit32u key);
   static void mouse_enabled_changed(void *dev, bx_bool enabled);
   static void mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
   void mouse_enq(int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
-  int mouse_poll(Bit8u *buf, int len);
-  int keypad_poll(Bit8u *buf, int len);
+  int mouse_poll(Bit8u *buf, int len, bx_bool force);
+  int keypad_poll(Bit8u *buf, int len, bx_bool force);
 };
 
 #endif

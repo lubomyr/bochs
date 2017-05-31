@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: stack64.cc 12619 2015-01-26 20:01:25Z sshwarts $
+// $Id: stack64.cc 12769 2015-05-16 21:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -35,7 +35,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POP_EqM(bxInstruction_c *i)
   // Note: there is one little weirdism here.  It is possible to use
   // RSP in the modrm addressing. If used, the value of RSP after the
   // pop is used to calculate the address.
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   write_linear_qword(i->seg(), get_laddr64(i->seg(), eaddr), val64);
 
@@ -84,7 +84,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSH64_Id(bxInstruction_c *i)
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSH_EqM(bxInstruction_c *i)
 {
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   Bit64u op1_64 = read_linear_qword(i->seg(), get_laddr64(i->seg(), eaddr));
 

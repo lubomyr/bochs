@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: plugin.h 12681 2015-03-06 22:54:30Z vruppert $
+// $Id: plugin.h 13167 2017-03-31 21:32:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2015  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -57,16 +57,15 @@ extern "C" {
 #define BX_PLUGIN_PCI       "pci"
 #define BX_PLUGIN_PCI2ISA   "pci2isa"
 #define BX_PLUGIN_PCI_IDE   "pci_ide"
-#define BX_PLUGIN_SOUNDMOD  "soundmod"
 #define BX_PLUGIN_SB16      "sb16"
 #define BX_PLUGIN_ES1370    "es1370"
-#define BX_PLUGIN_NETMOD    "netmod"
 #define BX_PLUGIN_NE2K      "ne2k"
 #define BX_PLUGIN_EXTFPUIRQ "extfpuirq"
 #define BX_PLUGIN_PCIDEV    "pcidev"
 #define BX_PLUGIN_USB_COMMON "usb_common"
 #define BX_PLUGIN_USB_UHCI  "usb_uhci"
 #define BX_PLUGIN_USB_OHCI  "usb_ohci"
+#define BX_PLUGIN_USB_EHCI  "usb_ehci"
 #define BX_PLUGIN_USB_XHCI  "usb_xhci"
 #define BX_PLUGIN_PCIPNIC   "pcipnic"
 #define BX_PLUGIN_E1000     "e1000"
@@ -85,10 +84,15 @@ extern "C" {
 #if BX_PLUGINS
 
 #define PLUG_load_plugin(name,type) {bx_load_plugin(#name,type);}
+#define PLUG_load_gui_plugin(name) bx_load_plugin(name,PLUGTYPE_GUI)
 #define PLUG_load_opt_plugin(name) bx_load_plugin(name,PLUGTYPE_OPTIONAL)
+#define PLUG_load_snd_plugin(name) bx_load_plugin(name,PLUGTYPE_SOUND)
+#define PLUG_load_net_plugin(name) bx_load_plugin(name,PLUGTYPE_NETWORK)
 #define PLUG_load_user_plugin(name) {bx_load_plugin(name,PLUGTYPE_USER);}
 #define PLUG_unload_plugin(name) {bx_unload_plugin(#name,1);}
 #define PLUG_unload_opt_plugin(name) bx_unload_plugin(name,1)
+#define PLUG_unload_snd_plugin(name) bx_unload_plugin(name,0)
+#define PLUG_unload_net_plugin(name) bx_unload_plugin(name,0)
 #define PLUG_unload_user_plugin(name) {bx_unload_plugin(name,1);}
 
 #define DEV_register_ioread_handler(b,c,d,e,f)  pluginRegisterIOReadHandler(b,c,d,e,f)
@@ -109,10 +113,14 @@ extern "C" {
 
 // When plugins are off, PLUG_load_plugin will call the plugin_init function
 // directly.
-#define PLUG_load_plugin(name,type) {lib##name##_LTX_plugin_init(NULL,type,0,NULL);}
-#define PLUG_load_opt_plugin(name) bx_load_opt_plugin(name)
+#define PLUG_load_plugin(name,type) {lib##name##_LTX_plugin_init(NULL,type);}
+#define PLUG_load_gui_plugin(name) bx_load_plugin2(name,PLUGTYPE_GUI)
+#define PLUG_load_opt_plugin(name) bx_load_plugin2(name,PLUGTYPE_OPTIONAL)
+#define PLUG_load_snd_plugin(name) bx_load_plugin2(name,PLUGTYPE_SOUND)
+#define PLUG_load_net_plugin(name) bx_load_plugin2(name,PLUGTYPE_NETWORK)
 #define PLUG_unload_plugin(name) {lib##name##_LTX_plugin_fini();}
 #define PLUG_unload_opt_plugin(name) bx_unload_opt_plugin(name,1);
+
 #define DEV_register_ioread_handler(b,c,d,e,f) bx_devices.register_io_read_handler(b,c,d,e,f)
 #define DEV_register_iowrite_handler(b,c,d,e,f) bx_devices.register_io_write_handler(b,c,d,e,f)
 #define DEV_unregister_ioread_handler(b,c,d,e)  bx_devices.unregister_io_read_handler(b,c,d,e)
@@ -133,10 +141,7 @@ extern "C" {
 #define DEV_reset_devices(type) {bx_devices.reset(type); }
 #define DEV_register_state() {bx_devices.register_state(); }
 #define DEV_after_restore_state() {bx_devices.after_restore_state(); }
-
 #define DEV_register_timer(a,b,c,d,e,f) bx_pc_system.register_timer(a,b,c,d,e,f)
-#define DEV_mouse_enabled_changed(en) (bx_devices.mouse_enabled_changed(en))
-#define DEV_mouse_motion(dx, dy, dz, bs, absxy) (bx_devices.mouse_motion(dx, dy, dz, bs, absxy))
 
 ///////// Removable devices macros
 #define DEV_optional_key_enq(a) (bx_devices.optional_key_enq(a))
@@ -156,15 +161,16 @@ extern "C" {
 #define DEV_cmos_get_reg(a) (bx_devices.pluginCmosDevice->get_reg(a))
 #define DEV_cmos_set_reg(a,b) (bx_devices.pluginCmosDevice->set_reg(a,b))
 #define DEV_cmos_checksum() (bx_devices.pluginCmosDevice->checksum_cmos())
-#define DEV_cmos_get_timeval() (bx_devices.pluginCmosDevice->get_timeval())
-#define DEV_cmos_present() (bx_devices.pluginCmosDevice != &bx_devices.stubCmos)
 
 ///////// keyboard macros
-#define DEV_kbd_gen_scancode(key) \
-    (bx_devices.pluginKeyboard->gen_scancode(key))
+#define DEV_kbd_gen_scancode(key) (bx_devices.gen_scancode(key))
 #define DEV_kbd_paste_bytes(bytes, count) \
     (bx_devices.pluginKeyboard->paste_bytes(bytes,count))
 #define DEV_kbd_release_keys() (bx_devices.pluginKeyboard->release_keys())
+
+///////// mouse macros
+#define DEV_mouse_enabled_changed(en) (bx_devices.mouse_enabled_changed(en))
+#define DEV_mouse_motion(dx, dy, dz, bs, absxy) (bx_devices.mouse_motion(dx, dy, dz, bs, absxy))
 
 ///////// hard drive macros
 #define DEV_hd_read_handler(a, b, c) \
@@ -177,7 +183,6 @@ extern "C" {
     (bx_devices.pluginHardDrive->get_cd_media_status(handle))
 #define DEV_hd_set_cd_media_status(handle, status) \
     (bx_devices.pluginHardDrive->set_cd_media_status(handle, status))
-#define DEV_hd_present() (bx_devices.pluginHardDrive != &bx_devices.stubHardDrive)
 #define DEV_hd_bmdma_read_sector(a,b,c) bx_devices.pluginHardDrive->bmdma_read_sector(a,b,c)
 #define DEV_hd_bmdma_write_sector(a,b) bx_devices.pluginHardDrive->bmdma_write_sector(a,b)
 #define DEV_hd_bmdma_complete(a) bx_devices.pluginHardDrive->bmdma_complete(a)
@@ -255,13 +260,13 @@ extern "C" {
 #define DEV_usb_send_msg(a,b) bx_devices.pluginUsbDevCtl->usb_send_msg((void*)a,b)
 
 ///////// Sound module macros
-#define DEV_sound_get_waveout(a) (bx_devices.pluginSoundModCtl->get_waveout(a))
-#define DEV_sound_get_wavein() (bx_devices.pluginSoundModCtl->get_wavein())
-#define DEV_sound_get_midiout(a) (bx_devices.pluginSoundModCtl->get_midiout(a))
+#define DEV_sound_get_waveout(a) (bx_soundmod_ctl.get_waveout(a))
+#define DEV_sound_get_wavein() (bx_soundmod_ctl.get_wavein())
+#define DEV_sound_get_midiout(a) (bx_soundmod_ctl.get_midiout(a))
 
 ///////// Networking module macro
 #define DEV_net_init_module(a,b,c,d) \
-  ((eth_pktmover_c*)bx_devices.pluginNetModCtl->init_module(a,(void*)b,(void*)c,d))
+  ((eth_pktmover_c*)bx_netmod_ctl.init_module(a,(void*)b,(void*)c,d))
 
 ///////// Gameport macro
 #define DEV_gameport_set_enabled(a) bx_devices.pluginGameport->set_enabled(a)
@@ -291,10 +296,6 @@ typedef struct _device_t
 extern device_t *devices;
 
 void plugin_startup(void);
-void plugin_load(char *name, char *args, plugintype_t);
-plugin_t *plugin_unload(plugin_t *plugin);
-void plugin_init_all(void);
-void plugin_fini_all(void);
 
 /* === Device Stuff === */
 typedef void (*deviceInitMem_t)(BX_MEM_C *);
@@ -331,13 +332,6 @@ BOCHSAPI extern int (*pluginRegisterDefaultIOWriteHandler)(void *thisPtr, ioWrit
 BOCHSAPI extern void  (*pluginRegisterIRQ)(unsigned irq, const char *name);
 BOCHSAPI extern void  (*pluginUnregisterIRQ)(unsigned irq, const char *name);
 
-/* === Timer stuff === */
-BOCHSAPI extern int     (*pluginRegisterTimer)(void *this_ptr, void (*funct)(void *),
-                             Bit32u useconds, bx_bool continuous,
-                             bx_bool active, const char *name);
-
-BOCHSAPI extern void    (*pluginActivateTimer)(unsigned id, Bit32u usec, bx_bool continuous);
-
 /* === HRQ stuff === */
 BOCHSAPI extern void    (*pluginSetHRQ)(unsigned val);
 BOCHSAPI extern void    (*pluginSetHRQHackCallback)(void (*callback)(void));
@@ -354,26 +348,45 @@ extern void bx_plugins_register_state(void);
 extern void bx_plugins_after_restore_state(void);
 
 #if !BX_PLUGINS
-int bx_load_opt_plugin(const char *name);
+int bx_load_plugin2(const char *name, plugintype_t type);
 int bx_unload_opt_plugin(const char *name, bx_bool devflag);
 #endif
 
 // every plugin must define these, within the extern"C" block, so that
 // a non-mangled function symbol is available in the shared library.
 void plugin_fini(void);
-int plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[]);
+int plugin_init(plugin_t *plugin, plugintype_t type);
 
 // still in extern "C"
 #if BX_PLUGINS && defined(_MSC_VER)
 #define DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(mod) \
-  extern "C" __declspec(dllexport) int __cdecl lib##mod##_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[]); \
+  extern "C" __declspec(dllexport) int __cdecl lib##mod##_LTX_plugin_init(plugin_t *plugin, plugintype_t type); \
   extern "C" __declspec(dllexport) void __cdecl lib##mod##_LTX_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(mod) \
+  extern "C" __declspec(dllexport) int __cdecl lib##mod##_gui_plugin_init(plugin_t *plugin, plugintype_t type); \
+  extern "C" __declspec(dllexport) void __cdecl lib##mod##_gui_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(mod) \
+  extern "C" __declspec(dllexport) int __cdecl lib##mod##_sound_plugin_init(plugin_t *plugin, plugintype_t type); \
+  extern "C" __declspec(dllexport) void __cdecl lib##mod##_sound_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(mod) \
+  extern "C" __declspec(dllexport) int __cdecl lib##mod##_net_plugin_init(plugin_t *plugin, plugintype_t type); \
+  extern "C" __declspec(dllexport) void __cdecl lib##mod##_net_plugin_fini(void);
 #else
 #define DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(mod) \
-  int CDECL lib##mod##_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[]); \
+  int CDECL lib##mod##_LTX_plugin_init(plugin_t *plugin, plugintype_t type); \
   void CDECL lib##mod##_LTX_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(mod) \
+  int CDECL lib##mod##_gui_plugin_init(plugin_t *plugin, plugintype_t type); \
+  void CDECL lib##mod##_gui_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(mod) \
+  int CDECL lib##mod##_sound_plugin_init(plugin_t *plugin, plugintype_t type); \
+  void CDECL lib##mod##_sound_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(mod) \
+  int CDECL lib##mod##_net_plugin_init(plugin_t *plugin, plugintype_t type); \
+  void CDECL lib##mod##_net_plugin_fini(void);
 #endif
 
+// device plugins
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(harddrv)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(hdimage)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(keyboard)
@@ -396,8 +409,8 @@ DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(pcidev)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_common)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_uhci)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_ohci)
+DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_ehci)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_xhci)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(soundmod)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(sb16)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(es1370)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(netmod)
@@ -411,20 +424,40 @@ DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(acpi)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(iodebug)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(ioapic)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(voodoo)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(amigaos)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(carbon)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(macintosh)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(nogui)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(rfb)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(sdl)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(sdl2)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(svga)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(term)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(vncsrv)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(win32)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(wx)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(x)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(user)
+// gui plugins
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(amigaos)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(carbon)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(macintosh)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(nogui)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(rfb)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(sdl)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(sdl2)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(svga)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(term)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(vncsrv)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(win32)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(wx)
+DECLARE_PLUGIN_INIT_FINI_FOR_GUI_MODULE(x)
+// sound driver plugins
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(alsa)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(dummy)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(file)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(oss)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(osx)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(sdl)
+DECLARE_PLUGIN_INIT_FINI_FOR_SOUND_MODULE(win)
+// network driver plugins
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(fbsd)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(linux)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(null)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(slirp)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(socket)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(tap)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(tuntap)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(vde)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(vnet)
+DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(win32)
 
 
 #ifdef __cplusplus

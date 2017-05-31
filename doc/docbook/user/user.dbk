@@ -1,7 +1,7 @@
 <!--
 ================================================================
 doc/docbook/user/user.dbk
-$Id: user.dbk 12734 2015-05-02 15:40:11Z vruppert $
+$Id: user.dbk 13176 2017-04-04 19:56:37Z vruppert $
 
 This is the top level file for the Bochs Users Manual.
 ================================================================
@@ -461,7 +461,7 @@ currently work with.
     <entry>Mouse</entry>
     <entry>Yes</entry>
     <entry>Emulates a serial, PS/2, bus or USB mouse with 3 buttons + optional mouse
-    wheel support. There is also an USB tablet emulation available.
+    wheel support. There is also a USB tablet emulation available.
     </entry>
   </row>
   <row>
@@ -526,11 +526,11 @@ currently work with.
   </row>
   <row>
     <entry>USB</entry>
-    <entry>incomplete</entry>
-    <entry>Three types of host controllers (UHCI, OHCI and xHCI) and the devices
-    'mouse', 'tablet', 'keypad', 'disk', 'cdrom', 'hub' and 'printer'. are
-    available. Plugging in and removing devices at runtime is possible. Access to
-    real hardware is not implemented yet.
+    <entry>Yes</entry>
+    <entry>Four types of host controllers (UHCI, OHCI, EHCI and xHCI) and the
+    devices 'mouse', 'tablet', 'keypad', 'disk', 'cdrom', 'floppy, ''hub' and
+    'printer' are available. Plugging in and removing devices at runtime is
+    possible. Access to real hardware is not implemented yet.
     </entry>
   </row>
   <row>
@@ -570,9 +570,10 @@ currently work with.
   </row>
   <row>
     <entry>Take advantage of your SMP box</entry>
-    <entry>No</entry>
-    <entry>At present, Bochs does not use threads or parallel processing, so it
-    will not run any faster on multiprocessor hardware.
+    <entry>Minimal</entry>
+    <entry>At present, Bochs only uses threads in the lowlevel sound output
+    code. The simulation itself uses only one thread, so it will not run any
+    faster on multiprocessor hardware.
     </entry>
   </row>
   <row>
@@ -698,8 +699,8 @@ code that displays the Bochs VGA screen and handles keyboard and mouse events.
        <para>
        Kevin Lawton is the primary author of Bochs. There have been bug fixes,
        enhancements, and code contributions from some few hundred people, so
-       it is not possible to list them all.  Recently, Kevin has been working
-       on a PC virtualization project called <ulink
+       it is not possible to list them all. Later, Kevin had been working on a
+       PC virtualization project called <ulink
        url="http://savannah.nongnu.org/projects/plex86">plex86</ulink>. In Fall 2002, he
        made contributed some major CPU speedups and helped with integration
        and debugging of the x86-64 emulation code.
@@ -786,9 +787,10 @@ code that displays the Bochs VGA screen and handles keyboard and mouse events.
      Does Bochs support a CD-ROM?
      </para></question>
      <answer><para>
-     Yes, a CD-ROM is supported in Linux, Windows, and most BSDs. The
-     CD-ROM drivers for Bochs allow the guest operating system to access the
-     host operating system's CD-ROM data directly.
+     Yes, the CD-ROM emulation and accessing ISO files is always available.
+     Reading from host CD-ROM media is supported in Linux, Windows, and most
+     BSDs. The CD-ROM drivers for Bochs allow the guest operating system to
+     access the host operating system's CD-ROM data directly.
      </para></answer>
   </qandaentry>
 
@@ -809,8 +811,9 @@ code that displays the Bochs VGA screen and handles keyboard and mouse events.
      </para></question>
      <answer><para>
      Yes.  Bochs emulates an NE2000 compatible network card (ISA / PCI) or an
-     Intel(R) 82540EM Gigabit Ethernet adapter (PCI). Networking is not supported
-     on all platforms. See <xref linkend="features"> for details.
+     Intel(R) 82540EM Gigabit Ethernet adapter (PCI). Using the host's network
+     capabilities is not supported on all platforms. See <xref linkend="features">
+     for details.
      </para></answer>
   </qandaentry>
 
@@ -820,14 +823,13 @@ code that displays the Bochs VGA screen and handles keyboard and mouse events.
      </para></question>
      <answer><para>
      Well, lot's of different OS's run inside of Bochs, so
-   thousands.  I'm assuming you are asking about Windows programs.
-   To give you a few, the following ones from the Winstone'98 tests
-   worked: Access 97, CorelDRAW! 7, Excel 97, Lotus 1-2-3 97, Word 97,
-   PowerPoint 97, Quattro Pro 7, WordPerfect 7.
-</para>
-
-     <para>Also, I've compiled an entire OS kernel inside Bochs before.  Not
-to mention, running DOOM, though at then-pathetic speeds.
+     thousands.  I'm assuming you are asking about Windows programs.
+     To give you a few, the following ones from the Winstone'98 tests
+     worked: Access 97, CorelDRAW! 7, Excel 97, Lotus 1-2-3 97, Word 97,
+     PowerPoint 97, Quattro Pro 7, WordPerfect 7.
+     </para>
+     <para>Also, I've compiled an entire OS kernel inside Bochs before.
+     Not  to mention, running DOOM, though at then-pathetic speeds.
      </para></answer>
   </qandaentry>
 
@@ -839,6 +841,19 @@ to mention, running DOOM, though at then-pathetic speeds.
       You should read <xref linkend="setup"> first. Next, you can check <xref linkend="guests">
       if there specific instructions on how to install your (guest) OS inside of Bochs.
     </para></answer>
+  </qandaentry>
+
+  <qandaentry>
+     <question><para>
+     Does Bochs run on my mobile device?
+     </para></question>
+     <answer><para>
+       Bochs has now minimal support for the Android platform using a special
+       version of the SDL library. There are some external projects that use
+       the offical sources with some modifications. They also offer a gui
+       for easy Bochs configuration. Other mobile platforms are not officially
+       supported yet.
+     </para></answer>
   </qandaentry>
 
 <!-- ......................................................
@@ -1134,7 +1149,12 @@ The <replaceable>tagname</replaceable> tells which release you want, and it can 
     </thead>
     <tbody>
       <row>
-        <entry>2.6.7 (bugfix)</entry>
+        <entry>2.6.8 (intermediate)</entry>
+        <entry>REL_2_6_8_FINAL</entry>
+        <entry>12740</entry>
+      </row>
+      <row>
+        <entry>2.6.7 (intermediate)</entry>
         <entry>REL_2_6_7_FINAL</entry>
         <entry>12531</entry>
       </row>
@@ -1374,24 +1394,30 @@ DLX Linux screenshot.
 </thead>
 <tbody>
 
+<row><entry>bios.bin-1.7.5 </entry> <entry> SeaBIOS ROM image </entry> </row>
 <row><entry>BIOS-bochs-latest </entry> <entry> default ROM BIOS image for Bochs </entry> </row>
 <row><entry>BIOS-bochs-legacy </entry> <entry> ROM BIOS image without 32-bit init code </entry> </row>
-<row><entry>bios.bin-1.7.5 </entry> <entry> SeaBIOS ROM image </entry> </row>
+<row><entry>bochsdbg.exe </entry> <entry> the main Bochs executable with debugger enabled </entry> </row>
 <row><entry>bochs.exe </entry> <entry> the main Bochs executable </entry> </row>
 <row><entry>bochs.ico </entry> <entry> the Bochs icon (used for links in start menu and on the desktop) </entry> </row>
-<row><entry>bochsdbg.exe </entry> <entry> the main Bochs executable with debugger enabled </entry> </row>
 <row><entry>bochsrc-sample.txt </entry> <entry> sample Bochs configuration file </entry> </row>
+<row><entry>bxhub.exe </entry> <entry> utility required for the 'socket' networking module </entry> </row>
 <row><entry>bximage.exe </entry> <entry> tool for manipulating disk images </entry> </row>
 <row><entry>CHANGES.txt </entry> <entry> what has changed between versions </entry> </row>
 <row><entry>COPYING.txt </entry> <entry> copy of the LGPL license </entry> </row>
+<row><entry>lgban.ico </entry> <entry> a set of Bochs icons in different sizes </entry> </row>
 <row><entry>LICENSE.txt </entry> <entry> Bochs license information </entry> </row>
-<row><entry>README.txt </entry> <entry> the read-me file from the source distribution. </entry> </row>
-<row><entry>TODO.txt </entry> <entry> the TODO file from the source distribution. </entry> </row>
+<row><entry>logo.ico </entry> <entry> another set of Bochs icons </entry> </row>
 <row><entry>niclist.exe </entry> <entry> tool to find out the network interface name </entry> </row>
-<row><entry>penguin.ico </entry> <entry> the Linux logo (used for the DLX link in start menu) </entry> </row>
+<row><entry>penguin.ico </entry> <entry> icons for the DLX Linux link </entry> </row>
+<row><entry>README.txt </entry> <entry> the read-me file from the source distribution. </entry> </row>
 <row><entry>sb16ctrl.exe </entry> <entry> tool to control sb16 in Bochs </entry> </row>
 <row><entry>sb16ctrl.txt </entry> <entry> examples of sb16ctrl commands </entry> </row>
 <row><entry>SeaBIOS-README.txt </entry> <entry> README for SeaBIOS ROM image </entry> </row>
+<row><entry>slirp.conf </entry> <entry> sample config file for the advanced 'slirp' network configuration </entry> </row>
+<row><entry>TODO.txt </entry> <entry> the TODO file from the source distribution. </entry> </row>
+<row><entry>unbochs.ico </entry> <entry> icon for the uninstaller link </entry> </row>
+<row><entry>uninstall.exe </entry> <entry> uninstall program for Bochs (created by the installation wizard) </entry> </row>
 <row><entry>VGABIOS-elpin-2.40 </entry> <entry> VGA BIOS image for Bochs </entry> </row>
 <row><entry>VGABIOS-elpin-LICENSE.txt </entry> <entry> license for VGA BIOS </entry> </row>
 <row><entry>VGABIOS-lgpl-latest </entry> <entry> LGPL'd VGA BIOS image for Bochs </entry> </row>
@@ -1399,12 +1425,11 @@ DLX Linux screenshot.
 <row><entry>VGABIOS-lgpl-latest-cirrus </entry> <entry> LGPL'd VGA BIOS image for Bochs with the Cirrus extension enabled </entry> </row>
 <row><entry>VGABIOS-lgpl-latest-cirrus-debug </entry> <entry> LGPL'd VGA BIOS image for Bochs with the Cirrus extension enabled and debug output to the logfile </entry> </row>
 <row><entry>VGABIOS-lgpl-README.txt </entry> <entry> readme for the LGPL'd VGA BIOS </entry> </row>
-<row><entry>uninstall.exe </entry> <entry> uninstall program for Bochs (created by the installation wizard) </entry> </row>
 <row><entry>dlxlinux\ </entry> <entry> directory containing DLX linux sample disk image and configuration files</entry> </row>
-<row><entry>dlxlinux\readme.txt </entry> <entry> description of DLX linux</entry> </row>
-<row><entry>dlxlinux\bochsrc.txt </entry> <entry> Bochs configuration file for DLX</entry> </row>
+<row><entry>dlxlinux\bochsrc.bxrc </entry> <entry> Bochs configuration file for DLX</entry> </row>
 <row><entry>dlxlinux/hd10meg.img </entry> <entry> disk image file (10 meg) </entry> </row>
-<row><entry>dlxlinux\start.bat </entry> <entry> Run this BAT file to try out DLX Linux inside Bochs! </entry> </row>
+<row><entry>dlxlinux\readme.txt </entry> <entry> description of DLX linux</entry> </row>
+<row><entry>dlxlinux\run.bat </entry> <entry> Run this BAT file to try out DLX Linux inside Bochs! </entry> </row>
 <row><entry>dlxlinux\testform.txt </entry> <entry> Form for reporting success or failure </entry> </row>
 <row>
   <entry>doc\index.html</entry>
@@ -1558,21 +1583,24 @@ description of each one.
 </thead>
 <tbody>
 
-<row><entry>/usr/share/doc/bochs/CHANGES</entry> <entry> what has changed between versions </entry> </row>
-<row><entry>/usr/share/doc/bochs/COPYING</entry> <entry> copy of the LGPL license </entry> </row>
-<row><entry>/usr/share/doc/bochs/LICENSE</entry> <entry> Bochs license information </entry> </row>
-<row><entry>/usr/share/doc/bochs/README</entry> <entry> the read-me file from the source distribution. </entry> </row>
-<row><entry>/usr/share/doc/bochs/TODO</entry> <entry> the TODO file from the source distribution. </entry> </row>
 <row><entry>/usr/bin/bochs </entry> <entry> the main Bochs executable </entry> </row>
+<row><entry>/usr/bin/bochs-dlx </entry> <entry> run this script to try out DLX Linux inside Bochs!</entry> </row>
+<row><entry>/usr/bin/bxhub </entry> <entry> utility required for the 'socket' networking module </entry> </row>
 <row><entry>/usr/bin/bximage </entry> <entry> tool for manipulating disk images </entry> </row>
 <row><entry>/usr/lib/bochs/plugins/* </entry> <entry> device and gui plugins for Bochs (plugin version only) </entry> </row>
 <row><entry>/usr/share/doc/bochs/bochsrc-sample.txt</entry> <entry> sample Bochs configuration file </entry> </row>
 <row><entry>/usr/share/man/man1/* </entry> <entry> man pages for bochs, bochs-dlx and bximage</entry> </row>
 <row><entry>/usr/share/man/man5/* </entry> <entry> man page for bochsrc </entry> </row>
+<row><entry>/usr/share/doc/bochs/CHANGES</entry> <entry> what has changed between versions </entry> </row>
+<row><entry>/usr/share/doc/bochs/COPYING</entry> <entry> copy of the LGPL license </entry> </row>
+<row><entry>/usr/share/doc/bochs/LICENSE</entry> <entry> Bochs license information </entry> </row>
+<row><entry>/usr/share/doc/bochs/README</entry> <entry> the read-me file from the source distribution. </entry> </row>
+<row><entry>/usr/share/doc/bochs/TODO</entry> <entry> the TODO file from the source distribution. </entry> </row>
 <row><entry>/usr/share/doc/bochs/index.html</entry> <entry> a local copy of all Bochs documentation ( <ulink url="http://bochs.sourceforge.net/doc/docbook/index.html">Online copy</ulink> )</entry> </row>
+<row><entry>/usr/share/doc/bochs/slirp.conf </entry> <entry> sample config file for the advanced 'slirp' network configuration </entry> </row>
+<row><entry>/usr/share/bochs/bios.bin-1.7.5 </entry> <entry> SeaBIOS ROM image </entry> </row>
 <row><entry>/usr/share/bochs/BIOS-bochs-latest </entry> <entry> default ROM BIOS image for Bochs </entry> </row>
 <row><entry>/usr/share/bochs/BIOS-bochs-legacy </entry> <entry> ROM BIOS image without 32-bit init code </entry> </row>
-<row><entry>/usr/share/bochs/bios.bin-1.7.5 </entry> <entry> SeaBIOS ROM image </entry> </row>
 <row><entry>/usr/share/bochs/SeaBIOS-README </entry> <entry> README for SeaBIOS ROM image </entry> </row>
 <row><entry>/usr/share/bochs/VGABIOS-elpin-2.40 </entry> <entry> VGA BIOS image for Bochs </entry> </row>
 <row><entry>/usr/share/bochs/VGABIOS-elpin-LICENSE </entry> <entry> license for VGA BIOS </entry> </row>
@@ -1581,7 +1609,6 @@ description of each one.
 <row><entry>/usr/share/bochs/VGABIOS-lgpl-latest-cirrus </entry> <entry> LGPL'd VGA BIOS image for Bochs with the Cirrus extension enabled </entry> </row>
 <row><entry>/usr/share/bochs/VGABIOS-lgpl-latest-cirrus-debug </entry> <entry> LGPL'd VGA BIOS image for Bochs with the Cirrus extension enabled and debug output to the logfile </entry> </row>
 <row><entry>/usr/share/bochs/VGABIOS-lgpl-README </entry> <entry> readme for the LGPL'd VGA BIOS </entry> </row>
-<row><entry>/usr/bin/bochs-dlx </entry> <entry> run this script to try out DLX Linux inside Bochs!</entry> </row>
 <row><entry>/usr/share/bochs/dlxlinux/ </entry> <entry> directory containing DLX linux sample disk image and configuration files</entry> </row>
 <row><entry>/usr/share/bochs/dlxlinux/readme.txt</entry> <entry> description of DLX linux</entry> </row>
 <row><entry>/usr/share/bochs/keymaps/*.map </entry> <entry>keymap tables for X11, SDL and SDL2 </entry> </row>
@@ -1973,6 +2000,7 @@ In Bochs 1.3 and before, the X11 GUI was always the default.
       <entry>--with-carbon</entry>
       <entry>Compile for MacOS X with the Carbon GUI.  See the
       .conf.macosx file for the correct MacOS X compile options.
+      WARNING: This Bochs feature is not maintained yet and may fail.
       </entry>
     </row>
     <row>
@@ -2016,7 +2044,8 @@ In Bochs 1.3 and before, the X11 GUI was always the default.
         configure on a platform which supports running configure, so that
         you may then transfer the configured code over to the
         real compile environment.
-        </entry>
+        WARNING: This Bochs feature is not maintained yet and may fail.
+      </entry>
     </row>
     <row>
       <entry>--with-wx</entry>
@@ -2030,7 +2059,8 @@ In Bochs 1.3 and before, the X11 GUI was always the default.
       <entry>Use SVGALIB library for Linux.  This allows a full-screen
         text and graphics display without X windows.  The SVGALIB port
         was written by Igor Popik.
-        </entry>
+        WARNING: This Bochs feature is not maintained yet and may fail.
+      </entry>
     </row>
     <row>
       <entry>--with-nogui</entry>
@@ -2055,10 +2085,158 @@ In Bochs 1.3 and before, the X11 GUI was always the default.
 <para>
 The remaining options can generally be used with any GUI.  For each option
 such as <option>--enable-cdrom</option>, you can also write <option>--disable-cdrom</option>
-to explicitly turn it off.
+to explicitly turn it off. The following 3 tables show the general options
+(.e.g debugger and plugins support), the CPU-related stuff (e.g. cpu level,
+SMP, x86_64 support) and the devices options (e.g. PCI, USB, Cirrus graphics).
 </para>
 
-<table id="configure-options"><title>Configure Options</title>
+<table id="configure-options-1"><title>Configure Options (General)</title>
+<tgroup cols="3" align="left" colsep="1" rowsep="1">
+  <thead>
+    <row>
+      <entry>Option</entry>
+      <entry>Default</entry>
+      <entry>Comments</entry>
+   </row>
+  </thead>
+  <tbody>
+    <row>
+      <entry>--enable-plugins</entry>
+      <entry>no</entry>
+      <entry>
+      Plugins are shared libraries that can be loaded on demand.  Example: the
+      serial device is implemented as a plugin.  In Unix, the serial plugin is
+      called libbx_serial.so.  When Bochs reads its configuration file, if the
+      serial device is enabled it loads libbx_serial.so.  See the Features
+      section for supported platforms.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-debugger</entry>
+      <entry>no</entry>
+      <entry>
+        Compile in support for Bochs internal command-line debugger.  This has
+        nothing to do with x86 hardware debug support.  It is a more powerful
+        and non-intrusive native debugger.  Enabling this will of course slow
+        down the emulation.  You only need this option if you know you need it.
+        After you have run <command>./configure</command>, you may want to edit
+        <filename>config.h</filename> to customize the debugger further;
+        see <xref linkend="internal-debugger"> for more information.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-debugger-gui</entry>
+      <entry>yes if debugger is on</entry>
+      <entry>
+      Enable support for the gui frontend of the Bochs debugger. This feature
+      is supported on Windows hosts and on hosts with GTK2 installed.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-readline</entry>
+      <entry>detected by configure</entry>
+      <entry>
+      Compile the debugger with the GNU readline library, which gives
+      command line editing and history.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-gdb-stub</entry>
+      <entry>no</entry>
+      <entry>
+      Enable support for the remote GDB stub. See <link linkend="debugging-with-gdb">Using Bochs and the remote GDB stub</link>.
+      NOTE: This feature cannot be used if the Bochs debugger is also enabled.
+      WARNING: This Bochs feature is not maintained yet and may fail.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-disasm</entry>
+      <entry>yes</entry>
+      <entry>Compile in support for built-in disassembler.  Bochs has
+          a built-in disassembler, which is useful if you either
+          run the built-in debugger (<option>--enable-debugger</option>), or want
+          disassembly of the current instruction when there is a
+          panic in bochs.</entry>
+    </row>
+    <row>
+      <entry>--enable-docbook</entry>
+      <entry>detected</entry>
+      <entry>
+      Build the docbook documentation in doc/docbook.  The configure
+      script will enable this option automatically if you have a program
+      called docbook2html installed.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-instrumentation=<option>directory</option></entry>
+      <entry>no</entry>
+      <entry>
+      Compile in support for instrumentation.  This allows you to collect
+      instrumentation data from bochs as it executes code.  You have to create
+      your own instrumentation library and define the instrumentation macros
+      (hooks in bochs) to either call your library functions or not, depending
+      upon whether you want to collect each piece of data.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-xpm</entry>
+      <entry>yes</entry>
+      <entry>
+      Enables the check for the XPM library. This option is only valid if the
+      x display library is enabled (<option>--with-x11</option>).
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-show-ips</entry>
+      <entry>yes</entry>
+      <entry>
+      Enables logging of measured IPS, see the <command>ips</command> parameter
+      of the <link linkend="bochsopt-cpu-ips">cpu option</link>.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-logging</entry>
+      <entry>yes</entry>
+      <entry>
+      By default, Bochs generates logfile output that can be configured with
+      bochsrc options and at runtime. Use <option>--disable-logging</option>
+      to turn off this feature completely.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-assert-checks</entry>
+      <entry>yes if debugger is on</entry>
+      <entry>
+      BX_ASSERT event causes a panic on assertion failure if enabled (logging
+      feature must be enabled, too).
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-cpp</entry>
+      <entry>no</entry>
+      <entry>
+      Use .cpp as C++ suffix. Renames all the .cc files to .cpp for use with
+      compilers which want that, like older MS C++ compilers. Don't use this
+      option unless you know you need it.
+      </entry>
+    </row>
+    <row>
+      <entry>--enable-idle-hack</entry>
+      <entry>no</entry>
+      <entry>
+      Enables Roland Mainz's experimental idle code, which is intended to
+      keep Bochs from always using 100% of CPU time.  When Bochs is waiting
+      around for an interrupt, the idle code uses a select() loop and some
+      X11 tricks to wait until user input arrives.  This is designed to
+      keep Bochs responsive while still yielding to other processes when
+      Bochs is idle. It only works with X11 or term GUI.
+      </entry>
+    </row>
+  </tbody>
+</tgroup>
+</table>
+
+<table id="configure-options-2"><title>Configure Options (CPU &amp; Memory)</title>
 <tgroup cols="3" align="left" colsep="1" rowsep="1">
   <thead>
     <row>
@@ -2131,7 +2309,8 @@ to explicitly turn it off.
           needs to use the x86 hardware debugging facilities such as
           DR0..DR7, instruction and data breakpoints etc., then you
           should use this option.  Otherwise don't use it, as it
-          will slow down the emulation.</entry>
+          will slow down the emulation.
+      </entry>
     </row>
     <row>
       <entry>--enable-monitor-mwait</entry>
@@ -2142,11 +2321,6 @@ to explicitly turn it off.
       <entry>--enable-alignment-check</entry>
       <entry>yes if cpu level &gt;= 4</entry>
       <entry>support for alignment check in the CPU and #AC exception</entry>
-    </row>
-    <row>
-      <entry>--enable-misaligned-sse</entry>
-      <entry>no</entry>
-      <entry>support for AMD's misaligned SSE extension</entry>
     </row>
     <row>
       <entry>--enable-configurable-msrs</entry>
@@ -2169,6 +2343,46 @@ to explicitly turn it off.
       <entry>yes</entry>
       <entry>support for guest memory larger than the host supports</entry>
     </row>
+    <row>
+      <entry>--enable-repeat-speedups</entry>
+      <entry>no</entry>
+      <entry>enable support repeated I/O and memory copy speedups</entry>
+    </row>
+    <row>
+      <entry>--enable-fast-function-calls</entry>
+      <entry>no</entry>
+      <entry>enable support for fast function calls (gcc on x86 only)</entry>
+    </row>
+    <row>
+      <entry>--enable-handlers-chaining</entry>
+      <entry>no</entry>
+      <entry>enable support for handlers chaining optimization</entry>
+    </row>
+    <row>
+      <entry>--enable-all-optimizations</entry>
+      <entry>no</entry>
+      <entry>
+        Turn on the enables for all speed optimizations that the
+        developers believe are safe to use:
+         --enable-repeat-speedups,
+         --enable-fast-function-calls,
+         --enable-handlers-chaining.
+      </entry>
+    </row>
+  </tbody>
+</tgroup>
+</table>
+
+<table id="configure-options-3"><title>Configure Options (Devices)</title>
+<tgroup cols="3" align="left" colsep="1" rowsep="1">
+  <thead>
+    <row>
+      <entry>Option</entry>
+      <entry>Default</entry>
+      <entry>Comments</entry>
+   </row>
+  </thead>
+  <tbody>
     <row>
       <entry>--enable-cdrom</entry>
       <entry>yes</entry>
@@ -2210,27 +2424,14 @@ to explicitly turn it off.
       </entry>
     </row>
     <row>
-      <entry>--enable-idle-hack</entry>
-      <entry>no</entry>
-      <entry>
-      Enables Roland Mainz's experimental idle code, which is intended to
-      keep Bochs from always using 100% of CPU time.  When Bochs is waiting
-      around for an interrupt, the idle code uses a select() loop and some
-      X11 tricks to wait until user input arrives.  This is designed to
-      keep Bochs responsive while still yielding to other processes when
-      Bochs is idle. It only works with X11 or term GUI.
-      </entry>
-    </row>
-    <row>
       <entry>--enable-ne2000</entry>
       <entry>no</entry>
       <entry>Enable NE2000 network card support.  This requires a
-      low-level component to be written for each OS.  The NE2000
-      option is only supported on FreeBSD, OpenBSD, Linux, and Windows
-      9x/NT/2K/XP.  When enabled and configured, the NE2000 device model can
-      talk to any computer on the network EXCEPT FOR the local host.
-      Exception: Under most circumstances, Bochs can talk to the local host
-      on Windows, and in the ethertap interface for Linux.
+      low-level component to be written for each OS (supported on FreeBSD,
+      OpenBSD, Linux, and Windows 9x/NT/2K/XP).  When enabled and configured,
+      the NE2000 device model can talk to any computer on the network
+      EXCEPT FOR the local host. Exception: Under most circumstances, Bochs can
+      talk to the local host on Windows, and in the ethertap interface for Linux.
       </entry>
     </row>
     <row>
@@ -2258,89 +2459,6 @@ to explicitly turn it off.
       </entry>
     </row>
     <row>
-      <entry>--enable-plugins</entry>
-      <entry>no</entry>
-      <entry>
-      Plugins are shared libraries that can be loaded on demand.  Example: the
-      serial device is implemented as a plugin.  In Unix, the serial plugin is
-      called libbx_serial.so.  When Bochs reads its configuration file, if the
-      serial device is enabled it loads libbx_serial.so.  See the Features
-      section for supported platforms.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-repeat-speedups</entry>
-      <entry>no</entry>
-      <entry>enable support repeated I/O and memory copy speedups</entry>
-    </row>
-    <row>
-      <entry>--enable-fast-function-calls</entry>
-      <entry>no</entry>
-      <entry>enable support for fast function calls (gcc on x86 only)</entry>
-    </row>
-    <row>
-      <entry>--enable-handlers-chaining</entry>
-      <entry>no</entry>
-      <entry>enable support for handlers chaining optimization</entry>
-    </row>
-    <row>
-      <entry>--enable-all-optimizations</entry>
-      <entry>no</entry>
-      <entry>
-        Turn on the enables for all speed optimizations that the
-        developers believe are safe to use:
-         --enable-repeat-speedups,
-         --enable-fast-function-calls,
-         --enable-handlers-chaining.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-debugger</entry>
-      <entry>no</entry>
-      <entry>
-        Compile in support for Bochs internal command-line debugger.  This has
-        nothing to do with x86 hardware debug support.  It is a more powerful
-        and non-intrusive native debugger.  Enabling this will of course slow
-        down the emulation.  You only need this option if you know you need it.
-        After you have run <command>./configure</command>, you may want to edit
-        <filename>config.h</filename> to customize the debugger further;
-        see <xref linkend="internal-debugger"> for more information.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-debugger-gui</entry>
-      <entry>yes if debugger is on</entry>
-      <entry>
-      Enable support for the gui frontend of the Bochs debugger. This feature
-      is supported on Windows hosts and on hosts with GTK2 installed.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-readline</entry>
-      <entry>detected by configure</entry>
-      <entry>
-      Compile the debugger with the GNU readline library, which gives
-      command line editing and history.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-gdb-stub</entry>
-      <entry>no</entry>
-      <entry>
-      Enable support for the remote GDB stub. See <link linkend="debugging-with-gdb">Using Bochs and the remote GDB stub</link>.
-      NOTE: This feature cannot be used if the Bochs debugger is also enabled.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-disasm</entry>
-      <entry>yes</entry>
-      <entry>Compile in support for built-in disassembler.  Bochs has
-          a built-in disassembler, which is useful if you either
-          run the built-in debugger (<option>--enable-debugger</option>), or want
-          disassembly of the current instruction when there is a
-          panic in bochs.</entry>
-    </row>
-    <row>
       <entry>--enable-iodebug</entry>
       <entry>yes if debugger is on</entry>
       <entry>
@@ -2356,7 +2474,8 @@ to explicitly turn it off.
     <row>
       <entry>--enable-pci</entry>
       <entry>yes</entry>
-      <entry>Enable limited i440FX PCI support. This is still incomplete, but usable.
+      <entry>Enable limited i440FX / i430FX PCI support. This is still incomplete,
+      but usable.
       </entry>
     </row>
     <row>
@@ -2365,6 +2484,7 @@ to explicitly turn it off.
       <entry>
         Enable PCI host device mapping support. This requires <option>--enable-pci</option>
         to be set as well as Linux 2.4, 2.6 or 3.x as host.
+        WARNING: This Bochs feature is not maintained yet and may fail.
       </entry>
     </row>
     <row>
@@ -2372,7 +2492,7 @@ to explicitly turn it off.
       <entry>no</entry>
       <entry>
         Enable i440FX PCI USB support (UHCI). The host controller with 2-port
-        root hub and 6 USB device types are available.
+        root hub and 8 USB device types are available.
       </entry>
     </row>
     <row>
@@ -2384,10 +2504,18 @@ to explicitly turn it off.
       </entry>
     </row>
     <row>
+      <entry>--enable-usb-ehci</entry>
+      <entry>no</entry>
+      <entry>
+        Enable USB EHCI support. The host controller with 6-port
+        root hub is available (USB device types: same as UHCI).
+      </entry>
+    </row>
+    <row>
       <entry>--enable-usb-xhci</entry>
       <entry>no</entry>
       <entry>
-        Enable experimental USB xHCI support. The host controller with 4-port
+        Enable USB xHCI support. The host controller with 4-port
         root hub is available (USB device types: same as UHCI).
       </entry>
     </row>
@@ -2397,68 +2525,6 @@ to explicitly turn it off.
       <entry>
         Enable support for the serial port emulation to access to the host's
         serial port. This feature is partly implemented for Windows hosts only.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-docbook</entry>
-      <entry>detected</entry>
-      <entry>
-      Build the docbook documentation in doc/docbook.  The configure
-      script will enable this option automatically if you have a program
-      called docbook2html installed.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-instrumentation=<option>directory</option></entry>
-      <entry>no</entry>
-      <entry>
-      Compile in support for instrumentation.  This allows you to collect
-      instrumentation data from bochs as it executes code.  You have to create
-      your own instrumentation library and define the instrumentation macros
-      (hooks in bochs) to either call your library functions or not, depending
-      upon whether you want to collect each piece of data.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-xpm</entry>
-      <entry>yes</entry>
-      <entry>
-      Enables the check for the XPM library. This option is only valid if the
-      x display library is enabled (<option>--with-x11</option>).
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-show-ips</entry>
-      <entry>yes</entry>
-      <entry>
-      Enables logging of measured IPS, see the <command>ips</command> parameter
-      of the <link linkend="bochsopt-cpu-ips">cpu option</link>.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-logging</entry>
-      <entry>yes</entry>
-      <entry>
-      By default, Bochs generates logfile output that can be configured with
-      bochsrc options and at runtime. Use <option>--disable-logging</option>
-      to turn off this feature completely.
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-assert-checks</entry>
-      <entry>yes if debugger is on</entry>
-      <entry>
-      BX_ASSERT event causes a panic on assertion failure if enabled (logging
-      feature must be enabled, too).
-      </entry>
-    </row>
-    <row>
-      <entry>--enable-cpp</entry>
-      <entry>no</entry>
-      <entry>
-      Use .cpp as C++ suffix. Renames all the .cc files to .cpp for use with
-      compilers which want that, like older MS C++ compilers. Don't use this
-      option unless you know you need it.
       </entry>
     </row>
   </tbody>
@@ -2602,7 +2668,8 @@ find the workspace file called <filename>bochs.sln</filename> in the folder
 "vs2013" and load it in VC++. Choose <command>Project:Set Active Project</command>
 and be sure that "bochs" is selected. Then choose <command>Build:Build bochs.exe</command>.
 This will build all the required libraries (iodev, cpu, etc.) and the auxiliary
-programs <filename>bximage.exe</filename> and <filename>niclist.exe</filename>.
+programs <filename>bximage.exe</filename>, <filename>bxhub.exe</filename> and
+<filename>niclist.exe</filename>.
 </para>
 
 <para>
@@ -3195,7 +3262,7 @@ These plugins will be loaded by default (if present): 'biosdev', 'extfpuirq',
 <para>
 These plugins are also supported, but they are usually loaded directly with
 their bochsrc option: 'e1000', 'es1370', 'ne2k', 'pcidev', 'pcipnic', 'sb16',
-'usb_ohci', 'usb_uhci', 'usb_xhci' and 'voodoo'.
+'usb_ehci', 'usb_ohci', 'usb_uhci', 'usb_xhci' and 'voodoo'.
 </para>
 </section>
 
@@ -3655,10 +3722,9 @@ value. In all other cases the 'memory' option should be used instead.
 <para>
 Examples:
 <screen>
-  romimage: file=bios/BIOS-bochs-latest, address=0xfffe0000
-  romimage: file=$BXSHARE/BIOS-bochs-legacy, address=0xffff0000
+  romimage: file=bios/BIOS-bochs-latest, options=fastboot
+  romimage: file=$BXSHARE/BIOS-bochs-legacy
   romimage: file=mybios.bin, address=0xfff80000
-  romimage: file=mybios.bin
 </screen>
 The ROM BIOS controls what the PC does when it first powers on.  Normally, you
 can use a precompiled BIOS in the source or binary distribution called
@@ -3670,6 +3736,8 @@ You can use the environment variable $BXSHARE to specify the location of the BIO
 The usage of external large BIOS images (up to 512k) at memory top is
 now supported, but we still recommend to use the BIOS distributed with Bochs.
 The start address is optional, since it can be calculated from image size.
+The Bochs BIOS currently supports only the option "fastboot" to skip the
+boot menu delay.
 </para>
 </section>
 
@@ -3843,9 +3911,9 @@ With the mouse type option you can select the type of mouse to emulate.
 The default value is 'ps2'. The other choices are 'imps2' (wheel mouse
 on PS/2), 'serial', 'serial_wheel', 'serial_msys' (one com port requires
 setting 'mode=mouse', see <link linkend="bochsopt-com">com option</link>)
-and 'bus' (if present). To connect a mouse to an USB port, see the
-<link linkend="bochsopt-usb-uhci">usb_uhci</link>, 'usb_ohci 'or
-'usb_xhci' option (requires PCI and USB support).
+'inport' and 'bus' (if present). To connect a mouse to a USB port, see the
+<link linkend="bochsopt-usb-uhci">usb_uhci</link>, 'usb_ohci', 'usb_ehci'
+or 'usb_xhci' options (requires PCI and USB support).
 </para>
 <para><command>enabled</command></para>
 <para>
@@ -3861,7 +3929,7 @@ and the 'toggle' option below).
 The default method to toggle the mouse capture at runtime is to press the
 CTRL key and the middle mouse button ('ctrl+mbutton'). This option allows
 to change the method to 'ctrl+f10' (like DOSBox) or 'ctrl+alt' (like QEMU)
-or 'f12' (replaces win32 'legacyF12' option).
+or 'f12'.
 </para>
 </section>
 
@@ -3878,7 +3946,7 @@ connected to PCI slots. Up to 5 slots are available. For these combined PCI/ISA
 devices assigning to slot is mandatory if you want to emulate the PCI model:
 cirrus, ne2k and pcivga. These PCI-only devices are also supported, but they are
 auto-assigned if you don't use the slot configuration: e1000, es1370, pcidev,
-pcipnic, usb_ohci and usb_xhci.
+pcipnic, usb_ohci, usb_ehci and usb_xhci.
 </para>
 </section>
 
@@ -3937,11 +4005,11 @@ Example:
 <screen>
   cmosimage: file=cmos.img, rtc_init=time0
 </screen>
-This defines image file that can be loaded into the CMOS RAM at startup.
-The rtc_init parameter controls whether initialize the RTC with values stored
-in the image. By default the time0 argument given to the
-<link linkend="bochsopt-clock">clock option</link> is used. With 'rtc_init=image'
-the image is the source for the initial time.
+This defines a binary image file with size 128 bytes that can be loaded into
+the CMOS RAM at startup. The rtc_init parameter controls whether initialize
+the RTC with values stored in the image. By default the time0 argument given
+to the <link linkend="bochsopt-clock">clock option</link> is used. With
+'rtc_init=image' the image is the source for the initial time.
 </para>
 </section>
 
@@ -4058,7 +4126,7 @@ This defines the type and characteristics of all attached ata devices:
 <row> <entry> heads </entry> <entry> only valid for disks </entry> </row>
 <row> <entry> spt </entry> <entry> only valid for disks </entry> </row>
 <row> <entry> status </entry> <entry> only valid for cdroms </entry> <entry> [inserted | ejected] </entry> </row>
-<row> <entry> biosdetect </entry> <entry> type of biosdetection </entry> <entry> [none | auto], only for disks on ata0 [cmos] </entry> </row>
+<row> <entry> biosdetect </entry> <entry> type of biosdetection </entry> <entry> [auto | cmos | none] </entry> </row>
 <row> <entry> translation </entry> <entry> type of translation done by the BIOS (legacy int13), only for disks </entry> <entry> [none | lba | large | rechs | auto] </entry> </row>
 <row> <entry> model </entry> <entry> string returned by identify device ATA command </entry> </row>
 <row> <entry> journal </entry> <entry> optional filename of the redolog for undoable, volatile and vvfat disks </entry> </row>
@@ -4273,9 +4341,9 @@ emulation problem (like an unsupported video mode).
 <para>
 The debug, info, error, and panic lines in the bochsrc control what Bochs will
 do when it encounters each type of event.  The allowed actions are: fatal
-(terminate bochs), ask (ask the user what to do), report (print information to
-the console or log file), or ignore (do nothing).  The recommended settings are
-listed in the sample above.
+(terminate bochs), ask (ask the user what to do), warn (show dialog with message
+and continue), report (print information to the console or log file), or ignore
+(do nothing). The recommended settings are listed in the sample above.
 </para>
 
 <para>
@@ -4349,10 +4417,10 @@ Examples:
 </para>
 <para>
   Other serial modes are 'null' (no input/output), 'file' (output to a file
-  specified as the 'dev' parameter), 'raw' (use the real serial port - under
-  construction for win32), 'mouse' (standard serial mouse - requires
-  <link linkend="bochsopt-mouse">mouse option</link> setting 'type=serial'
-  or 'type=serial_wheel').
+  specified as the 'dev' parameter and changeable at runtime), 'raw' (use the
+  real serial port - partly implemented on win32), 'mouse' (standard serial
+  mouse - requires <link linkend="bochsopt-mouse">mouse option</link> setting
+  'type=serial', 'type=serial_wheel' or 'type=serial_msys').
 </para>
 </section>
 
@@ -4369,7 +4437,7 @@ This defines a parallel (printer) port. When turned on and an output file is
 defined, the emulated printer port sends characters printed by the guest OS
 into the output file. On some platforms, a device filename can be used to
 send the data to the real parallel port (e.g. "/dev/lp0" on Linux, "lpt1" on
-win32 platforms).
+win32 platforms). The output file can be changed at runtime.
 </para>
 </section>
 
@@ -4407,12 +4475,12 @@ format sound: property=value.
     <option>waveindrv</option>:
     This defines the driver to be used for the wavein feature.
     Possible values are 'dummy' (recording silence) and platform-dependent
-    drivers 'alsa', 'oss' and 'win'.
+    drivers 'alsa', 'oss', 'sdl' and 'win'.
    </para></listitem>
 
    <listitem><para>
     <option>wavein</option>:
-    This defines the device to be used for wave output (if necessary).
+    This defines the device to be used for wave input (if necessary).
    </para></listitem>
 
    <listitem><para>
@@ -4572,6 +4640,8 @@ ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vde, ethdev="/tmp/vde.c
 ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vnet, ethdev="c:/temp"
 ne2k: ioaddr=0x300, irq=9, mac=fe:fd:00:00:00:01, ethmod=tap, ethdev=tap0
 ne2k: ioaddr=0x300, irq=9, mac=fe:fd:00:00:00:01, ethmod=tuntap, ethdev=/dev/net/tun0, script=./tunconfig
+ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=40000 # use localhost
+ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=mymachine:40000
 ne2k: mac=b0:c4:20:00:00:01, ethmod=slirp, script=slirp.conf, bootrom=ne2k_pci.rom
 
 IOADDR, IRQ: You probably won't need to change ioaddr and irq, unless there
@@ -4683,7 +4753,7 @@ version where this module was added.
     uses the 'ethdev' value for the root directory and doesn't overwrite files.
     </entry>
     <entry>Yes, for TFTP</entry>
-    <entry>No</entry>
+    <entry>Yes, for log file name</entry>
     <entry>2.2</entry>
   </row>
   <row>
@@ -4697,6 +4767,18 @@ version where this module was added.
     <entry>Yes, for TFTP</entry>
     <entry>Yes, for Slirp config</entry>
     <entry>2.6.5</entry>
+  </row>
+  <row>
+    <entry>socket</entry>
+    <entry>Connect up to 6 Bochs instances on the same or other machine
+    with external program 'bxhub' (simulating an ethernet hub). It provides
+    the same services as the 'vnet' module and assigns IP addresses like
+    'slirp' (10.0.2.x) (see <link linkend="using-socket">Using the 'socket'
+    networking module</link>).
+    </entry>
+    <entry>Yes, for base UDP port and (optional) the host to connect</entry>
+    <entry>No</entry>
+    <entry>2.6.9</entry>
   </row>
   <row>
     <entry>win32</entry>
@@ -4744,8 +4826,9 @@ Examples:
   usb_uhci: enabled=1, port1=mouse, port2=disk:usbstick.img
   usb_uhci: enabled=1, port1=hub:7, port2=disk:growing:usbdisk.img
   usb_uhci: enabled=1, port2=disk:undoable:usbdisk.img, options2=journal:redo.log
-  usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2=speed:full
+  usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2="debug,speed:full"
   usb_uhci: enabled=1, port1=printer:printdata.bin, port2=cdrom:image.iso
+  usb_uhci: enabled=1, port2=floppy:vvfat:diskette, options2="model:teac"
 </screen>
 This option controls the presence of the USB root hub which is a part of the
 i440FX PCI chipset.
@@ -4753,7 +4836,7 @@ i440FX PCI chipset.
 <para>
 With the port<replaceable>X</replaceable> option you can connect devices
 to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'disk', 'cdrom',
-'hub' and 'printer').
+'floppy, ''hub' and 'printer').
 </para>
 <para>
 If you connect the mouse or tablet to one of the ports, Bochs forwards the
@@ -4762,14 +4845,20 @@ When connecting the keypad to one of the ports, Bochs forwards the input of
 the numeric keypad to the USB device instead of the PS/2 keyboard.
 </para>
 <para>
-To connect a 'flat' mode image as an USB hardisk you can use the 'disk' device
+To connect a 'flat' mode image as a USB hardisk you can use the 'disk' device
 with the path to the image separated with a colon. To use other disk image modes
 similar to ATA disks the syntax 'disk:mode:filename' must be used (see above).
 </para>
 <para>
-To emulate an USB cdrom you can use the 'cdrom' device name and the path to
+To emulate a USB cdrom you can use the 'cdrom' device name and the path to
 an ISO image or raw device name also separated with a colon. An option to
 insert/eject media is available in the runtime configuration.
+</para>
+<para>
+To emulate a USB floppy you can use the 'floppy' device with the path to the
+image separated with a colon. To use the VVFAT image mode similar to the
+legacy floppy the syntax 'floppy:vvfat:directory' must be used (see above).
+An option to insert/eject media is available in the runtime configuration.
 </para>
 <para>
 The device name 'hub' connects an external hub with max. 8 ports (default: 4)
@@ -4780,18 +4869,24 @@ available in the runtime configuration.
 <para>
 The device 'printer' emulates the HP Deskjet 920C printer. The PCL data is
 sent to a file specified in bochsrc.txt. The current code appends the PCL
-code to the file if the file already existed. It would probably be nice to
-overwrite the file instead, asking user first.
+code to the file if the file already existed. The output file can be changed
+at runtime.
 </para>
 <para>
 The options<replaceable>X</replaceable> parameter can be used to assign specific
 options to the device connected to the corresponding USB port. Currently this
 feature is used to set the speed reported by device ('low', 'full', 'high' or
-'super'). The availabe speed choices depend on both HC and device. For the USB
+'super'). The availabe speed choices depend on both HC and device. The option
+'debug' turns on debug output for the device at connection time. For the USB
 'disk' device the optionsX parameter can be used to specify an alternative
 redolog file (journal) of some image modes. For 'vvfat' mode USB disks the optionsX
 parameter can be used to specify the disk size (range 128M ... 128G). If the
 size is not specified, it defaults to 504M.
+For the USB 'floppy' device the optionsX parameter can be used to specify an
+alternative device ID to be reported. Currently only the model "teac" is
+supported (can fix hw detection in some guest OS). The USB floppy also
+accepts the parameter "write_protected" with valid values 0 and 1 to select
+the access mode (default is 0).
 </para>
 <note><para>
 PCI support must be enabled to use USB UHCI.
@@ -4810,15 +4905,27 @@ syntax as the UHCI controller (see the <link linkend="bochsopt-usb-uhci">usb_uhc
 The optionsX parameter is also available on OHCI.</para>
 </section>
 
+<section id="bochsopt-usb-ehci"><title>usb_ehci</title>
+<para>
+Example:
+<screen>
+  usb_ehci: enabled=1, port1=tablet, options1="speed:high"
+</screen>
+This option controls the presence of the USB EHCI host controller with a
+6-port hub. The portX parameter accepts the same device types with the same
+syntax as the UHCI controller (see the <link linkend="bochsopt-usb-uhci">usb_uhci option</link>).
+The optionsX parameter is also available on EHCI.</para>
+</section>
+
 <section id="bochsopt-usb-xhci"><title>usb_xhci</title>
 <para>
 Example:
 <screen>
-  usb_xhci: enabled=1
+  usb_xhci: enabled=1, port1="disk:usbdisk.img"
 </screen>
-This option controls the presence of the experimental USB xHCI host controller
-with a 4-port hub. The portX parameter accepts the same device types with the same
-syntax as the UHCI controller (see the <link linkend="bochsopt-usb-uhci">usb_uhci option</link>).
+This option controls the presence of the USB xHCI host controller with a 4-port
+hub. The portX parameter accepts the same device types with the same syntax as
+the UHCI controller (see the <link linkend="bochsopt-usb-uhci">usb_uhci option</link>).
 The optionsX parameter is also available on xHCI. NOTE: port 1 and 2 are USB3 and
 only support super-speed devices, but port 3 and 4 are USB2 and support speed
 settings low, full and high.</para>
@@ -5497,6 +5604,11 @@ features enabled at compile time (3rd column).
     <entry>cpu level 5</entry>
   </row>
   <row>
+    <entry>pentium</entry>
+    <entry>Intel Pentium (P54C)</entry>
+    <entry>cpu level 5</entry>
+  </row>
+  <row>
     <entry>pentium_mmx</entry>
     <entry>Intel Pentium MMX</entry>
     <entry>cpu level 5</entry>
@@ -5572,6 +5684,11 @@ features enabled at compile time (3rd column).
     <entry>cpu level 6, x86-64</entry>
   </row>
   <row>
+    <entry>corei7_sandy_bridge_2600k</entry>
+    <entry>Intel(R) Core(TM) i7-2600K (Sandy Bridge)</entry>
+    <entry>cpu level 6, x86-64, avx</entry>
+  </row>
+  <row>
     <entry>zambezi</entry>
     <entry>AMD FX(tm)-4100 Quad-Core Processor (Zambezi)</entry>
     <entry>cpu level 6, x86-64, avx</entry>
@@ -5582,8 +5699,8 @@ features enabled at compile time (3rd column).
     <entry>cpu level 6, x86-64, avx</entry>
   </row>
   <row>
-    <entry>corei7_sandy_bridge_2600k</entry>
-    <entry>Intel(R) Core(TM) i7-2600K (Sandy Bridge)</entry>
+    <entry>ryzen</entry>
+    <entry>AMD Ryzen 7 1700</entry>
     <entry>cpu level 6, x86-64, avx</entry>
   </row>
   <row>
@@ -5594,6 +5711,11 @@ features enabled at compile time (3rd column).
   <row>
     <entry>corei7_haswell_4770</entry>
     <entry>Intel(R) Core(TM) i7-4770 CPU (Haswell)</entry>
+    <entry>cpu level 6, x86-64, avx</entry>
+  </row>
+  <row>
+    <entry>broadwell_ult</entry>
+    <entry>Intel(R) Processor 5Y70 CPU (Broadwell)</entry>
     <entry>cpu level 6, x86-64, avx</entry>
   </row>
 </tbody>
@@ -5732,16 +5854,22 @@ On Linux /dev/console is used for output and on Windows the Beep() function.</pa
 </section>
 <section><title>SB16 runtime configuration</title>
 <para>
-The SB16 configuration parameters <option>loglevel</option> and <option>dmatimer</option>
-are available in the runtime configuration menu or dialog. In addition to this,
-there is a small program called <command>SB16CTRL</command> to change emulation
-settings from inside the simulation.
+Most of the SB16 configuration parameters are available in the runtime
+configuration menu or dialog. In addition to this, there is a small program
+called <command>SB16CTRL</command> to change emulation settings from inside
+the simulation.
 </para>
-<section><title>Runtime options <option>loglevel</option> and <option>dmatimer</option></title>
+<section><title>Runtime options</title>
 <para>
 Unlike other devices, the SB16 emulation has it's own logfile and a loglevel parameter
-to control what should be printed there. See the <link linkend="bochsopt-sb16">sb16</link>
-bochsrc option for details.
+to control what should be printed there. Both the <option>log</option> file and
+<option>loglevel</option> parameters can be changed at runtime. See the
+<link linkend="bochsopt-sb16">sb16</link> bochsrc option for details.
+</para>
+<para>
+The output parameters <option>midimode</option>, <option>midifile</option>,
+<option>wavemode</option> and <option>wavefile</option> are also available at
+runtime.
 </para>
 <para>
 The <option>dmatimer</option> parameter controls the DMA timing for wave (PCM)
@@ -5763,7 +5891,7 @@ program that can be run from inside the emulation.
 It currently supports the following commands:
 </para>
 
-<table><title>Supported options for <command>sb16ctl</command></title>
+<table><title>Supported options for <command>sb16ctrl</command></title>
 <tgroup cols="2">
   <thead>
     <row>
@@ -6439,6 +6567,16 @@ simulation is starting.
       <entry>unmappped</entry>
       <entry>UNMAP</entry>
       <entry>Unmapped I/O handler</entry>
+    </row>
+    <row>
+      <entry>usb_cbi</entry>
+      <entry>USBCBI</entry>
+      <entry>USB (UFI/CBI) floppy emulation</entry>
+    </row>
+    <row>
+      <entry>usb_ehci</entry>
+      <entry>EHCI</entry>
+      <entry>USB EHCI controller</entry>
     </row>
     <row>
       <entry>usb_hid</entry>
@@ -7510,6 +7648,66 @@ Up to 5 port redirection rules are supported per slirp instance.</para>
 </section>
 </section>
 
+<section id="using-socket"><title>Using the 'socket' networking module</title>
+<para>
+The original patch for the 'socket' networking module has been written by
+Mariusz Matuszek in 2003. It supported interconnecting two Bochs sessions
+running on the same machine via UDP using an external program called 'bxhub'.
+</para>
+<para>
+The 'socket' networking module is now integrated in the Bochs code with these
+extensions:
+<itemizedlist>
+<listitem><para>Integrated 'vnet' server features (ARP, ICMP-echo, DHCP and TFTP)</para></listitem>
+<listitem><para>Command line options for 'bxhub' added for base UDP port and 'vnet' server features</para></listitem>
+<listitem><para>Support for connects from up to 6 Bochs sessions</para></listitem>
+<listitem><para>Support for connecting 'bxhub' on other machine</para></listitem>
+</itemizedlist>
+</para>
+<para>
+The 'socket' networking module uses two UDP ports per Bochs session. By default
+the first session receives packets from port 40000 and sends packets to port
+40001. The second session uses then the ports 40002 and 40003. For further
+sessions the port numbers are incremented accordingly. The port number for
+receiving packets is specified with the 'ethdev' parameter of the bochsrc
+line for the network adapter. The format is <emphasis>host:port</emphasis>
+for connecting the 'bxhub' utility. If it runs on the same machine
+('localhost') the host name can be omitted.
+</para>
+<para>
+These examples show how to use the 'socket' module with the NE2000 adapter. The line
+is very similar for the E1000 or PCI Pseudo NIC.
+<screen>
+ne2k: mac=52:54:00:12:34:56, ethmod=socket, ethdev=mymachine:40000, script=""
+ne2k: mac=52:54:00:12:34:56, ethmod=socket, ethdev=40000, script=""
+</screen>
+</para>
+<section><title>Using the 'bxhub' utility</title>
+<para>
+If <command>bxhub</command> is started without command line options, these
+default values are used:
+<itemizedlist>
+<listitem><para>UDP base port 40000</para></listitem>
+<listitem><para>2 client connections</para></listitem>
+<listitem><para>Server MAC address b0:c4:20:00:00:0f</para></listitem>
+<listitem><para>TFTP support disabled</para></listitem>
+</itemizedlist>
+</para>
+<para>
+To change the default settings, these parameters are supported:
+<screen>
+Usage: bxhub [options]
+
+Supported options:
+  -ports=...    number of virtual ethernet ports (2 - 6)
+  -base=...     base UDP port (bxhub uses 2 ports per Bochs session)
+  -mac=...      host MAC address (default is b0:c4:20:00:00:0f)
+  -tftp=...     enable TFTP support using specified directory
+  --help        display this help and exit
+</screen>
+</para>
+</section>
+</section>
 <section id="internal-debugger">
 <title>Using Bochs internal debugger</title>
 

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vga.cc 12577 2014-12-24 19:44:47Z vruppert $
+// $Id: vga.cc 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //  PCI VGA dummy adapter Copyright (C) 2002,2003  Mike Nordell
 //
 //  This library is free software; you can redistribute it and/or
@@ -58,7 +58,7 @@
 
 bx_vga_c *theVga = NULL;
 
-int CDECL libvga_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libvga_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   if (type == PLUGTYPE_CORE) {
     theVga = new bx_vga_c();
@@ -345,14 +345,16 @@ Bit64s bx_vga_c::vga_param_handler(bx_param_c *param, int set, Bit64s val)
 
 void bx_vga_c::refresh_display(void *this_ptr, bx_bool redraw)
 {
+#if BX_SUPPORT_PCI
   if (BX_VGA_THIS s.vga_override && (BX_VGA_THIS s.nvgadev != NULL)) {
     BX_VGA_THIS s.nvgadev->refresh_display(BX_VGA_THIS s.nvgadev, redraw);
-  } else {
-    if (redraw) {
-      redraw_area(0, 0, BX_VGA_THIS s.last_xres, BX_VGA_THIS s.last_yres);
-    }
-    timer_handler(this_ptr);
+    return;
   }
+#endif
+  if (redraw) {
+    redraw_area(0, 0, BX_VGA_THIS s.last_xres, BX_VGA_THIS s.last_yres);
+  }
+  timer_handler(this_ptr);
 }
 
 void bx_vga_c::timer_handler(void *this_ptr)
@@ -780,11 +782,12 @@ void bx_vga_c::redraw_area(unsigned x0, unsigned y0, unsigned width,
   if (width == 0 || height == 0) {
     return;
   }
+#if BX_SUPPORT_PCI
   if (BX_VGA_THIS s.vga_override && (BX_VGA_THIS s.nvgadev != NULL)) {
     BX_VGA_THIS s.nvgadev->redraw_area(x0, y0, width, height);
     return;
   }
-
+#endif
   if (BX_VGA_THIS vbe.enabled) {
     BX_VGA_THIS s.vga_mem_updated = 1;
     xmax = BX_VGA_THIS vbe.xres;
@@ -1355,26 +1358,6 @@ Bit32u bx_vga_c::vbe_write(Bit32u address, Bit32u value, unsigned io_len)
 }
 
 #if BX_SUPPORT_PCI
-// pci configuration space read callback handler
-Bit32u bx_vga_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_VGA_THIS pci_conf[address+i] << (i*8));
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%08x", address, value));
-
-  return value;
-}
-
-
 // static pci configuration space write callback handler
 void bx_vga_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {

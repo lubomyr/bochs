@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.cc 12501 2014-10-14 15:59:10Z sshwarts $
+// $Id: icache.cc 12925 2016-06-12 21:23:48Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2007-2011 Stanislav Shwartsman
+//   Copyright (c) 2007-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -30,6 +30,11 @@
 #include "cpustats.h"
 
 bxPageWriteStampTable pageWriteStampTable;
+
+extern int fetchDecode32(const Bit8u *fetchPtr, Bit32u fetchModeMask, bx_bool handle_lock_cr0, bxInstruction_c *i, unsigned remainingInPage);
+#if BX_SUPPORT_X86_64
+extern int fetchDecode64(const Bit8u *fetchPtr, Bit32u fetchModeMask, bx_bool handle_lock_cr0, bxInstruction_c *i, unsigned remainingInPage);
+#endif
 
 void flushICaches(void)
 {
@@ -67,11 +72,9 @@ void genDummyICacheEntry(bxInstruction_c *i)
 
 #endif
 
-bxICacheEntry_c* BX_CPU_C::serveICacheMiss(bxICacheEntry_c *entry, Bit32u eipBiased, bx_phy_address pAddr)
+bxICacheEntry_c* BX_CPU_C::serveICacheMiss(Bit32u eipBiased, bx_phy_address pAddr)
 {
-  entry = BX_CPU_THIS_PTR iCache.get_entry(pAddr, BX_CPU_THIS_PTR fetchModeMask);
-
-  BX_CPU_THIS_PTR iCache.victim_entry(entry, BX_CPU_THIS_PTR fetchModeMask);
+  bxICacheEntry_c *entry = BX_CPU_THIS_PTR iCache.get_entry(pAddr, BX_CPU_THIS_PTR fetchModeMask);
 
   BX_CPU_THIS_PTR iCache.alloc_trace(entry);
 
@@ -89,6 +92,11 @@ bxICacheEntry_c* BX_CPU_C::serveICacheMiss(bxICacheEntry_c *entry, Bit32u eipBia
   Bit32u pageOffset = PAGE_OFFSET((Bit32u) pAddr);
   Bit32u traceMask = 0;
 
+#if BX_SUPPORT_SMP == 0
+  if (PPFOf(pAddr) == BX_CPU_THIS_PTR pAddrStackPage)
+    invalidate_stack_cache();
+#endif
+
   // Don't allow traces longer than cpu_loop can execute
   static unsigned quantum =
 #if BX_SUPPORT_SMP
@@ -100,10 +108,10 @@ bxICacheEntry_c* BX_CPU_C::serveICacheMiss(bxICacheEntry_c *entry, Bit32u eipBia
   {
 #if BX_SUPPORT_X86_64
     if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64)
-      ret = fetchDecode64(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, i, remainingInPage);
+      ret = fetchDecode64(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage);
     else
 #endif
-      ret = fetchDecode32(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, i, remainingInPage);
+      ret = fetchDecode32(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage);
 
     if (ret < 0) {
       // Fetching instruction on segment/page boundary
@@ -252,10 +260,10 @@ void BX_CPU_C::boundaryFetch(const Bit8u *fetchPtr, unsigned remainingInPage, bx
 
 #if BX_SUPPORT_X86_64
   if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64)
-    ret = fetchDecode64(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, i, remainingInPage+fetchBufferLimit);
+    ret = fetchDecode64(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage+fetchBufferLimit);
   else
 #endif
-    ret = fetchDecode32(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, i, remainingInPage+fetchBufferLimit);
+    ret = fetchDecode32(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage+fetchBufferLimit);
 
   if (ret < 0) {
     BX_INFO(("boundaryFetch #GP(0): failed to complete instruction decoding"));

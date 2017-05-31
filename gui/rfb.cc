@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rfb.cc 12606 2015-01-17 19:53:03Z vruppert $
+// $Id: rfb.cc 13075 2017-02-18 11:13:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2000  Psyon.Org!
@@ -7,7 +7,7 @@
 //    Donald Becker
 //    http://www.psyon.org
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,11 +41,7 @@
 
 #include "icon_bochs.h"
 #include "font/vga.bitmap.h"
-#if (BX_WITH_SDL || BX_WITH_SDL2) && !BX_PLUGINS
-extern unsigned char sdl_font8x8[256][8];
-#else
 #include "sdl.h" // 8x8 font for status text
-#endif
 
 #include "rfb.h"
 #include "rfbkeys.h"
@@ -55,12 +51,16 @@ public:
   bx_rfb_gui_c (void) {}
   DECLARE_GUI_VIRTUAL_METHODS()
   DECLARE_GUI_NEW_VIRTUAL_METHODS()
+  virtual void set_display_mode(disp_mode_t newmode);
   void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
   void statusbar_setitem_specific(int element, bx_bool active, bx_bool w);
   virtual void set_mouse_mode_absxy(bx_bool mode);
 #if BX_SHOW_IPS
   void show_ips(Bit32u ips_count);
 #endif
+private:
+  void rfbMouseMove(int x, int y, int z, int bmask);
+  void rfbKeyPressed(Bit32u key, int press_release);
 };
 
 // declare one instance of the gui object and call macro to insert the
@@ -116,16 +116,7 @@ static struct _rfbBitmaps {
     unsigned ydim;
 } rfbBitmaps[BX_MAX_PIXMAPS];
 
-static unsigned rfbHeaderbarBitmapCount = 0;
-static struct _rfbHeaderbarBitmaps {
-    unsigned int index;
-    unsigned int xorigin;
-    unsigned int yorigin;
-    unsigned int alignment;
-    void (*f)(void);
-} rfbHeaderbarBitmaps[BX_MAX_HEADERBAR_ENTRIES];
-
-//Keyboard stuff
+// Keyboard/Mouse stuff
 #define KEYBOARD 1
 #define MOUSE    0
 #define MAX_KEY_EVENTS 512
@@ -204,8 +195,6 @@ void SendUpdate(int x, int y, int width, int height, Bit32u encoding);
 void rfbAddUpdateRegion(unsigned x0, unsigned y0, unsigned w, unsigned h);
 void rfbSetStatusText(int element, const char *text, bx_bool active, bx_bool w = 0);
 static Bit32u convertStringToRfbKey(const char *string);
-void rfbKeyPressed(Bit32u key, int press_release);
-void rfbMouseMove(int x, int y, int z, int bmask);
 #if BX_SHOW_IPS && defined(WIN32)
 DWORD WINAPI rfbShowIPSthread(LPVOID);
 #endif
@@ -218,24 +207,10 @@ static const rfbPixelFormat BGR233Format = {
 #define PF_EQ(x,y) ((x.bitsPerPixel == y.bitsPerPixel) && (x.depth == y.depth) && (x.trueColourFlag == y.trueColourFlag) && ((x.bigEndianFlag == y.bigEndianFlag) || (x.bitsPerPixel == 8)) && (!x.trueColourFlag || ((x.redMax == y.redMax) &&    (x.greenMax == y.greenMax) && (x.blueMax == y.blueMax) && (x.redShift == y.redShift) && (x.greenShift == y.greenShift) && (x.blueShift == y.blueShift))))
 
 
-// RFB implementation of the bx_gui_c methods
-
-// ::SPECIFIC_INIT()
-//
-// Called from gui.cc, once upon program startup, to allow for the
-// specific GUI code (X11, Win32, ...) to be initialized.
-//
-// argc, argv: used to pass display library specific options to the init code
-//     (X11 options, Win32 options,...)
-//
-// headerbar_y:  A headerbar (toolbar) is display on the top of the
-//     VGA window, showing floppy status, and other information.  It
-//     always assumes the width of the current VGA mode width, but
-//     it's height is defined by this parameter.
+// RFB implementation of the bx_gui_c methods (see nogui.cc for details)
 
 void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 {
-  unsigned char fc, vc;
   int i, timeout = 30;
 
   put("RFB");
@@ -251,13 +226,7 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 
   for (i = 0; i < 256; i++) {
     for (int j = 0; j < 16; j++) {
-      vc = bx_vgafont[i].data[j];
-      fc = 0;
-      for (int b = 0; b < 8; b++) {
-        fc |= (vc & 0x01) << (7 - b);
-        vc >>= 1;
-      }
-      vga_charmap[i * 32 + j] = fc;
+      vga_charmap[i * 32 + j] = reverse_bitorder(bx_vgafont[i].data[j]);
     }
   }
 
@@ -286,7 +255,7 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
     BX_ERROR(("private_colormap option ignored."));
   }
 
-  rfbScreen = (char *)malloc(rfbWindowX * rfbWindowY);
+  rfbScreen = new char[rfbWindowX * rfbWindowY];
   memset(&rfbPalette, 0, sizeof(rfbPalette));
 
   rfbUpdateRegion.x = rfbWindowX;
@@ -340,14 +309,8 @@ void bx_rfb_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 #endif
 
   new_gfx_api = 1;
-  dialog_caps = 0;
+  console.present = 1;
 }
-
-// ::HANDLE_EVENTS()
-//
-// Called periodically (vga_update_interval in .bochsrc) so the
-// the gui code can poll for keyboard, mouse, and other
-// relevant events.
 
 void bx_rfb_gui_c::handle_events(void)
 {
@@ -383,42 +346,14 @@ void bx_rfb_gui_c::handle_events(void)
 #endif
 }
 
-// ::FLUSH()
-//
-// Called periodically, requesting that the gui code flush all pending
-// screen update requests.
-
 void bx_rfb_gui_c::flush(void)
 {
 }
 
-// ::CLEAR_SCREEN()
-//
-// Called to request that the VGA region is cleared.  Don't
-// clear the area that defines the headerbar.
 void bx_rfb_gui_c::clear_screen(void)
 {
   memset(&rfbScreen[rfbWindowX * rfbHeaderbarY], 0, rfbWindowX * rfbDimensionY);
 }
-
-// ::TEXT_UPDATE()
-//
-// Called in a VGA text mode, to update the screen with
-// new content.
-//
-// old_text: array of character/attributes making up the contents
-//           of the screen from the last call.  See below
-// new_text: array of character/attributes making up the current
-//           contents, which should now be displayed.  See below
-//
-// format of old_text & new_text: each is tm_info->line_offset*text_rows
-//     bytes long. Each character consists of 2 bytes.  The first by is
-//     the character value, the second is the attribute byte.
-//
-// cursor_x: new x location of cursor
-// cursor_y: new y location of cursor
-// tm_info:  this structure contains information for additional
-//           features in text mode (cursor shape, line offset,...)
 
 void bx_rfb_gui_c::text_update(Bit8u *old_text, Bit8u *new_text, unsigned long cursor_x, unsigned long cursor_y, bx_vga_tminfo_t *tm_info)
 {
@@ -516,33 +451,12 @@ int bx_rfb_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
   return 0;
 }
 
-// ::PALETTE_CHANGE()
-//
-// Allocate a color in the native GUI, for this color, and put
-// it in the colormap location 'index'.
-// returns: 0=no screen update needed (color map change has direct effect)
-//          1=screen updated needed (redraw using current colormap)
-
 bx_bool bx_rfb_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
   rfbPalette[index] = (((red * 7 + 127) / 255) << 0) | (((green * 7 + 127) / 255) << 3) | (((blue * 3 + 127) / 255) << 6);
   return 1;
 }
 
-// ::GRAPHICS_TILE_UPDATE()
-//
-// Called to request that a tile of graphics be drawn to the
-// screen, since info in this region has changed.
-//
-// tile: array of 8bit values representing a block of pixels with
-//       dimension equal to the 'x_tilesize' & 'y_tilesize' members.
-//       Each value specifies an index into the
-//       array of colors you allocated for ::palette_change()
-// x0: x origin of tile
-// y0: y origin of tile
-//
-// note: origin of tile and of window based on (0,0) being in the upper
-//       left of the window.
 void bx_rfb_gui_c::graphics_tile_update(Bit8u *tile, unsigned x0, unsigned y0)
 {
   unsigned c, i, h, y;
@@ -570,18 +484,6 @@ void bx_rfb_gui_c::graphics_tile_update(Bit8u *tile, unsigned x0, unsigned y0)
   rfbAddUpdateRegion(x0, y0 + rfbHeaderbarY, rfbTileX, h);
 }
 
-// ::DIMENSION_UPDATE()
-//
-// Called when the VGA mode changes it's X,Y dimensions.
-// Resize the window to this size, but you need to add on
-// the height of the headerbar to the Y value.
-//
-// x: new VGA x size
-// y: new VGA y size (add headerbar_y parameter from ::specific_init().
-// fheight: new VGA character height in text mode
-// fwidth : new VGA character width in text mode
-// bpp : bits per pixel in graphics mode
-
 void bx_rfb_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
 {
   if (bpp == 8) {
@@ -590,6 +492,7 @@ void bx_rfb_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, un
     BX_PANIC(("%d bpp graphics mode not supported yet", bpp));
   }
   guest_textmode = (fheight > 0);
+  guest_fsize = (fheight << 4) | fwidth;
   guest_xres = x;
   guest_yres = y;
   if (guest_textmode) {
@@ -607,7 +510,8 @@ void bx_rfb_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, un
       rfbDimensionY = y;
       rfbWindowX = rfbDimensionX;
       rfbWindowY = rfbDimensionY + rfbHeaderbarY + rfbStatusbarY;
-      rfbScreen = (char *)realloc(rfbScreen, rfbWindowX * rfbWindowY);
+      delete [] rfbScreen;
+      rfbScreen = new char[rfbWindowX * rfbWindowY];
       SendUpdate(0, 0, rfbWindowX, rfbWindowY, rfbEncodingDesktopSize);
       bx_gui->show_headerbar();
     } else {
@@ -622,24 +526,13 @@ void bx_rfb_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, un
   }
 }
 
-// ::CREATE_BITMAP()
-//
-// Create a monochrome bitmap of size 'xdim' by 'ydim', which will
-// be drawn in the headerbar.  Return an integer ID to the bitmap,
-// with which the bitmap can be referenced later.
-//
-// bmap: packed 8 pixels-per-byte bitmap.  The pixel order is:
-//       bit0 is the left most pixel, bit7 is the right most pixel.
-// xdim: x dimension of bitmap
-// ydim: y dimension of bitmap
-
 unsigned bx_rfb_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, unsigned ydim)
 {
   if (rfbBitmapCount >= BX_MAX_PIXMAPS) {
     BX_ERROR(("too many pixmaps."));
     return 0;
   }
-  rfbBitmaps[rfbBitmapCount].bmap = (char *) malloc((xdim * ydim) / 8);
+  rfbBitmaps[rfbBitmapCount].bmap = new char[(xdim * ydim) / 8];
   rfbBitmaps[rfbBitmapCount].xdim = xdim;
   rfbBitmaps[rfbBitmapCount].ydim = ydim;
   memcpy(rfbBitmaps[rfbBitmapCount].bmap, bmap, (xdim * ydim) / 8);
@@ -648,71 +541,50 @@ unsigned bx_rfb_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, u
   return (rfbBitmapCount - 1);
 }
 
-// ::HEADERBAR_BITMAP()
-//
-// Called to install a bitmap in the bochs headerbar (toolbar).
-//
-// bmap_id: will correspond to an ID returned from
-//     ::create_bitmap().  'alignment' is either BX_GRAVITY_LEFT
-//     or BX_GRAVITY_RIGHT, meaning install the bitmap in the next
-//     available leftmost or rightmost space.
-// alignment: is either BX_GRAVITY_LEFT or BX_GRAVITY_RIGHT,
-//     meaning install the bitmap in the next
-//     available leftmost or rightmost space.
-// f: a 'C' function pointer to callback when the mouse is clicked in
-//     the boundaries of this bitmap.
-
 unsigned bx_rfb_gui_c::headerbar_bitmap(unsigned bmap_id, unsigned alignment, void (*f)(void))
 {
   int hb_index;
 
-  if ((rfbHeaderbarBitmapCount + 1) > BX_MAX_HEADERBAR_ENTRIES) {
+  if ((bx_headerbar_entries + 1) > BX_MAX_HEADERBAR_ENTRIES) {
     return 0;
   }
 
-  rfbHeaderbarBitmapCount++;
-  hb_index = rfbHeaderbarBitmapCount - 1;
-  rfbHeaderbarBitmaps[hb_index].index = bmap_id;
-  rfbHeaderbarBitmaps[hb_index].alignment = alignment;
-  rfbHeaderbarBitmaps[hb_index].f = f;
+  hb_index = bx_headerbar_entries++;
+  bx_headerbar_entry[hb_index].bmap_id = bmap_id;
+  bx_headerbar_entry[hb_index].xdim = rfbBitmaps[bmap_id].xdim;
+  bx_headerbar_entry[hb_index].ydim = rfbBitmaps[bmap_id].ydim;
+  bx_headerbar_entry[hb_index].alignment = alignment;
+  bx_headerbar_entry[hb_index].f = f;
   if (alignment == BX_GRAVITY_LEFT) {
-    rfbHeaderbarBitmaps[hb_index].xorigin = rfbOriginLeft;
-    rfbHeaderbarBitmaps[hb_index].yorigin = 0;
+    bx_headerbar_entry[hb_index].xorigin = rfbOriginLeft;
     rfbOriginLeft += rfbBitmaps[bmap_id].xdim;
   } else { // BX_GRAVITY_RIGHT
     rfbOriginRight += rfbBitmaps[bmap_id].xdim;
-    rfbHeaderbarBitmaps[hb_index].xorigin = rfbOriginRight;
-    rfbHeaderbarBitmaps[hb_index].yorigin = 0;
+    bx_headerbar_entry[hb_index].xorigin = rfbOriginRight;
   }
   return hb_index;
 }
 
-// ::SHOW_HEADERBAR()
-//
-// Show (redraw) the current headerbar, which is composed of
-// currently installed bitmaps.
-
 void bx_rfb_gui_c::show_headerbar(void)
 {
   char *newBits, value;
-  unsigned int i, xorigin, addr;
+  unsigned int i, xorigin, addr, bmap_id;
 
-  newBits = (char *) malloc(rfbWindowX * rfbHeaderbarY);
+  newBits = new char[rfbWindowX * rfbHeaderbarY];
   memset(newBits, 0, (rfbWindowX * rfbHeaderbarY));
   DrawBitmap(0, 0, rfbWindowX, rfbHeaderbarY, newBits, headerbar_fg, headerbar_bg, 0);
-  for (i = 0; i < rfbHeaderbarBitmapCount; i++) {
-    if (rfbHeaderbarBitmaps[i].alignment == BX_GRAVITY_LEFT) {
-      xorigin = rfbHeaderbarBitmaps[i].xorigin;
+  for (i = 0; i < bx_headerbar_entries; i++) {
+    if (bx_headerbar_entry[i].alignment == BX_GRAVITY_LEFT) {
+      xorigin = bx_headerbar_entry[i].xorigin;
     } else {
-      xorigin = rfbWindowX - rfbHeaderbarBitmaps[i].xorigin;
+      xorigin = rfbWindowX - bx_headerbar_entry[i].xorigin;
     }
-    DrawBitmap(xorigin, 0, rfbBitmaps[rfbHeaderbarBitmaps[i].index].xdim,
-               rfbBitmaps[rfbHeaderbarBitmaps[i].index].ydim,
-               rfbBitmaps[rfbHeaderbarBitmaps[i].index].bmap,
-               headerbar_fg, headerbar_bg, 0);
+    bmap_id = bx_headerbar_entry[i].bmap_id;
+    DrawBitmap(xorigin, 0, rfbBitmaps[bmap_id].xdim, rfbBitmaps[bmap_id].ydim,
+               rfbBitmaps[bmap_id].bmap, headerbar_fg, headerbar_bg, 0);
   }
-  free(newBits);
-  newBits = (char *) malloc(rfbWindowX * rfbStatusbarY / 8);
+  delete [] newBits;
+  newBits = new char[rfbWindowX * rfbStatusbarY / 8];
   memset(newBits, 0, (rfbWindowX * rfbStatusbarY / 8));
   for (i = 1; i < 12; i++) {
     addr = rfbStatusitemPos[i] / 8;
@@ -723,47 +595,28 @@ void bx_rfb_gui_c::show_headerbar(void)
   }
   DrawBitmap(0, rfbWindowY - rfbStatusbarY, rfbWindowX, rfbStatusbarY, newBits,
              headerbar_fg, headerbar_bg, 0);
-  free(newBits);
+  delete [] newBits;
   for (i = 1; i <= statusitem_count; i++) {
     rfbSetStatusText(i, statusitem[i - 1].text, rfbStatusitemActive[i]);
   }
 }
 
-// ::REPLACE_BITMAP()
-//
-// Replace the bitmap installed in the headerbar ID slot 'hbar_id',
-// with the one specified by 'bmap_id'.  'bmap_id' will have
-// been generated by ::create_bitmap().  The old and new bitmap
-// must be of the same size.  This allows the bitmap the user
-// sees to change, when some action occurs.  For example when
-// the user presses on the floppy icon, it then displays
-// the ejected status.
-//
-// hbar_id: headerbar slot ID
-// bmap_id: bitmap ID
-
 void bx_rfb_gui_c::replace_bitmap(unsigned hbar_id, unsigned bmap_id)
 {
   unsigned int xorigin;
 
-  if (bmap_id == rfbHeaderbarBitmaps[hbar_id].index)
+  if (bmap_id == bx_headerbar_entry[hbar_id].bmap_id)
     return;
-  rfbHeaderbarBitmaps[hbar_id].index = bmap_id;
-  if (rfbHeaderbarBitmaps[hbar_id].alignment == BX_GRAVITY_LEFT) {
-    xorigin = rfbHeaderbarBitmaps[hbar_id].xorigin;
+  bx_headerbar_entry[hbar_id].bmap_id = bmap_id;
+  if (bx_headerbar_entry[hbar_id].alignment == BX_GRAVITY_LEFT) {
+    xorigin = bx_headerbar_entry[hbar_id].xorigin;
   } else {
-    xorigin = rfbWindowX - rfbHeaderbarBitmaps[hbar_id].xorigin;
+    xorigin = rfbWindowX - bx_headerbar_entry[hbar_id].xorigin;
   }
-  DrawBitmap(xorigin, 0, rfbBitmaps[rfbHeaderbarBitmaps[hbar_id].index].xdim,
-             rfbBitmaps[rfbHeaderbarBitmaps[hbar_id].index].ydim,
-             rfbBitmaps[rfbHeaderbarBitmaps[hbar_id].index].bmap, headerbar_fg,
-             headerbar_bg, 1);
+  DrawBitmap(xorigin, 0, rfbBitmaps[bmap_id].xdim, rfbBitmaps[bmap_id].ydim,
+             rfbBitmaps[bmap_id].bmap, headerbar_fg, headerbar_bg, 1);
 }
 
-// ::EXIT()
-//
-// Called before bochs terminates, to allow for a graceful
-// exit from the native GUI mechanism.
 void bx_rfb_gui_c::exit(void)
 {
   unsigned int i;
@@ -771,7 +624,7 @@ void bx_rfb_gui_c::exit(void)
 #ifdef BX_RFB_WIN32
   StopWinsock();
 #endif
-  free(rfbScreen);
+  delete [] rfbScreen;
   for(i = 0; i < rfbBitmapCount; i++) {
     free(rfbBitmaps[i].bmap);
   }
@@ -866,6 +719,449 @@ void bx_rfb_gui_c::show_ips(Bit32u ips_count)
   }
 }
 #endif
+
+void bx_rfb_gui_c::set_display_mode(disp_mode_t newmode)
+{
+  // if no mode change, do nothing.
+  if (disp_mode == newmode) return;
+  // remember the display mode for next time
+  disp_mode = newmode;
+  if ((newmode == DISP_MODE_SIM) && console_running()) {
+    console_cleanup();
+  }
+}
+
+void bx_rfb_gui_c::rfbMouseMove(int x, int y, int z, int bmask)
+{
+  static int oldx = -1;
+  static int oldy = -1;
+  int dx, dy;
+
+  if ((oldx == 1) && (oldy == -1)) {
+    oldx = x;
+    oldy = y;
+    return;
+  }
+  if (y > rfbHeaderbarY) {
+    if (console_running())
+      return;
+    if (rfbMouseModeAbsXY) {
+      if ((y >= rfbHeaderbarY) && (y < (int)(rfbDimensionY + rfbHeaderbarY))) {
+        dx = x * 0x7fff / rfbDimensionX;
+        dy = (y - rfbHeaderbarY) * 0x7fff / rfbDimensionY;
+        DEV_mouse_motion(dx, dy, z, bmask, 1);
+      }
+    } else {
+      DEV_mouse_motion(x - oldx, oldy - y, z, bmask, 0);
+    }
+    oldx = x;
+    oldy = y;
+  } else {
+    if (bmask == 1) {
+      bKeyboardInUse = 0;
+      rfbKeyboardEvents = 0;
+      headerbar_click(x);
+    }
+  }
+}
+
+// function to convert key names into rfb key values.
+// This first try will be horribly inefficient, but it only has
+// to be done while loading a keymap.  Once the simulation starts,
+// this function won't be called.
+static Bit32u convertStringToRfbKey(const char *string)
+{
+  rfbKeyTabEntry *ptr;
+  for (ptr = &rfb_keytable[0]; ptr->name != NULL; ptr++) {
+    if (!strcmp(string, ptr->name))
+      return ptr->value;
+  }
+  return BX_KEYMAP_UNKNOWN;
+}
+
+static Bit32u rfb_ascii_to_key_event[0x5f] = {
+  //  !"#$%&'
+  BX_KEY_SPACE,
+  BX_KEY_1,
+  BX_KEY_SINGLE_QUOTE,
+  BX_KEY_3,
+  BX_KEY_4,
+  BX_KEY_5,
+  BX_KEY_7,
+  BX_KEY_SINGLE_QUOTE,
+
+  // ()*+,-./
+  BX_KEY_9,
+  BX_KEY_0,
+  BX_KEY_8,
+  BX_KEY_EQUALS,
+  BX_KEY_COMMA,
+  BX_KEY_MINUS,
+  BX_KEY_PERIOD,
+  BX_KEY_SLASH,
+
+  // 01234567
+  BX_KEY_0,
+  BX_KEY_1,
+  BX_KEY_2,
+  BX_KEY_3,
+  BX_KEY_4,
+  BX_KEY_5,
+  BX_KEY_6,
+  BX_KEY_7,
+
+  // 89:;<=>?
+  BX_KEY_8,
+  BX_KEY_9,
+  BX_KEY_SEMICOLON,
+  BX_KEY_SEMICOLON,
+  BX_KEY_COMMA,
+  BX_KEY_EQUALS,
+  BX_KEY_PERIOD,
+  BX_KEY_SLASH,
+
+  // @ABCDEFG
+  BX_KEY_2,
+  BX_KEY_A,
+  BX_KEY_B,
+  BX_KEY_C,
+  BX_KEY_D,
+  BX_KEY_E,
+  BX_KEY_F,
+  BX_KEY_G,
+
+
+  // HIJKLMNO
+  BX_KEY_H,
+  BX_KEY_I,
+  BX_KEY_J,
+  BX_KEY_K,
+  BX_KEY_L,
+  BX_KEY_M,
+  BX_KEY_N,
+  BX_KEY_O,
+
+
+  // PQRSTUVW
+  BX_KEY_P,
+  BX_KEY_Q,
+  BX_KEY_R,
+  BX_KEY_S,
+  BX_KEY_T,
+  BX_KEY_U,
+  BX_KEY_V,
+  BX_KEY_W,
+
+  // XYZ[\]^_
+  BX_KEY_X,
+  BX_KEY_Y,
+  BX_KEY_Z,
+  BX_KEY_LEFT_BRACKET,
+  BX_KEY_BACKSLASH,
+  BX_KEY_RIGHT_BRACKET,
+  BX_KEY_6,
+  BX_KEY_MINUS,
+
+  // `abcdefg
+  BX_KEY_GRAVE,
+  BX_KEY_A,
+  BX_KEY_B,
+  BX_KEY_C,
+  BX_KEY_D,
+  BX_KEY_E,
+  BX_KEY_F,
+  BX_KEY_G,
+
+  // hijklmno
+  BX_KEY_H,
+  BX_KEY_I,
+  BX_KEY_J,
+  BX_KEY_K,
+  BX_KEY_L,
+  BX_KEY_M,
+  BX_KEY_N,
+  BX_KEY_O,
+
+  // pqrstuvw
+  BX_KEY_P,
+  BX_KEY_Q,
+  BX_KEY_R,
+  BX_KEY_S,
+  BX_KEY_T,
+  BX_KEY_U,
+  BX_KEY_V,
+  BX_KEY_W,
+
+  // xyz{|}~
+  BX_KEY_X,
+  BX_KEY_Y,
+  BX_KEY_Z,
+  BX_KEY_LEFT_BRACKET,
+  BX_KEY_BACKSLASH,
+  BX_KEY_RIGHT_BRACKET,
+  BX_KEY_GRAVE
+};
+
+void bx_rfb_gui_c::rfbKeyPressed(Bit32u key, int press_release)
+{
+  Bit32u key_event;
+
+  if (console_running() && press_release) {
+    if (((key >= XK_space) && (key <= XK_asciitilde)) ||
+        (key == XK_Return) || (key == XK_BackSpace)) {
+      console_key_enq((Bit8u)(key & 0xff));
+    }
+    return;
+  }
+  if (!SIM->get_param_bool(BXPN_KBD_USEMAPPING)->get()) {
+    if ((key >= XK_space) && (key <= XK_asciitilde)) {
+      key_event = rfb_ascii_to_key_event[key - XK_space];
+    } else {
+      switch (key) {
+        case XK_KP_1:
+#ifdef XK_KP_End
+        case XK_KP_End:
+#endif
+          key_event = BX_KEY_KP_END;
+          break;
+
+        case XK_KP_2:
+#ifdef XK_KP_Down
+        case XK_KP_Down:
+#endif
+          key_event = BX_KEY_KP_DOWN;
+          break;
+
+        case XK_KP_3:
+#ifdef XK_KP_Page_Down
+        case XK_KP_Page_Down:
+#endif
+          key_event = BX_KEY_KP_PAGE_DOWN;
+          break;
+
+        case XK_KP_4:
+#ifdef XK_KP_Left
+        case XK_KP_Left:
+#endif
+          key_event = BX_KEY_KP_LEFT;
+          break;
+
+        case XK_KP_5:
+#ifdef XK_KP_Begin
+        case XK_KP_Begin:
+#endif
+          key_event = BX_KEY_KP_5;
+          break;
+
+        case XK_KP_6:
+#ifdef XK_KP_Right
+        case XK_KP_Right:
+#endif
+          key_event = BX_KEY_KP_RIGHT;
+          break;
+
+        case XK_KP_7:
+#ifdef XK_KP_Home
+        case XK_KP_Home:
+#endif
+          key_event = BX_KEY_KP_HOME;
+          break;
+
+        case XK_KP_8:
+#ifdef XK_KP_Up
+        case XK_KP_Up:
+#endif
+          key_event = BX_KEY_KP_UP;
+          break;
+
+        case XK_KP_9:
+#ifdef XK_KP_Page_Up
+        case XK_KP_Page_Up:
+#endif
+          key_event = BX_KEY_KP_PAGE_UP;
+          break;
+
+        case XK_KP_0:
+#ifdef XK_KP_Insert
+        case XK_KP_Insert:
+#endif
+          key_event = BX_KEY_KP_INSERT;
+          break;
+
+        case XK_KP_Decimal:
+#ifdef XK_KP_Delete
+        case XK_KP_Delete:
+#endif
+          key_event = BX_KEY_KP_DELETE;
+          break;
+
+#ifdef XK_KP_Enter
+        case XK_KP_Enter:
+          key_event = BX_KEY_KP_ENTER;
+          break;
+#endif
+
+        case XK_KP_Subtract:
+          key_event = BX_KEY_KP_SUBTRACT;
+          break;
+        case XK_KP_Add:
+          key_event = BX_KEY_KP_ADD;
+          break;
+
+        case XK_KP_Multiply:
+          key_event = BX_KEY_KP_MULTIPLY;
+          break;
+        case XK_KP_Divide:
+          key_event = BX_KEY_KP_DIVIDE;
+          break;
+
+        case XK_Up:
+          key_event = BX_KEY_UP;
+          break;
+        case XK_Down:
+          key_event = BX_KEY_DOWN;
+          break;
+        case XK_Left:
+          key_event = BX_KEY_LEFT;
+          break;
+        case XK_Right:
+          key_event = BX_KEY_RIGHT;
+          break;
+
+        case XK_Delete:
+          key_event = BX_KEY_DELETE;
+          break;
+        case XK_BackSpace:
+          key_event = BX_KEY_BACKSPACE;
+          break;
+        case XK_Tab:
+          key_event = BX_KEY_TAB;
+          break;
+#ifdef XK_ISO_Left_Tab
+        case XK_ISO_Left_Tab:
+          key_event = BX_KEY_TAB;
+          break;
+#endif
+        case XK_Return:
+          key_event = BX_KEY_ENTER;
+          break;
+        case XK_Escape:
+          key_event = BX_KEY_ESC;
+          break;
+        case XK_F1:
+          key_event = BX_KEY_F1;
+          break;
+        case XK_F2:
+          key_event = BX_KEY_F2;
+          break;
+        case XK_F3:
+          key_event = BX_KEY_F3;
+          break;
+        case XK_F4:
+          key_event = BX_KEY_F4;
+          break;
+        case XK_F5:
+          key_event = BX_KEY_F5;
+          break;
+        case XK_F6:
+          key_event = BX_KEY_F6;
+          break;
+        case XK_F7:
+          key_event = BX_KEY_F7;
+          break;
+        case XK_F8:
+          key_event = BX_KEY_F8;
+          break;
+        case XK_F9:
+          key_event = BX_KEY_F9;
+          break;
+        case XK_F10:
+          key_event = BX_KEY_F10;
+          break;
+        case XK_F11:
+          key_event = BX_KEY_F11;
+          break;
+        case XK_F12:
+          key_event = BX_KEY_F12;
+          break;
+        case XK_Control_L:
+          key_event = BX_KEY_CTRL_L;
+          break;
+#ifdef XK_Control_R
+        case XK_Control_R:
+          key_event = BX_KEY_CTRL_R;
+          break;
+#endif
+        case XK_Shift_L:
+          key_event = BX_KEY_SHIFT_L;
+          break;
+        case XK_Shift_R:
+          key_event = BX_KEY_SHIFT_R;
+          break;
+        case XK_Alt_L:
+          key_event = BX_KEY_ALT_L;
+          break;
+#ifdef XK_Alt_R
+        case XK_Alt_R:
+          key_event = BX_KEY_ALT_R;
+          break;
+#endif
+        case XK_Caps_Lock:
+          key_event = BX_KEY_CAPS_LOCK;
+          break;
+        case XK_Num_Lock:
+          key_event = BX_KEY_NUM_LOCK;
+          break;
+#ifdef XK_Scroll_Lock
+        case XK_Scroll_Lock:
+          key_event = BX_KEY_SCRL_LOCK;
+          break;
+#endif
+#ifdef XK_Print
+        case XK_Print:
+          key_event = BX_KEY_PRINT;
+          break;
+#endif
+#ifdef XK_Pause
+        case XK_Pause:
+          key_event = BX_KEY_PAUSE;
+          break;
+#endif
+
+        case XK_Insert:
+          key_event = BX_KEY_INSERT;
+          break;
+        case XK_Home:
+          key_event = BX_KEY_HOME;
+          break;
+        case XK_End:
+          key_event = BX_KEY_END;
+          break;
+        case XK_Page_Up:
+          key_event = BX_KEY_PAGE_UP;
+          break;
+        case XK_Page_Down:
+          key_event = BX_KEY_PAGE_DOWN;
+          break;
+
+        default:
+          BX_ERROR(("rfbKeyPress(): key %04x unhandled!", key));
+          return;
+      }
+    }
+  } else {
+    BXKeyEntry *entry = bx_keymap.findHostKey(key);
+    if (!entry) {
+      BX_ERROR(("rfbKeyPressed(): key %x unhandled!", (unsigned) key));
+      return;
+    }
+    key_event = entry->baseKey;
+  }
+
+  if (!press_release)
+    key_event |= BX_KEY_RELEASED;
+  DEV_kbd_gen_scancode(key_event);
+}
 
 // RFB specific functions
 
@@ -1254,7 +1550,7 @@ void DrawBitmap(int x, int y, int width, int height, char *bmap,
         char fgcolor, char bgcolor, bx_bool update_client)
 {
   unsigned char *newBits;
-  newBits = (unsigned char *)malloc(width * height);
+  newBits = new unsigned char[width * height];
   memset(newBits, 0, (width * height));
   for (int i = 0; i < (width * height) / 8; i++) {
     newBits[i * 8 + 0] = (bmap[i] & 0x01) ? fgcolor : bgcolor;
@@ -1267,15 +1563,16 @@ void DrawBitmap(int x, int y, int width, int height, char *bmap,
     newBits[i * 8 + 7] = (bmap[i] & 0x80) ? fgcolor : bgcolor;
   }
   UpdateScreen(newBits, x, y, width, height, update_client);
-  free(newBits);
+  delete [] newBits;
 }
 
 void DrawChar(int x, int y, int width, int height, int fonty, char *bmap,
         char fgcolor, char bgcolor, bx_bool gfxchar)
 {
-  static unsigned char newBits[9 * 32];
+  static unsigned char newBits[18 * 32];
   unsigned char mask;
   int bytes = width * height;
+  bx_bool dwidth = (width > 9);
   for (int i = 0; i < bytes; i+=width) {
     mask = 0x80;
     for (int j = 0; j < width; j++) {
@@ -1288,7 +1585,7 @@ void DrawChar(int x, int y, int width, int height, int fonty, char *bmap,
           newBits[i + j] = bgcolor;
         }
       }
-      mask >>= 1;
+      if (!dwidth || (j & 1)) mask >>= 1;
     }
     fonty++;
   }
@@ -1352,13 +1649,13 @@ void SendUpdate(int x, int y, int width, int height, Bit32u encoding)
         WriteExact(sGlobal, (char *)&furh, rfbFramebufferUpdateRectHeaderSize);
 
         if (encoding == rfbEncodingRaw) {
-          newBits = (char *)malloc(width * height);
+          newBits = new char[width * height];
           for(int i = 0; i < height; i++) {
             memcpy(&newBits[i * width], &rfbScreen[y * rfbWindowX + x], width);
             y++;
           }
           WriteExact(sGlobal, (char *)newBits, width * height);
-          free(newBits);
+          delete [] newBits;
         }
     }
 }
@@ -1387,7 +1684,7 @@ void rfbSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
   rfbStatusitemActive[element] = active;
   xleft = rfbStatusitemPos[element] + 2;
   xsize = rfbStatusitemPos[element + 1] - xleft - 1;
-  newBits = (char *) malloc(((xsize / 8) + 1) * (rfbStatusbarY - 2));
+  newBits = new char[((xsize / 8) + 1) * (rfbStatusbarY - 2)];
   memset(newBits, 0, ((xsize / 8) + 1) * (rfbStatusbarY - 2));
   for (i = 0; i < (rfbStatusbarY - 2); i++) {
     newBits[((xsize / 8) + 1) * i] = 0;
@@ -1403,7 +1700,7 @@ void rfbSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
   DrawBitmap(xleft, rfbWindowY - rfbStatusbarY + 1, xsize, rfbStatusbarY - 2,
              newBits, fgcolor, bgcolor, 0);
 
-  free(newBits);
+  delete [] newBits;
   len = ((element > 0) && (strlen(text) > 4)) ? 4 : strlen(text);
   for (i = 0; i < len; i++) {
     DrawChar(xleft + i * 8 + 2, rfbWindowY - rfbStatusbarY + 5, 8, 8, 0,
@@ -1411,437 +1708,6 @@ void rfbSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
   }
 
   rfbAddUpdateRegion(xleft, rfbWindowY - rfbStatusbarY + 1, xsize, rfbStatusbarY - 2);
-}
-
-// function to convert key names into rfb key values.
-// This first try will be horribly inefficient, but it only has
-// to be done while loading a keymap.  Once the simulation starts,
-// this function won't be called.
-static Bit32u convertStringToRfbKey(const char *string)
-{
-  rfbKeyTabEntry *ptr;
-  for (ptr = &rfb_keytable[0]; ptr->name != NULL; ptr++) {
-    if (!strcmp(string, ptr->name))
-      return ptr->value;
-  }
-  return BX_KEYMAP_UNKNOWN;
-}
-
-static Bit32u rfb_ascii_to_key_event[0x5f] = {
-  //  !"#$%&'
-  BX_KEY_SPACE,
-  BX_KEY_1,
-  BX_KEY_SINGLE_QUOTE,
-  BX_KEY_3,
-  BX_KEY_4,
-  BX_KEY_5,
-  BX_KEY_7,
-  BX_KEY_SINGLE_QUOTE,
-
-  // ()*+,-./
-  BX_KEY_9,
-  BX_KEY_0,
-  BX_KEY_8,
-  BX_KEY_EQUALS,
-  BX_KEY_COMMA,
-  BX_KEY_MINUS,
-  BX_KEY_PERIOD,
-  BX_KEY_SLASH,
-
-  // 01234567
-  BX_KEY_0,
-  BX_KEY_1,
-  BX_KEY_2,
-  BX_KEY_3,
-  BX_KEY_4,
-  BX_KEY_5,
-  BX_KEY_6,
-  BX_KEY_7,
-
-  // 89:;<=>?
-  BX_KEY_8,
-  BX_KEY_9,
-  BX_KEY_SEMICOLON,
-  BX_KEY_SEMICOLON,
-  BX_KEY_COMMA,
-  BX_KEY_EQUALS,
-  BX_KEY_PERIOD,
-  BX_KEY_SLASH,
-
-  // @ABCDEFG
-  BX_KEY_2,
-  BX_KEY_A,
-  BX_KEY_B,
-  BX_KEY_C,
-  BX_KEY_D,
-  BX_KEY_E,
-  BX_KEY_F,
-  BX_KEY_G,
-
-
-  // HIJKLMNO
-  BX_KEY_H,
-  BX_KEY_I,
-  BX_KEY_J,
-  BX_KEY_K,
-  BX_KEY_L,
-  BX_KEY_M,
-  BX_KEY_N,
-  BX_KEY_O,
-
-
-  // PQRSTUVW
-  BX_KEY_P,
-  BX_KEY_Q,
-  BX_KEY_R,
-  BX_KEY_S,
-  BX_KEY_T,
-  BX_KEY_U,
-  BX_KEY_V,
-  BX_KEY_W,
-
-  // XYZ[\]^_
-  BX_KEY_X,
-  BX_KEY_Y,
-  BX_KEY_Z,
-  BX_KEY_LEFT_BRACKET,
-  BX_KEY_BACKSLASH,
-  BX_KEY_RIGHT_BRACKET,
-  BX_KEY_6,
-  BX_KEY_MINUS,
-
-  // `abcdefg
-  BX_KEY_GRAVE,
-  BX_KEY_A,
-  BX_KEY_B,
-  BX_KEY_C,
-  BX_KEY_D,
-  BX_KEY_E,
-  BX_KEY_F,
-  BX_KEY_G,
-
-  // hijklmno
-  BX_KEY_H,
-  BX_KEY_I,
-  BX_KEY_J,
-  BX_KEY_K,
-  BX_KEY_L,
-  BX_KEY_M,
-  BX_KEY_N,
-  BX_KEY_O,
-
-  // pqrstuvw
-  BX_KEY_P,
-  BX_KEY_Q,
-  BX_KEY_R,
-  BX_KEY_S,
-  BX_KEY_T,
-  BX_KEY_U,
-  BX_KEY_V,
-  BX_KEY_W,
-
-  // xyz{|}~
-  BX_KEY_X,
-  BX_KEY_Y,
-  BX_KEY_Z,
-  BX_KEY_LEFT_BRACKET,
-  BX_KEY_BACKSLASH,
-  BX_KEY_RIGHT_BRACKET,
-  BX_KEY_GRAVE
-};
-
-void rfbKeyPressed(Bit32u key, int press_release)
-{
-  Bit32u key_event;
-
-  if (!SIM->get_param_bool(BXPN_KBD_USEMAPPING)->get()) {
-    if ((key >= XK_space) && (key <= XK_asciitilde)) {
-      key_event = rfb_ascii_to_key_event[key - XK_space];
-    } else {
-      switch (key) {
-        case XK_KP_1:
-#ifdef XK_KP_End
-        case XK_KP_End:
-#endif
-          key_event = BX_KEY_KP_END;
-          break;
-
-        case XK_KP_2:
-#ifdef XK_KP_Down
-        case XK_KP_Down:
-#endif
-          key_event = BX_KEY_KP_DOWN;
-          break;
-
-        case XK_KP_3:
-#ifdef XK_KP_Page_Down
-        case XK_KP_Page_Down:
-#endif
-          key_event = BX_KEY_KP_PAGE_DOWN;
-          break;
-
-        case XK_KP_4:
-#ifdef XK_KP_Left
-        case XK_KP_Left:
-#endif
-          key_event = BX_KEY_KP_LEFT;
-          break;
-
-        case XK_KP_5:
-#ifdef XK_KP_Begin
-        case XK_KP_Begin:
-#endif
-          key_event = BX_KEY_KP_5;
-          break;
-
-        case XK_KP_6:
-#ifdef XK_KP_Right
-        case XK_KP_Right:
-#endif
-          key_event = BX_KEY_KP_RIGHT;
-          break;
-
-        case XK_KP_7:
-#ifdef XK_KP_Home
-        case XK_KP_Home:
-#endif
-          key_event = BX_KEY_KP_HOME;
-          break;
-
-        case XK_KP_8:
-#ifdef XK_KP_Up
-        case XK_KP_Up:
-#endif
-          key_event = BX_KEY_KP_UP;
-          break;
-
-        case XK_KP_9:
-#ifdef XK_KP_Page_Up
-        case XK_KP_Page_Up:
-#endif
-          key_event = BX_KEY_KP_PAGE_UP;
-          break;
-
-        case XK_KP_0:
-#ifdef XK_KP_Insert
-        case XK_KP_Insert:
-#endif
-          key_event = BX_KEY_KP_INSERT;
-          break;
-
-        case XK_KP_Decimal:
-#ifdef XK_KP_Delete
-        case XK_KP_Delete:
-#endif
-          key_event = BX_KEY_KP_DELETE;
-          break;
-
-#ifdef XK_KP_Enter
-        case XK_KP_Enter:
-          key_event = BX_KEY_KP_ENTER;
-          break;
-#endif
-
-        case XK_KP_Subtract:
-          key_event = BX_KEY_KP_SUBTRACT;
-          break;
-        case XK_KP_Add:
-          key_event = BX_KEY_KP_ADD;
-          break;
-
-        case XK_KP_Multiply:
-          key_event = BX_KEY_KP_MULTIPLY;
-          break;
-        case XK_KP_Divide:
-          key_event = BX_KEY_KP_DIVIDE;
-          break;
-
-        case XK_Up:
-          key_event = BX_KEY_UP;
-          break;
-        case XK_Down:
-          key_event = BX_KEY_DOWN;
-          break;
-        case XK_Left:
-          key_event = BX_KEY_LEFT;
-          break;
-        case XK_Right:
-          key_event = BX_KEY_RIGHT;
-          break;
-
-        case XK_Delete:
-          key_event = BX_KEY_DELETE;
-          break;
-        case XK_BackSpace:
-          key_event = BX_KEY_BACKSPACE;
-          break;
-        case XK_Tab:
-          key_event = BX_KEY_TAB;
-          break;
-#ifdef XK_ISO_Left_Tab
-        case XK_ISO_Left_Tab:
-          key_event = BX_KEY_TAB;
-          break;
-#endif
-        case XK_Return:
-          key_event = BX_KEY_ENTER;
-          break;
-        case XK_Escape:
-          key_event = BX_KEY_ESC;
-          break;
-        case XK_F1:
-          key_event = BX_KEY_F1;
-          break;
-        case XK_F2:
-          key_event = BX_KEY_F2;
-          break;
-        case XK_F3:
-          key_event = BX_KEY_F3;
-          break;
-        case XK_F4:
-          key_event = BX_KEY_F4;
-          break;
-        case XK_F5:
-          key_event = BX_KEY_F5;
-          break;
-        case XK_F6:
-          key_event = BX_KEY_F6;
-          break;
-        case XK_F7:
-          key_event = BX_KEY_F7;
-          break;
-        case XK_F8:
-          key_event = BX_KEY_F8;
-          break;
-        case XK_F9:
-          key_event = BX_KEY_F9;
-          break;
-        case XK_F10:
-          key_event = BX_KEY_F10;
-          break;
-        case XK_F11:
-          key_event = BX_KEY_F11;
-          break;
-        case XK_F12:
-          key_event = BX_KEY_F12;
-          break;
-        case XK_Control_L:
-          key_event = BX_KEY_CTRL_L;
-          break;
-#ifdef XK_Control_R
-        case XK_Control_R:
-          key_event = BX_KEY_CTRL_R;
-          break;
-#endif
-        case XK_Shift_L:
-          key_event = BX_KEY_SHIFT_L;
-          break;
-        case XK_Shift_R:
-          key_event = BX_KEY_SHIFT_R;
-          break;
-        case XK_Alt_L:
-          key_event = BX_KEY_ALT_L;
-          break;
-#ifdef XK_Alt_R
-        case XK_Alt_R:
-          key_event = BX_KEY_ALT_R;
-          break;
-#endif
-        case XK_Caps_Lock:
-          key_event = BX_KEY_CAPS_LOCK;
-          break;
-        case XK_Num_Lock:
-          key_event = BX_KEY_NUM_LOCK;
-          break;
-#ifdef XK_Scroll_Lock
-        case XK_Scroll_Lock:
-          key_event = BX_KEY_SCRL_LOCK;
-          break;
-#endif
-#ifdef XK_Print
-        case XK_Print:
-          key_event = BX_KEY_PRINT;
-          break;
-#endif
-#ifdef XK_Pause
-        case XK_Pause:
-          key_event = BX_KEY_PAUSE;
-          break;
-#endif
-
-        case XK_Insert:
-          key_event = BX_KEY_INSERT;
-          break;
-        case XK_Home:
-          key_event = BX_KEY_HOME;
-          break;
-        case XK_End:
-          key_event = BX_KEY_END;
-          break;
-        case XK_Page_Up:
-          key_event = BX_KEY_PAGE_UP;
-          break;
-        case XK_Page_Down:
-          key_event = BX_KEY_PAGE_DOWN;
-          break;
-
-        default:
-          BX_ERROR(("rfbKeyPress(): key %04x unhandled!", key));
-          return;
-      }
-    }
-  } else {
-    BXKeyEntry *entry = bx_keymap.findHostKey(key);
-    if (!entry) {
-      BX_ERROR(("rfbKeyPressed(): key %x unhandled!", (unsigned) key));
-      return;
-    }
-    key_event = entry->baseKey;
-  }
-
-  if (!press_release)
-    key_event |= BX_KEY_RELEASED;
-  DEV_kbd_gen_scancode(key_event);
-}
-
-void rfbMouseMove(int x, int y, int z, int bmask)
-{
-  static int oldx = -1;
-  static int oldy = -1;
-  int dx, dy, xorigin;
-
-  if ((oldx == 1) && (oldy == -1)) {
-    oldx = x;
-    oldy = y;
-    return;
-  }
-  if (y > rfbHeaderbarY) {
-    if (rfbMouseModeAbsXY) {
-      if ((y >= rfbHeaderbarY) && (y < (int)(rfbDimensionY + rfbHeaderbarY))) {
-        dx = x * 0x7fff / rfbDimensionX;
-        dy = (y - rfbHeaderbarY) * 0x7fff / rfbDimensionY;
-        DEV_mouse_motion(dx, dy, z, bmask, 1);
-      }
-    } else {
-      DEV_mouse_motion(x - oldx, oldy - y, z, bmask, 0);
-    }
-    oldx = x;
-    oldy = y;
-  } else {
-    if (bmask == 1) {
-      for (unsigned i = 0; i < rfbHeaderbarBitmapCount; i++) {
-        if (rfbHeaderbarBitmaps[i].alignment == BX_GRAVITY_LEFT)
-          xorigin = rfbHeaderbarBitmaps[i].xorigin;
-        else
-          xorigin = rfbWindowX - rfbHeaderbarBitmaps[i].xorigin;
-        if ((x >= xorigin) &&
-            (x < (xorigin + int(rfbBitmaps[rfbHeaderbarBitmaps[i].index].xdim)))) {
-          rfbHeaderbarBitmaps[i].f();
-          return;
-        }
-      }
-    }
-  }
 }
 
 #if BX_SHOW_IPS && defined(WIN32)

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cmos.cc 12514 2014-10-19 08:54:16Z vruppert $
+// $Id: cmos.cc 13051 2017-01-28 09:52:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -100,7 +100,7 @@ Bit8u bin_to_bcd(Bit8u value, bx_bool is_binary)
     return ((value  / 10) << 4) | (value % 10);
 }
 
-int CDECL libcmos_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libcmos_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   if (type == PLUGTYPE_CORE) {
     theCmosDevice = new bx_cmos_c();
@@ -144,7 +144,7 @@ bx_cmos_c::~bx_cmos_c(void)
 
 void bx_cmos_c::init(void)
 {
-  BX_DEBUG(("Init $Id: cmos.cc 12514 2014-10-19 08:54:16Z vruppert $"));
+  BX_DEBUG(("Init $Id: cmos.cc 13051 2017-01-28 09:52:09Z vruppert $"));
   // CMOS RAM & RTC
 
   DEV_register_ioread_handler(this, read_handler, 0x0070, "CMOS RAM", 1);
@@ -318,12 +318,7 @@ void bx_cmos_c::register_state(void)
 {
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "cmos", "CMOS State");
   BXRS_HEX_PARAM_FIELD(list, mem_address, BX_CMOS_THIS s.cmos_mem_address);
-  bx_list_c *ram = new bx_list_c(list, "ram");
-  for (unsigned i=0; i<128; i++) {
-    char name[6];
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(ram, name, &BX_CMOS_THIS s.reg[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(list, "ram", BX_CMOS_THIS s.reg, 128, 1);
 }
 
 void bx_cmos_c::after_restore_state(void)

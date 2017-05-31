@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.h 12688 2015-03-17 20:55:51Z vruppert $
+// $Id: soundwin.h 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -230,6 +230,6 @@ public:
   virtual bx_soundlow_waveout_c* get_waveout();
   virtual bx_soundlow_wavein_c* get_wavein();
   virtual bx_soundlow_midiout_c* get_midiout();
-};
+} bx_sound_windows;
 
 #endif  // BX_HAVE_SOUND_WIN

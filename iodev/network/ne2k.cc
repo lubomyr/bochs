@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ne2k.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: ne2k.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -132,7 +132,7 @@ Bit32s ne2k_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libne2k_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libne2k_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theNE2kDevice = new bx_ne2k_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theNE2kDevice, BX_PLUGIN_NE2K);
@@ -176,7 +176,7 @@ void bx_ne2k_c::init(void)
   Bit8u macaddr[6];
   bx_param_string_c *bootrom;
 
-  BX_DEBUG(("Init $Id: ne2k.cc 12366 2014-06-08 08:40:08Z vruppert $"));
+  BX_DEBUG(("Init $Id: ne2k.cc 13160 2017-03-30 18:08:15Z vruppert $"));
 
   // Read in values from config interface
   bx_list_c *base = (bx_list_c*) SIM->get_param(BXPN_NE2K);
@@ -215,8 +215,8 @@ void bx_ne2k_c::init(void)
 
   if (BX_NE2K_THIS s.tx_timer_index == BX_NULL_TIMER_HANDLE) {
     BX_NE2K_THIS s.tx_timer_index =
-      bx_pc_system.register_timer(this, tx_timer_handler, 0,
-                                  0,0, "ne2k"); // one-shot, inactive
+      DEV_register_timer(this, tx_timer_handler, 0, 0, 0,
+                         "ne2k"); // one-shot, inactive
   }
   // Register the IRQ and i/o port addresses
   if (!BX_NE2K_THIS s.pci_enabled) {
@@ -347,9 +347,6 @@ void bx_ne2k_c::reset(unsigned type)
 
 void bx_ne2k_c::register_state(void)
 {
-  unsigned i;
-  char name[6];
-
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "ne2k", "NE2000 State");
   bx_list_c *CR = new bx_list_c(list, "CR");
   new bx_shadow_bool_c(CR, "stop", &BX_NE2K_THIS s.CR.stop);
@@ -424,17 +421,9 @@ void bx_ne2k_c::register_state(void)
   new bx_shadow_num_c(list, "tallycnt_0", &BX_NE2K_THIS s.tallycnt_0, BASE_HEX);
   new bx_shadow_num_c(list, "tallycnt_1", &BX_NE2K_THIS s.tallycnt_1, BASE_HEX);
   new bx_shadow_num_c(list, "tallycnt_2", &BX_NE2K_THIS s.tallycnt_2, BASE_HEX);
-  bx_list_c *paddr = new bx_list_c(list, "physaddr");
-  for (i=0; i<6; i++) {
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(paddr, name, &BX_NE2K_THIS s.physaddr[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(list, "physaddr", BX_NE2K_THIS s.physaddr, 6, 1);
   new bx_shadow_num_c(list, "curr_page", &BX_NE2K_THIS s.curr_page, BASE_HEX);
-  bx_list_c *mchash = new bx_list_c(list, "mchash");
-  for (i=0; i<8; i++) {
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(mchash, name, &BX_NE2K_THIS s.mchash[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(list, "mchash", BX_NE2K_THIS s.mchash, 8, 1);
   new bx_shadow_num_c(list, "rempkt_ptr", &BX_NE2K_THIS s.rempkt_ptr, BASE_HEX);
   new bx_shadow_num_c(list, "localpkt_ptr", &BX_NE2K_THIS s.localpkt_ptr, BASE_HEX);
   new bx_shadow_num_c(list, "address_cnt", &BX_NE2K_THIS s.address_cnt, BASE_HEX);
@@ -1706,19 +1695,6 @@ void bx_ne2k_c::set_irq_level(bx_bool level)
 }
 
 #if BX_SUPPORT_PCI
-
-// pci configuration space read callback handler
-Bit32u bx_ne2k_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_NE2K_THIS pci_conf[address+i] << (i*8));
-  }
-  BX_DEBUG(("NE2000 PCI NIC read  register 0x%02x value 0x%08x", address, value));
-  return value;
-}
-
 // pci configuration space write callback handler
 void bx_ne2k_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {
@@ -1791,7 +1767,6 @@ void bx_ne2k_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
   else if (io_len == 4)
     BX_DEBUG(("write PCI register 0x%02x value 0x%08x", address, value));
 }
-
 #endif /* BX_SUPPORT_PCI */
 
 #if BX_DEBUGGER

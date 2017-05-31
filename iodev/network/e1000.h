@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: e1000.h 11382 2012-08-30 20:41:25Z vruppert $
+// $Id: e1000.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Intel(R) 82540EM Gigabit Ethernet support (ported from QEMU)
@@ -12,7 +12,7 @@
 //  Copyright (c) 2007 Dan Aloni
 //  Copyright (c) 2004 Antony T Curtis
 //
-//  Copyright (C) 2011  The Bochs Project
+//  Copyright (C) 2011-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -113,7 +113,7 @@ typedef struct {
 } bx_e1000_t;
 
 
-class bx_e1000_c : public bx_devmodel_c, bx_pci_device_stub_c {
+class bx_e1000_c : public bx_pci_device_c {
 public:
   bx_e1000_c();
   virtual ~bx_e1000_c();
@@ -122,8 +122,7 @@ public:
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  virtual Bit32u pci_read_handler(Bit8u address, unsigned io_len);
-  virtual void   pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+  virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 
 private:
   bx_e1000_t s;

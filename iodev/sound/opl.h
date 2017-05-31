@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: opl.h 12696 2015-03-27 15:49:40Z vruppert $
+// $Id: opl.h 12749 2015-05-05 18:06:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Copyright (C) 2002-2013  The DOSBox Team
@@ -38,8 +38,8 @@
   define Bits, Bitu, Bit32s, Bit32u, Bit16s, Bit16u, Bit8s, Bit8u here
 */
 #include <stdint.h>
-typedef uintptr_t Bitu;
-typedef intptr_t  Bits;
+typedef Bit64u    Bitu;
+typedef Bit64s    Bits;
 /*
 typedef uint32_t  Bit32u;
 typedef int32_t   Bit32s;

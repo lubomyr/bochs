@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_linux.cc 10975 2012-01-14 17:03:00Z vruppert $
+// $Id: eth_linux.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2011  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,21 @@
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_LINUX
+
+// network driver plugin entry points
+
+int CDECL liblinux_net_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL liblinux_net_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+// network driver implementation
 
 #define LOG_THIS netdev->
 
@@ -224,8 +239,8 @@ bx_linux_pktmover_c::bx_linux_pktmover_c(const char *netif,
 
   // Start the rx poll
   this->rx_timer_index =
-    bx_pc_system.register_timer(this, this->rx_timer_handler, BX_PACKET_POLL,
-                                1, 1, "eth_linux"); // continuous, active
+    DEV_register_timer(this, this->rx_timer_handler, BX_PACKET_POLL, 1, 1,
+                       "eth_linux"); // continuous, active
 
   this->rxh    = rxh;
   this->rxstat = rxstat;

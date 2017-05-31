@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci.h 11590 2013-01-25 15:52:39Z vruppert $
+// $Id: pci.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2013  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -36,7 +36,7 @@
 #define BX_PCI_INTC 3
 #define BX_PCI_INTD 4
 
-class bx_pci_bridge_c : public bx_devmodel_c, public bx_pci_device_stub_c {
+class bx_pci_bridge_c : public bx_pci_device_c {
 public:
   bx_pci_bridge_c();
   virtual ~bx_pci_bridge_c();
@@ -45,8 +45,7 @@ public:
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  virtual Bit32u pci_read_handler(Bit8u address, unsigned io_len);
-  virtual void   pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+  virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 #if BX_DEBUGGER
   virtual void debug_dump(int argc, char **argv);
 #endif

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: misc.cc 12994 2016-12-13 20:22:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski.
@@ -8,7 +8,9 @@
  * terms and conditions of the copyright.
  */
 
+#ifndef _WIN32
 #include <dirent.h>
+#endif
 
 #include "slirp.h"
 #include "libslirp.h"

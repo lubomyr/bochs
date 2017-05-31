@@ -1,9 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcipnic.h 11231 2012-06-24 17:42:24Z sshwarts $
+// $Id: pcipnic.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  Fen Systems Ltd.
 //  http://www.fensystems.co.uk/
+//  Copyright (C) 2003-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -59,7 +60,7 @@ typedef struct {
 } bx_pnic_t;
 
 
-class bx_pcipnic_c : public bx_devmodel_c, bx_pci_device_stub_c {
+class bx_pcipnic_c : public bx_pci_device_c {
 public:
   bx_pcipnic_c();
   virtual ~bx_pcipnic_c();
@@ -68,7 +69,6 @@ public:
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  virtual Bit32u pci_read_handler(Bit8u address, unsigned io_len);
   virtual void   pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 
 private:

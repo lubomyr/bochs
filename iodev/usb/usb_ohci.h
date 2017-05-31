@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ohci.h 10972 2012-01-14 12:36:32Z vruppert $
+// $Id: usb_ohci.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009       Benjamin D Lunt (fys at frontiernet net)
-//                2009-2012  The Bochs Project
+//  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
+//                2009-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,13 @@
 #  define BX_OHCI_THIS_PTR this
 #endif
 
-// number of ports defined in bochs.h
+#define USB_OHCI_PORTS 2
+
+// HCFS values
+#define  OHCI_USB_RESET       0x00
+#define  OHCI_USB_RESUME      0x01
+#define  OHCI_USB_OPERATIONAL 0x02
+#define  OHCI_USB_SUSPEND     0x03
 
 #define OHCI_INTR_SO          (1<<0) // Scheduling overrun
 #define OHCI_INTR_WD          (1<<1) // HcDoneHead writeback
@@ -228,7 +234,7 @@ typedef struct {
       bx_bool pes;               //  1 bit PortEnableStatus            = 0b             RW  RW
       bx_bool ccs;               //  1 bit CurrentConnectStatus        = 0b             RW  RW
     } HcRhPortStatus;
-  } usb_port[BX_N_USB_OHCI_PORTS];
+  } usb_port[USB_OHCI_PORTS];
 
   Bit8u devfunc;
   unsigned ohci_done_count;
@@ -236,13 +242,13 @@ typedef struct {
   bx_bool  use_bulk_head;
   Bit64u   sof_time;
 
-  int statusbar_id; // ID of the status LEDs
   Bit8u device_change;
+  int rt_conf_id;
 } bx_usb_ohci_t;
 
 
 
-class bx_usb_ohci_c : public bx_devmodel_c, public bx_pci_device_stub_c {
+class bx_usb_ohci_c : public bx_pci_device_c {
 public:
   bx_usb_ohci_c();
   virtual ~bx_usb_ohci_c();
@@ -250,8 +256,10 @@ public:
   virtual void reset(unsigned);
   virtual void register_state(void);
   virtual void after_restore_state(void);
-  virtual Bit32u  pci_read_handler(Bit8u address, unsigned io_len);
-  virtual void    pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+
+  virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+
+  void event_handler(int event, USBPacket *packet, int port);
 
   static const char *usb_param_handler(bx_param_string_c *param, int set,
                                        const char *oldval, const char *val, int maxlen);
@@ -259,9 +267,8 @@ public:
 private:
 
   bx_usb_ohci_t hub;
-  Bit8u         *device_buffer;
 
-  USBPacket usb_packet;
+  USBAsync *packets;
 
   static void reset_hc();
   static void reset_port(int);
@@ -278,7 +285,8 @@ private:
 
   static Bit32u get_frame_remaining(void);
 
-  void process_ed(struct OHCI_ED *, const Bit32u);
+  void process_lists();
+  bx_bool process_ed(struct OHCI_ED *, const Bit32u);
   bx_bool process_td(struct OHCI_TD *, struct OHCI_ED *);
 
 #if BX_USE_USB_OHCI_SMF

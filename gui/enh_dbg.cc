@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: enh_dbg.cc 12542 2014-11-06 17:13:27Z vruppert $
+// $Id: enh_dbg.cc 13075 2017-02-18 11:13:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -8,7 +8,7 @@
 //
 //  Modified by Bruce Ewing
 //
-//  Copyright (C) 2008-2014  The Bochs Project
+//  Copyright (C) 2008-2017  The Bochs Project
 
 #include "config.h"
 
@@ -3432,7 +3432,7 @@ BxEvent *enh_dbg_notify_callback(void *unused, BxEvent *event)
     case BX_ASYNC_EVT_LOG_MSG:
       if (LogView) {
         ParseIDText(event->u.logmsg.msg);
-        free((void*)event->u.logmsg.msg);
+        delete [] event->u.logmsg.msg;
         return event;
       }
     default:
@@ -3443,11 +3443,11 @@ BxEvent *enh_dbg_notify_callback(void *unused, BxEvent *event)
 static size_t strip_whitespace(char *s)
 {
   size_t ptr = 0;
-  char *tmp = (char*)malloc(strlen(s)+1);
+  char *tmp = new char[strlen(s)+1];
   strcpy(tmp, s);
   while (s[ptr] == ' ') ptr++;
   if (ptr > 0) strcpy(s, tmp+ptr);
-  free(tmp);
+  delete [] tmp;
   ptr = strlen(s);
   while ((ptr > 0) && (s[ptr-1] == ' ')) {
     s[--ptr] = 0;

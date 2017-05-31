@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_win32.cc 12496 2014-10-04 17:31:57Z vruppert $
+// $Id: eth_win32.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,6 +41,21 @@
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_WIN32
+
+// network driver plugin entry points
+
+int CDECL libwin32_net_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL libwin32_net_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+// network driver implementation
 
 #ifndef __CYGWIN__
 #include <winsock2.h>
@@ -331,11 +346,11 @@ bx_win32_pktmover_c::bx_win32_pktmover_c(
     BX_PANIC(("Could not allocate a recv packet"));
   }
   rx_timer_index =
-    bx_pc_system.register_timer(this, this->rx_timer_handler, 10000, 1, 1, "eth_win32");
+    DEV_register_timer(this, this->rx_timer_handler, 10000, 1, 1, "eth_win32");
 
 #if BX_ETH_WIN32_LOGGING
-  pktlog_txt = fopen("ne2k-pktlog.txt", "wb");
-  if (!pktlog_txt) BX_PANIC(("ne2k-pktlog.txt failed"));
+  pktlog_txt = fopen("eth_win32-pktlog.txt", "wb");
+  if (!pktlog_txt) BX_PANIC(("eth_win32-pktlog.txt failed"));
   fprintf(pktlog_txt, "win32 packetmover readable log file\n");
   fprintf(pktlog_txt, "host adapter = %s\n", netif);
   fprintf(pktlog_txt, "guest MAC address = ");
@@ -391,7 +406,7 @@ void bx_win32_pktmover_c::rx_timer(void)
         if(memcmp(pPacket, cMacAddr, 6) == 0 || memcmp(pPacket, broadcast_macaddr, 6) == 0)
         {
           pktlen = hdr->bh_caplen;
-          if (pktlen < 60) pktlen = 60;
+          if (pktlen < MIN_RX_PACKET_LEN) pktlen = MIN_RX_PACKET_LEN;
 #if BX_ETH_WIN32_LOGGING
           write_pktlog_txt(pktlog_txt, pPacket, pktlen, 1);
 #endif

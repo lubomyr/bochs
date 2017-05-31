@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: serial.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: serial.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -58,23 +58,27 @@ typedef int SOCKET;
 
 bx_serial_c *theSerialDevice = NULL;
 
+#ifdef BX_SER_WIN32
+static bx_bool winsock_init = false;
+#endif
+
 // builtin configuration handling functions
+
+static const char *serial_mode_list[] = {
+  "null",
+  "file",
+  "term",
+  "raw",
+  "mouse",
+  "socket-client",
+  "socket-server",
+  "pipe-client",
+  "pipe-server",
+  NULL
+};
 
 void serial_init_options(void)
 {
-  static const char *serial_mode_list[] = {
-    "null",
-    "file",
-    "term",
-    "raw",
-    "mouse",
-    "socket-client",
-    "socket-server",
-    "pipe-client",
-    "pipe-server",
-    NULL
-  };
-
   char name[4], label[80], descr[120];
 
   bx_list_c *serial = (bx_list_c*)SIM->get_param("ports.serial");
@@ -147,7 +151,7 @@ Bit32s serial_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libserial_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libserial_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theSerialDevice = new bx_serial_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theSerialDevice, BX_PLUGIN_SERIAL);
@@ -219,6 +223,12 @@ bx_serial_c::~bx_serial_c(void)
         case BX_SER_MODE_SOCKET_CLIENT:
         case BX_SER_MODE_SOCKET_SERVER:
           if (BX_SER_THIS s[i].socket_id >= 0) closesocket(BX_SER_THIS s[i].socket_id);
+#ifdef BX_SER_WIN32
+          if (winsock_init) {
+            WSACleanup();
+            winsock_init = false;
+          }
+#endif
           break;
         case BX_SER_MODE_PIPE_CLIENT:
         case BX_SER_MODE_PIPE_SERVER:
@@ -230,6 +240,8 @@ bx_serial_c::~bx_serial_c(void)
       }
     }
   }
+  bx_list_c *misc_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_MISC);
+  misc_rt->remove("serial");
   SIM->get_bochs_root()->remove("serial");
   BX_DEBUG(("Exit"));
 }
@@ -240,7 +252,7 @@ bx_serial_c::init(void)
 {
   Bit16u ports[BX_SERIAL_MAXDEV] = {0x03f8, 0x02f8, 0x03e8, 0x02e8};
   char name[16], pname[20];
-  bx_list_c *base;
+  bx_list_c *base, *misc_rt = NULL, *menu = NULL;
   unsigned i, count = 0;
 
   BX_SER_THIS detect_mouse = 0;
@@ -281,21 +293,21 @@ bx_serial_c::init(void)
 
       if (BX_SER_THIS s[i].tx_timer_index == BX_NULL_TIMER_HANDLE) {
         BX_SER_THIS s[i].tx_timer_index =
-          bx_pc_system.register_timer(this, tx_timer_handler, 0,
-                                      0,0, "serial.tx"); // one-shot, inactive
+          DEV_register_timer(this, tx_timer_handler, 0, 0, 0,
+                             "serial.tx"); // one-shot, inactive
           bx_pc_system.setTimerParam(BX_SER_THIS s[i].tx_timer_index, i);
       }
 
       if (BX_SER_THIS s[i].rx_timer_index == BX_NULL_TIMER_HANDLE) {
         BX_SER_THIS s[i].rx_timer_index =
-          bx_pc_system.register_timer(this, rx_timer_handler, 0,
-                                      0,0, "serial.rx"); // one-shot, inactive
+          DEV_register_timer(this, rx_timer_handler, 0, 0, 0,
+                             "serial.rx"); // one-shot, inactive
           bx_pc_system.setTimerParam(BX_SER_THIS s[i].rx_timer_index, i);
       }
       if (BX_SER_THIS s[i].fifo_timer_index == BX_NULL_TIMER_HANDLE) {
         BX_SER_THIS s[i].fifo_timer_index =
-          bx_pc_system.register_timer(this, fifo_timer_handler, 0,
-                                      0,0, "serial.fifo"); // one-shot, inactive
+          DEV_register_timer(this, fifo_timer_handler, 0, 0, 0,
+                             "serial.fifo"); // one-shot, inactive
           bx_pc_system.setTimerParam(BX_SER_THIS s[i].fifo_timer_index, i);
       }
 
@@ -371,16 +383,24 @@ bx_serial_c::init(void)
 
       BX_SER_THIS s[i].io_mode = BX_SER_MODE_NULL;
       Bit8u mode = SIM->get_param_enum("mode", base)->get();
-      bx_param_string_c *devparam = SIM->get_param_string("dev", base);
-      const char *dev = devparam->getptr();
+      BX_SER_THIS s[i].file = SIM->get_param_string("dev", base);
+      const char *dev = BX_SER_THIS s[i].file->getptr();
       if (mode == BX_SER_MODE_FILE) {
-        if (!devparam->isempty()) {
+        if (!BX_SER_THIS s[i].file->isempty()) {
           // tx_timer() opens the output file on demand
           BX_SER_THIS s[i].io_mode = BX_SER_MODE_FILE;
+          BX_SER_THIS s[i].file->set_handler(serial_file_param_handler);
+          // init runtime parameters
+          if (misc_rt == NULL) {
+            misc_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_MISC);
+            menu = new bx_list_c(misc_rt, "serial", "Serial Port Runtime Options");
+            menu->set_options(menu->SHOW_PARENT | menu->USE_BOX_TITLE);
+          }
+          menu->add(BX_SER_THIS s[i].file);
         }
       } else if (mode == BX_SER_MODE_TERM) {
 #if defined(SERIAL_ENABLE) && !defined(BX_SER_WIN32)
-        if (!devparam->isempty()) {
+        if (!BX_SER_THIS s[i].file->isempty()) {
           BX_SER_THIS s[i].tty_id = open(dev, O_RDWR|O_NONBLOCK,600);
           if (BX_SER_THIS s[i].tty_id < 0) {
             BX_PANIC(("open of com%d (%s) failed", i+1, dev));
@@ -430,7 +450,6 @@ bx_serial_c::init(void)
         BX_SER_THIS mouse_type = SIM->get_param_enum(BXPN_MOUSE_TYPE)->get();
       } else if ((mode == BX_SER_MODE_SOCKET_CLIENT) ||
                  (mode == BX_SER_MODE_SOCKET_SERVER)) {
-        BX_SER_THIS s[i].io_mode = mode;
         struct sockaddr_in  sin;
         struct hostent      *hp;
         char                host[BX_PATHNAME_LEN];
@@ -439,15 +458,16 @@ bx_serial_c::init(void)
         bx_bool             server = (mode == BX_SER_MODE_SOCKET_SERVER);
 
 #ifdef BX_SER_WIN32
-        static bx_bool winsock_init = false;
         if (!winsock_init) {
           WORD wVersionRequested;
           WSADATA wsaData;
           int err;
           wVersionRequested = MAKEWORD(2, 0);
           err = WSAStartup(wVersionRequested, &wsaData);
-          if (err != 0)
+          if (err != 0) {
             BX_PANIC(("WSAStartup failed"));
+            continue;
+          }
           winsock_init = true;
         }
 #endif
@@ -457,12 +477,14 @@ bx_serial_c::init(void)
         substr = strtok(NULL, ":");
         if (!substr) {
           BX_PANIC(("com%d: inet address is wrong (%s)", i+1, dev));
+          continue;
         }
         port = atoi(substr);
 
         hp = gethostbyname(host);
         if (!hp) {
           BX_PANIC(("com%d: gethostbyname failed (%s)", i+1, host));
+          continue;
         }
 
         memset ((char*) &sin, 0, sizeof (sin));
@@ -474,37 +496,44 @@ bx_serial_c::init(void)
         sin.sin_port = htons (port);
 
         socket = ::socket (AF_INET, SOCK_STREAM, 0);
-        if (socket < 0)
+        if (socket < 0) {
           BX_PANIC(("com%d: socket() failed",i+1));
+          continue;
+        }
 
-        // server mode
         if (server) {
-          if (::bind (socket, (sockaddr *) &sin, sizeof (sin)) < 0 ||
-              ::listen (socket, SOMAXCONN) < 0) {
+          // server mode
+          if (::bind(socket, (sockaddr *) &sin, sizeof (sin)) < 0 ||
+              ::listen(socket, SOMAXCONN) < 0) {
             closesocket(socket);
             socket = (SOCKET) -1;
             BX_PANIC(("com%d: bind() or listen() failed (host:%s, port:%d)",i+1, host, port));
-          }
-          else {
-            BX_INFO(("com%d: waiting for client to connect (host:%s, port:%d)",i+1, host, port));
+            continue;
+          } else {
+            fprintf(stderr,"com%d: waiting for client to connect (host:%s, port:%d)\n",i+1, host, port);
             SOCKET client;
-            if ((client = ::accept (socket, NULL, 0)) < 0)
+            if ((client = ::accept(socket, NULL, 0)) < 0) {
               BX_PANIC(("com%d: accept() failed (host:%s, port:%d)",i+1, host, port));
-            closesocket(socket);
-            socket = client;
+              continue;
+            } else {
+              fprintf(stderr,"client connected\n");
+              closesocket(socket);
+              socket = client;
+            }
           }
-        }
-        // client mode
-        else if (::connect (socket, (sockaddr *) &sin, sizeof (sin)) < 0) {
+        } else if (::connect(socket, (sockaddr *) &sin, sizeof (sin)) < 0) {
+          // client mode
           closesocket(socket);
           socket = (SOCKET) -1;
-          BX_INFO(("com%d: connect() failed (host:%s, port:%d)",i+1, host, port));
+          BX_ERROR(("com%d: connect() failed (host:%s, port:%d)",i+1, host, port));
         }
 
         BX_SER_THIS s[i].socket_id = socket;
-        if (socket > 0)
+        if (socket > 0) {
           BX_INFO(("com%d - inet %s - socket_id: %d, ip:%s, port:%d",
-            i+1, server ? "server" : "client", socket, host, port));
+                   i+1, server ? "server" : "client", socket, host, port));
+          BX_SER_THIS s[i].io_mode = mode;
+        }
       } else if ((mode == BX_SER_MODE_PIPE_CLIENT) ||
                  (mode == BX_SER_MODE_PIPE_SERVER)) {
         if (strlen(dev) > 0) {
@@ -512,38 +541,40 @@ bx_serial_c::init(void)
 #ifdef BX_SER_WIN32
           HANDLE pipe;
 
-          BX_SER_THIS s[i].io_mode = mode;
-
-          // server mode
           if (server) {
+            // server mode
             pipe = CreateNamedPipe( dev,
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                 1, 4096, 4096, 0, NULL);
 
-            if (pipe == INVALID_HANDLE_VALUE)
+            if (pipe == INVALID_HANDLE_VALUE) {
               BX_PANIC(("com%d: CreateNamedPipe(%s) failed", i+1, dev));
-
+              continue;
+            }
             BX_INFO(("com%d: waiting for client to connect to %s", i+1, dev));
             if (!ConnectNamedPipe(pipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED)
             {
               CloseHandle(pipe);
               pipe = INVALID_HANDLE_VALUE;
               BX_PANIC(("com%d: ConnectNamedPipe(%s) failed", i+1, dev));
+              continue;
             }
-          }
-          // client mode
-          else {
+          } else {
+            // client mode
             pipe = CreateFile( dev,
                GENERIC_READ | GENERIC_WRITE, 
                0, NULL, OPEN_EXISTING, 0, NULL);
 
-            if (pipe == INVALID_HANDLE_VALUE)
-              BX_INFO(("com%d: failed to open pipe %s", i+1, dev));
+            if (pipe == INVALID_HANDLE_VALUE) {
+              BX_ERROR(("com%d: failed to open pipe %s", i+1, dev));
+            }
           }
 
-          if (pipe != INVALID_HANDLE_VALUE)
+          if (pipe != INVALID_HANDLE_VALUE) {
             BX_SER_THIS s[i].pipe = pipe;
+            BX_SER_THIS s[i].io_mode = mode;
+          }
 #else
           BX_PANIC(("support for serial mode 'pipe-%s' not available", server?"server":"client"));
 #endif
@@ -558,7 +589,7 @@ bx_serial_c::init(void)
       }
       count++;
       BX_INFO(("com%d at 0x%04x irq %d (mode: %s)", i+1, ports[i], BX_SER_THIS s[i].IRQ,
-               SIM->get_param_enum("mode", base)->get_selected()));
+               serial_mode_list[BX_SER_THIS s[i].io_mode]));
     }
   }
   // Check if the device is disabled or not configured
@@ -577,7 +608,7 @@ bx_serial_c::init(void)
 
 void bx_serial_c::register_state(void)
 {
-  unsigned i, j;
+  unsigned i;
   char name[6];
   bx_list_c *port;
 
@@ -645,16 +676,8 @@ void bx_serial_c::register_state(void)
     new bx_shadow_bool_c(mstatus, "dcd", &BX_SER_THIS s[i].modem_status.dcd);
     new bx_shadow_num_c(port, "scratch", &BX_SER_THIS s[i].scratch, BASE_HEX);
     new bx_shadow_num_c(port, "tsrbuffer", &BX_SER_THIS s[i].tsrbuffer, BASE_HEX);
-    bx_list_c *rxfifo = new bx_list_c(port, "rx_fifo");
-    for (j=0; j<16; j++) {
-      sprintf(name, "0x%02x", j);
-      new bx_shadow_num_c(rxfifo, name, &BX_SER_THIS s[i].rx_fifo[j], BASE_HEX);
-    }
-    bx_list_c *txfifo = new bx_list_c(port, "tx_fifo");
-    for (j=0; j<16; j++) {
-      sprintf(name, "0x%02x", j);
-      new bx_shadow_num_c(txfifo, name, &BX_SER_THIS s[i].tx_fifo[j], BASE_HEX);
-    }
+    new bx_shadow_data_c(port, "rx_fifo", BX_SER_THIS s[i].rx_fifo, 16, 1);
+    new bx_shadow_data_c(port, "tx_fifo", BX_SER_THIS s[i].tx_fifo, 16, 1);
     new bx_shadow_num_c(port, "divisor_lsb", &BX_SER_THIS s[i].divisor_lsb, BASE_HEX);
     new bx_shadow_num_c(port, "divisor_msb", &BX_SER_THIS s[i].divisor_msb, BASE_HEX);
   }
@@ -666,11 +689,8 @@ void bx_serial_c::register_state(void)
   new bx_shadow_bool_c(list, "mouse_update", &BX_SER_THIS mouse_update);
   bx_list_c *mousebuf = new bx_list_c(list, "mouse_internal_buffer");
   new bx_shadow_num_c(mousebuf, "num_elements", &BX_SER_THIS mouse_internal_buffer.num_elements);
-  bx_list_c *buffer = new bx_list_c(mousebuf, "buffer");
-  for (i=0; i<BX_MOUSE_BUFF_SIZE; i++) {
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(buffer, name, &BX_SER_THIS mouse_internal_buffer.buffer[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(mousebuf, "buffer", BX_SER_THIS mouse_internal_buffer.buffer,
+                       BX_MOUSE_BUFF_SIZE, 1);
   new bx_shadow_num_c(mousebuf, "head", &BX_SER_THIS mouse_internal_buffer.head);
 }
 
@@ -995,14 +1015,16 @@ void bx_serial_c::write(Bit32u address, Bit32u value, unsigned io_len)
         Bit8u bitmask = 0xff >> (3 - BX_SER_THIS s[port].line_cntl.wordlen_sel);
         value &= bitmask;
         if (BX_SER_THIS s[port].line_status.thr_empty) {
-          if (BX_SER_THIS s[port].fifo_cntl.enable) {
+          if (BX_SER_THIS s[port].fifo_cntl.enable &&
+              !BX_SER_THIS s[port].modem_cntl.local_loopback) {
             BX_SER_THIS s[port].tx_fifo[BX_SER_THIS s[port].tx_fifo_end++] = value;
           } else {
             BX_SER_THIS s[port].thrbuffer = value;
           }
           BX_SER_THIS s[port].line_status.thr_empty = 0;
           if (BX_SER_THIS s[port].line_status.tsr_empty) {
-            if (BX_SER_THIS s[port].fifo_cntl.enable) {
+            if (BX_SER_THIS s[port].fifo_cntl.enable &&
+                !BX_SER_THIS s[port].modem_cntl.local_loopback) {
               BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].tx_fifo[0];
               memmove(&BX_SER_THIS s[port].tx_fifo[0], &BX_SER_THIS s[port].tx_fifo[1], 15);
               BX_SER_THIS s[port].line_status.thr_empty = (--BX_SER_THIS s[port].tx_fifo_end == 0);
@@ -1010,11 +1032,18 @@ void bx_serial_c::write(Bit32u address, Bit32u value, unsigned io_len)
               BX_SER_THIS s[port].tsrbuffer = BX_SER_THIS s[port].thrbuffer;
               BX_SER_THIS s[port].line_status.thr_empty = 1;
             }
+            if (BX_SER_THIS s[port].line_status.thr_empty) {
+              raise_interrupt(port, BX_SER_INT_TXHOLD);
+            }
             BX_SER_THIS s[port].line_status.tsr_empty = 0;
-            raise_interrupt(port, BX_SER_INT_TXHOLD);
-            bx_pc_system.activate_timer(BX_SER_THIS s[port].tx_timer_index,
-                                        BX_SER_THIS s[port].databyte_usec,
-                                        0); /* not continuous */
+            if (BX_SER_THIS s[port].modem_cntl.local_loopback) {
+              rx_fifo_enq(port, BX_SER_THIS s[port].tsrbuffer);
+              BX_SER_THIS s[port].line_status.tsr_empty = 1;
+            } else {
+              bx_pc_system.activate_timer(BX_SER_THIS s[port].tx_timer_index,
+                                          BX_SER_THIS s[port].databyte_usec,
+                                          0); /* not continuous */
+            }
           } else {
             BX_SER_THIS s[port].tx_interrupt = 0;
             lower_interrupt(port);
@@ -1348,7 +1377,9 @@ void bx_serial_c::rx_fifo_enq(Bit8u port, Bit8u data)
 
   if (BX_SER_THIS s[port].fifo_cntl.enable) {
     if (BX_SER_THIS s[port].rx_fifo_end == 16) {
-      BX_ERROR(("com%d: receive FIFO overflow", port+1));
+      if (!BX_SER_THIS s[port].modem_cntl.local_loopback) {
+        BX_ERROR(("com%d: receive FIFO overflow", port+1));
+      }
       BX_SER_THIS s[port].line_status.overrun_error = 1;
       raise_interrupt(port, BX_SER_INT_RXLSTAT);
     } else {
@@ -1399,70 +1430,58 @@ void bx_serial_c::tx_timer(void)
 {
   bx_bool gen_int = 0;
   Bit8u port = (Bit8u)bx_pc_system.triggeredTimerParam();
-  char pname[20];
 
-  if (BX_SER_THIS s[port].modem_cntl.local_loopback) {
-    rx_fifo_enq(port, BX_SER_THIS s[port].tsrbuffer);
-  } else {
-    switch (BX_SER_THIS s[port].io_mode) {
-      case BX_SER_MODE_FILE:
+  switch (BX_SER_THIS s[port].io_mode) {
+    case BX_SER_MODE_FILE:
+      if (BX_SER_THIS s[port].output == NULL) {
+        if (!BX_SER_THIS s[port].file->isempty()) {
+          BX_SER_THIS s[port].output = fopen(BX_SER_THIS s[port].file->getptr(), "wb");
+        }
         if (BX_SER_THIS s[port].output == NULL) {
-          sprintf(pname, "ports.serial.%d", port+1);
-          bx_list_c *base = (bx_list_c*) SIM->get_param(pname);
-          bx_param_string_c *devparam = SIM->get_param_string("dev", base);
-          if (!devparam->isempty()) {
-            BX_SER_THIS s[port].output = fopen(devparam->getptr(), "wb");
-          }
-          if (BX_SER_THIS s[port].output == NULL) {
-            BX_ERROR(("Could not open '%s' to write com%d output",
-                      devparam->getptr(), port+1));
-            BX_SER_THIS s[port].io_mode = BX_SER_MODE_NULL;
-          }
+          BX_ERROR(("Could not open '%s' to write com%d output",
+                    BX_SER_THIS s[port].file->getptr(), port+1));
+          BX_SER_THIS s[port].io_mode = BX_SER_MODE_NULL;
+          return;
         }
-        fputc(BX_SER_THIS s[port].tsrbuffer, BX_SER_THIS s[port].output);
-        fflush(BX_SER_THIS s[port].output);
-        break;
-      case BX_SER_MODE_TERM:
+      }
+      fputc(BX_SER_THIS s[port].tsrbuffer, BX_SER_THIS s[port].output);
+      fflush(BX_SER_THIS s[port].output);
+      break;
+    case BX_SER_MODE_TERM:
 #if defined(SERIAL_ENABLE)
-        BX_DEBUG(("com%d: write: '%c'", port+1, BX_SER_THIS s[port].tsrbuffer));
-        if (BX_SER_THIS s[port].tty_id >= 0) {
-          write(BX_SER_THIS s[port].tty_id, (bx_ptr_t) & BX_SER_THIS s[port].tsrbuffer, 1);
-        }
+      BX_DEBUG(("com%d: write: '%c'", port+1, BX_SER_THIS s[port].tsrbuffer));
+      if (BX_SER_THIS s[port].tty_id >= 0) {
+        write(BX_SER_THIS s[port].tty_id, (bx_ptr_t) & BX_SER_THIS s[port].tsrbuffer, 1);
+      }
 #endif
-        break;
-      case BX_SER_MODE_RAW:
+      break;
+    case BX_SER_MODE_RAW:
 #if USE_RAW_SERIAL
-        if (!BX_SER_THIS s[port].raw->ready_transmit())
-          BX_PANIC(("com%d: not ready to transmit", port+1));
-        BX_SER_THIS s[port].raw->transmit(BX_SER_THIS s[port].tsrbuffer);
+      if (!BX_SER_THIS s[port].raw->ready_transmit())
+        BX_PANIC(("com%d: not ready to transmit", port+1));
+      BX_SER_THIS s[port].raw->transmit(BX_SER_THIS s[port].tsrbuffer);
 #endif
-        break;
-      case BX_SER_MODE_MOUSE:
-        BX_INFO(("com%d: write to mouse ignored: 0x%02x", port+1, BX_SER_THIS s[port].tsrbuffer));
-        break;
-      case BX_SER_MODE_SOCKET_CLIENT:
-      case BX_SER_MODE_SOCKET_SERVER:
-        if (BX_SER_THIS s[port].socket_id >= 0) {
+      break;
+    case BX_SER_MODE_MOUSE:
+      BX_INFO(("com%d: write to mouse ignored: 0x%02x", port+1, BX_SER_THIS s[port].tsrbuffer));
+      break;
+    case BX_SER_MODE_SOCKET_CLIENT:
+    case BX_SER_MODE_SOCKET_SERVER:
+      if (BX_SER_THIS s[port].socket_id >= 0) {
+        BX_DEBUG(("com%d: write byte [0x%02x]", port+1, BX_SER_THIS s[port].tsrbuffer));
+        ::send(BX_SER_THIS s[port].socket_id,
+               (const char*) &BX_SER_THIS s[port].tsrbuffer, 1, 0);
+      }
+      break;
+    case BX_SER_MODE_PIPE_CLIENT:
+    case BX_SER_MODE_PIPE_SERVER:
 #ifdef BX_SER_WIN32
-          BX_INFO(("attempting to write win32 : %c", BX_SER_THIS s[port].tsrbuffer));
-          ::send(BX_SER_THIS s[port].socket_id,
-                 (const char*) & BX_SER_THIS s[port].tsrbuffer, 1, 0);
-#else
-          ::write(BX_SER_THIS s[port].socket_id,
-                  (bx_ptr_t) & BX_SER_THIS s[port].tsrbuffer, 1);
+      if (BX_SER_THIS s[port].pipe) {
+        DWORD written;
+        WriteFile(BX_SER_THIS s[port].pipe, (bx_ptr_t)& BX_SER_THIS s[port].tsrbuffer, 1, &written, NULL);
+      }
 #endif
-        }
-        break;
-      case BX_SER_MODE_PIPE_CLIENT:
-      case BX_SER_MODE_PIPE_SERVER:
-#ifdef BX_SER_WIN32
-        if (BX_SER_THIS s[port].pipe) {
-          DWORD written;
-          WriteFile(BX_SER_THIS s[port].pipe, (bx_ptr_t)& BX_SER_THIS s[port].tsrbuffer, 1, &written, NULL);
-        }
-#endif
-        break;
-    }
+      break;
   }
 
   BX_SER_THIS s[port].line_status.tsr_empty = 1;
@@ -1530,17 +1549,15 @@ void bx_serial_c::rx_timer(void)
           tval.tv_usec = 0;
           FD_ZERO(&fds);
           SOCKET socketid = BX_SER_THIS s[port].socket_id;
-          if (socketid >= 0) FD_SET(socketid, &fds);
-          if ((socketid >= 0) && (select(socketid+1, &fds, NULL, NULL, &tval) == 1)) {
-            ssize_t bytes = (ssize_t)
-#ifdef BX_SER_WIN32
+          if (socketid >= 0) {
+            FD_SET(socketid, &fds);
+            if (select(socketid+1, &fds, NULL, NULL, &tval) == 1) {
+              ssize_t bytes = (ssize_t)
               ::recv(socketid, (char*) &chbuf, 1, 0);
-#else
-                read(socketid, &chbuf, 1);
-#endif
-            if (bytes > 0) {
-              BX_INFO((" -- COM %d : read byte [%d]", port+1, chbuf));
-              data_ready = 1;
+              if (bytes > 0) {
+                BX_DEBUG(("com%d: read byte [0x%02x]", port+1, chbuf));
+                data_ready = 1;
+              }
             }
           }
         }
@@ -1751,4 +1768,19 @@ void bx_serial_c::update_mouse_data()
     BX_SER_THIS mouse_internal_buffer.num_elements++;
   }
   BX_SER_THIS mouse_update = 0;
+}
+
+const char* bx_serial_c::serial_file_param_handler(bx_param_string_c *param, int set,
+                                                   const char *oldval, const char *val,
+                                                   int maxlen)
+{
+  if ((set) && (strcmp(val, oldval))) {
+    int port = atoi((param->get_parent())->get_name()) - 1;
+    if (BX_SER_THIS s[port].output != NULL) {
+      fclose(BX_SER_THIS s[port].output);
+      BX_SER_THIS s[port].output = NULL;
+    }
+    // tx_timer() re-opens the output file on demand
+  }
+  return val;
 }

@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: call_far.cc 12497 2014-10-12 18:59:10Z sshwarts $
+// $Id: call_far.cc 12845 2015-09-28 18:45:26Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2005-2012 Stanislav Shwartsman
@@ -35,7 +35,7 @@ BX_CPU_C::call_protected(bxInstruction_c *i, Bit16u cs_raw, bx_address disp)
 
   /* new cs selector must not be null, else #GP(0) */
   if ((cs_raw & 0xfffc) == 0) {
-    BX_ERROR(("call_protected: CS selector null"));
+    BX_DEBUG(("call_protected: CS selector null"));
     exception(BX_GP_EXCEPTION, 0);
   }
 
@@ -323,11 +323,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
     if (BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.u.segment.d_b)
       return_ESP = ESP;
     else
-      return_ESP =  SP;
+      return_ESP = SP;
 
     // save return CS:eIP to be pushed on new stack
     return_CS = BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value;
-    if (cs_descriptor.u.segment.d_b)
+    if (BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.u.segment.d_b)
       return_EIP = EIP;
     else
       return_EIP = IP;

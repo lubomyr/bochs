@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ioapic.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: ioapic.cc 13095 2017-03-03 09:06:47Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@
 
 bx_ioapic_c *theIOAPIC = NULL;
 
-int CDECL libioapic_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libioapic_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theIOAPIC = new bx_ioapic_c();
   bx_devices.pluginIOAPIC = theIOAPIC;
@@ -259,10 +259,10 @@ void bx_ioapic_c::set_irq_level(Bit8u int_in, bx_bool level)
   if (int_in == 0) { // timer connected to pin #2
     int_in = 2;
   }
-  BX_DEBUG(("set_irq_level(): INTIN%d: level=%d", int_in, level));
   if (int_in < BX_IOAPIC_NUM_PINS) {
     Bit32u bit = 1<<int_in;
     if ((level<<int_in) != (intin & bit)) {
+      BX_DEBUG(("set_irq_level(): INTIN%d: level=%d", int_in, level));
       bx_io_redirect_entry_t *entry = ioredtbl + int_in;
       if (entry->trigger_mode()) {
         // level triggered
@@ -278,8 +278,10 @@ void bx_ioapic_c::set_irq_level(Bit8u int_in, bx_bool level)
         // edge triggered
         if (level) {
           intin |= bit;
-          irr |= bit;
-          service_ioapic();
+          if (!entry->is_masked()) {
+            irr |= bit;
+            service_ioapic();
+          }
         } else {
           intin &= ~bit;
         }

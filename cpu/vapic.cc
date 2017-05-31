@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vapic.cc 12668 2015-02-22 21:33:26Z sshwarts $
+// $Id: vapic.cc 12793 2015-07-13 20:24:14Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2012-2015 Stanislav Shwartsman
@@ -33,7 +33,7 @@ bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::is_virtual_apic_page(bx_phy_address pad
   if (BX_CPU_THIS_PTR in_vmx_guest) {
     VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
     if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_VIRTUALIZE_APIC_ACCESSES))
-      if (PPFOf(paddr) == PPFOf(vm->apic_access_page)) return BX_TRUE;
+      if (PPFOf(paddr) == vm->apic_access_page) return BX_TRUE;
   }
 
   return BX_FALSE;

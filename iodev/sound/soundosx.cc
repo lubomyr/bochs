@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundosx.cc 12733 2015-05-02 08:42:44Z vruppert $
+// $Id: soundosx.cc 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2015  The Bochs Project
+//  Copyright (C) 2004-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -20,12 +20,18 @@
 
 // This file (SOUNDOSX.CC) written and donated by Brian Huffman
 
+// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
+// platforms that require a special tag on exported symbols, BX_PLUGGABLE
+// is used to know when we are exporting symbols and when we are importing.
+#define BX_PLUGGABLE
+
 #ifdef PARANOID
 #include <MacTypes.h>
 #endif
 
 #include "iodev.h"
 #include "soundlow.h"
+#include "soundmod.h"
 #include "soundosx.h"
 
 #if BX_HAVE_SOUND_OSX && BX_SUPPORT_SOUNDLOW
@@ -76,7 +82,20 @@ AudioUnit WaveOutputUnit = NULL;
 AudioConverterRef WaveConverter = NULL;
 #endif
 
-// bx_soundlow_waveout_osx_c class implemenzation
+// sound driver plugin entry points
+
+int CDECL libosx_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL libosx_sound_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+// bx_soundlow_waveout_osx_c class implementation
 
 bx_soundlow_waveout_osx_c::bx_soundlow_waveout_osx_c()
     :bx_soundlow_waveout_c()
@@ -173,6 +192,7 @@ int bx_soundlow_waveout_osx_c::openwaveoutput(const char *wavedev)
 
   set_pcm_params(&real_pcm_param);
   pcm_callback_id = register_wave_callback(this, pcm_callback);
+  start_resampler_thread();
   start_mixer_thread();
   WaveOpen = 1;
   return BX_SOUNDLOW_OK;
@@ -450,7 +470,7 @@ void bx_soundlow_waveout_osx_c::nextbuffer (int *outDataSize, void **outData)
 }
 #endif
 
-// bx_soundlow_midiout_osx_c class implemenzation
+// bx_soundlow_midiout_osx_c class implementation
 
 bx_soundlow_midiout_osx_c::bx_soundlow_midiout_osx_c()
     :bx_soundlow_midiout_c()
@@ -538,13 +558,7 @@ int bx_soundlow_midiout_osx_c::closemidioutput()
   return BX_SOUNDLOW_OK;
 }
 
-// bx_sound_osx_c class implemenzation
-
-bx_sound_osx_c::bx_sound_osx_c()
-    :bx_sound_lowlevel_c()
-{
-  BX_INFO(("Sound lowlevel module 'osx' initialized"));
-}
+// bx_sound_osx_c class implementation
 
 bx_soundlow_waveout_c* bx_sound_osx_c::get_waveout()
 {

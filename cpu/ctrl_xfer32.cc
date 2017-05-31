@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ctrl_xfer32.cc 12613 2015-01-25 20:55:10Z sshwarts $
+// $Id: ctrl_xfer32.cc 12769 2015-05-16 21:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -270,7 +270,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CALL_EdR(bxInstruction_c *i)
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CALL32_Ep(bxInstruction_c *i)
 {
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
 
   Bit32u op1_32 = read_virtual_dword(i->seg(), eaddr);
   Bit16u cs_raw = read_virtual_word (i->seg(), (eaddr+4) & i->asize_mask());
@@ -529,7 +529,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::JMP_EdR(bxInstruction_c *i)
 /* Far indirect jump */
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::JMP32_Ep(bxInstruction_c *i)
 {
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
 
   Bit32u op1_32 = read_virtual_dword(i->seg(), eaddr);
   Bit16u cs_raw = read_virtual_word (i->seg(), (eaddr+4) & i->asize_mask());

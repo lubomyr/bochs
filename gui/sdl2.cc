@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sdl2.cc 12607 2015-01-19 20:32:20Z vruppert $
+// $Id: sdl2.cc 13175 2017-04-04 17:57:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2014  The Bochs Project
+//  Copyright (C) 2014-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -53,6 +53,7 @@ public:
 #if BX_SHOW_IPS
   virtual void show_ips(Bit32u ips_count);
 #endif
+  virtual void set_console_edit_mode(bx_bool mode);
 };
 
 // declare one instance of the gui object and call macro to insert the
@@ -79,17 +80,8 @@ static Bit32u convertStringToSDLKey(const char *string);
 #define MAX_SDL_BITMAPS 32
 struct bitmaps {
   SDL_Surface *surface;
-  SDL_Rect src,dst;
-  void (*cb)(void);
+  SDL_Rect src, dst;
 };
-
-static struct {
-  unsigned bmp_id;
-  unsigned alignment;
-  void (*f)(void);
-} hb_entry[BX_MAX_HEADERBAR_ENTRIES];
-
-unsigned bx_headerbar_entries = 0;
 
 static SDL_Window *window;
 SDL_Surface *sdl_screen, *sdl_fullscreen;
@@ -119,7 +111,7 @@ bitmaps *sdl_bitmaps[MAX_SDL_BITMAPS];
 int n_sdl_bitmaps = 0;
 int statusbar_height = 18;
 static unsigned statusitem_pos[12] = {
-  0, 170, 210, 250, 290, 330, 370, 410, 450, 490, 530, 570
+  0, 170, 220, 270, 320, 370, 420, 470, 520, 570, 620, 670
 };
 static bx_bool statusitem_active[12];
 #if BX_SHOW_IPS
@@ -133,24 +125,6 @@ BxEvent *sdl2_notify_callback(void *unused, BxEvent *event);
 static bxevent_handler old_callback = NULL;
 static void *old_callback_arg = NULL;
 #endif
-
-
-static void headerbar_click(int x)
-{
-  int xdim,xorigin;
-
-  for (unsigned i=0; i<bx_headerbar_entries; i++) {
-    xdim = sdl_bitmaps[hb_entry[i].bmp_id]->src.w;
-    if (hb_entry[i].alignment == BX_GRAVITY_LEFT)
-      xorigin = sdl_bitmaps[hb_entry[i].bmp_id]->dst.x;
-    else
-      xorigin = res_x - sdl_bitmaps[hb_entry[i].bmp_id]->dst.x;
-    if ((x>=xorigin) && (x<(xorigin+xdim))) {
-      hb_entry[i].f();
-      return;
-    }
-  }
-}
 
 
 static void sdl_set_status_text(int element, const char *text, bx_bool active, bx_bool w = 0)
@@ -185,8 +159,8 @@ static void sdl_set_status_text(int element, const char *text, bx_bool active, b
     } while(--colsleft);
     buf = buf_row + disp;
   } while(--rowsleft);
-  if ((element > 0) && (strlen(text) > 4)) {
-    textlen = 4;
+  if ((element > 0) && (strlen(text) > 6)) {
+    textlen = 6;
   } else {
     textlen = strlen(text);
   }
@@ -417,8 +391,7 @@ bx_sdl2_gui_c::bx_sdl2_gui_c()
 #endif
 #endif
   if (SDL_Init(flags) < 0) {
-    setonoff(LOGLEV_PANIC, ACT_FATAL);
-    panic("Unable to initialize SDL2 libraries");
+    BX_FATAL(("Unable to initialize SDL2 libraries"));
     return;
   }
   atexit(SDL_Quit);
@@ -426,13 +399,15 @@ bx_sdl2_gui_c::bx_sdl2_gui_c()
   info("maximum host resolution: x=%d y=%d", sdl_maxres.w, sdl_maxres.h);
 }
 
+// SDL2 implementation of the bx_gui_c methods (see nogui.cc for details)
+
 void bx_sdl2_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 {
   int i, j;
   unsigned icon_id;
-#ifdef WIN32
-  bx_bool gui_ci;
+  bx_bool gui_ci = 0;
 
+#ifdef WIN32
   gui_ci = !strcmp(SIM->get_param_enum(BXPN_SEL_CONFIG_INTERFACE)->get_selected(), "win32config");
 #endif
   put("SDL2");
@@ -456,8 +431,7 @@ void bx_sdl2_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
     SDL_WINDOW_SHOWN
     );
   if (window == NULL) {
-    LOG_THIS setonoff(LOGLEV_PANIC, ACT_FATAL);
-    BX_PANIC(("Unable to create SDL2 window"));
+    BX_FATAL(("Unable to create SDL2 window"));
     return;
   }
 
@@ -503,7 +477,7 @@ void bx_sdl2_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
         }
 #else
         init_debug_dialog();
-#endif 
+#endif
 #endif
 #if BX_SHOW_IPS
       } else if (!strcmp(argv[i], "hideIPS")) {
@@ -517,14 +491,14 @@ void bx_sdl2_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   }
 
   new_gfx_api = 1;
-#ifdef WIN32
-  if (gui_ci) {
-    dialog_caps = BX_GUI_DLG_ALL;
-  }
-#if BX_SHOW_IPS
+#if defined(WIN32) && BX_SHOW_IPS
   timer_id = SDL_AddTimer(1000, sdlTimer, NULL);
 #endif
-#endif
+  if (gui_ci) {
+    dialog_caps = BX_GUI_DLG_ALL;
+  } else {
+    console.present = 1;
+  }
 }
 
 
@@ -544,7 +518,7 @@ void bx_sdl2_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
   Bit16u font_row, mask;
   Bit8u cfstart, cfwidth, cfheight, split_fontrows, split_textrow;
   bx_bool cursor_visible, gfxcharw9, invert, forceUpdate, split_screen;
-  bx_bool blink_mode, blink_state;
+  bx_bool blink_mode, blink_state, dwidth;
   Uint32 text_palette[16];
 
   forceUpdate = 0;
@@ -554,6 +528,7 @@ void bx_sdl2_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
     if (tm_info->blink_flags & BX_TEXT_BLINK_TOGGLE)
       forceUpdate = 1;
   }
+  dwidth = (fontwidth > 9);
   if (charmap_updated) {
     forceUpdate = 1;
     charmap_updated = 0;
@@ -686,7 +661,7 @@ void bx_sdl2_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
             else
               *buf = fgcolor;
             buf++;
-            font_row <<= 1;
+            if (!dwidth || (fontpixels & 1)) font_row <<= 1;
           } while (--fontpixels);
           buf -= cfwidth;
           buf += disp;
@@ -788,7 +763,7 @@ void bx_sdl2_gui_c::handle_events(void)
         break;
 
       case SDL_MOUSEMOTION:
-        if (!sdl_grab) {
+        if (!sdl_grab || console_running()) {
           break;
         }
         if (just_warped
@@ -848,6 +823,9 @@ void bx_sdl2_gui_c::handle_events(void)
             && (sdl_fullscreen_toggle == 0)) {
           mouse_toggle_check(BX_MT_MBUTTON, 0);
         }
+        if (console_running()) {
+          break;
+        }
         // figure out mouse state
         new_mousex = (int)(sdl_event.button.x);
         new_mousey = (int)(sdl_event.button.y);
@@ -878,7 +856,7 @@ void bx_sdl2_gui_c::handle_events(void)
         break;
 
       case SDL_MOUSEWHEEL:
-        if (sdl_grab) {
+        if (sdl_grab && !console_running()) {
           wheel_status = sdl_event.wheel.y;
           if (sdl_mouse_mode_absxy) {
             DEV_mouse_motion(old_mousex, old_mousey, wheel_status, old_mousebuttons, 1);
@@ -889,6 +867,15 @@ void bx_sdl2_gui_c::handle_events(void)
         break;
 
       case SDL_KEYDOWN:
+        if (console_running()) {
+          if ((sdl_event.key.keysym.sym & (1 << 30)) == 0) {
+            Bit8u ascii = (Bit8u)sdl_event.key.keysym.sym;
+            if ((ascii == SDLK_RETURN) || (ascii == SDLK_BACKSPACE)) {
+              console_key_enq(ascii);
+            }
+          }
+          break;
+        }
         // mouse capture toggle-check
         if (sdl_fullscreen_toggle == 0) {
           if ((sdl_event.key.keysym.sym == SDLK_LCTRL) ||
@@ -973,9 +960,14 @@ void bx_sdl2_gui_c::handle_events(void)
         }
         break;
 
+      case SDL_TEXTINPUT:
+        if (console_running()) {
+          console_key_enq(sdl_event.text.text[0]);
+        }
+        break;
+
       case SDL_QUIT:
-        LOG_THIS setonoff(LOGLEV_PANIC, ACT_FATAL);
-        BX_PANIC(("User requested shutdown."));
+        BX_FATAL(("User requested shutdown."));
         break;
     }
   }
@@ -1037,6 +1029,7 @@ void bx_sdl2_gui_c::dimension_update(unsigned x, unsigned y,
     BX_PANIC(("%d bpp graphics mode not supported", bpp));
   }
   guest_textmode = (fheight > 0);
+  guest_fsize = (fheight << 4) | fwidth;
   guest_xres = x;
   guest_yres = y;
   if (guest_textmode) {
@@ -1048,13 +1041,13 @@ void bx_sdl2_gui_c::dimension_update(unsigned x, unsigned y,
 
   if ((x == res_x) && (y == res_y)) return;
 
-  #ifndef ANDROID
+#ifndef ANDROID
   // This is not needed on Android
   if (((int)x > sdl_maxres.w) || ((int)y > sdl_maxres.h)) {
     BX_PANIC(("dimension_update(): resolution of out of display bounds"));
     return;
   }
-  #endif
+#endif
   if (sdl_fullscreen_toggle == 0) {
     SDL_SetWindowSize(window, x, y + headerbar_height + statusbar_height);
     sdl_screen = SDL_GetWindowSurface(window);
@@ -1119,8 +1112,7 @@ unsigned bx_sdl2_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, 
   if (!tmp->surface) {
     delete tmp;
     bx_gui->exit();
-    LOG_THIS setonoff(LOGLEV_PANIC, ACT_FATAL);
-    BX_PANIC(("Unable to create requested bitmap"));
+    BX_FATAL(("Unable to create requested bitmap"));
   }
 
   tmp->src.w = xdim;
@@ -1131,7 +1123,6 @@ unsigned bx_sdl2_gui_c::create_bitmap(const unsigned char *bmap, unsigned xdim, 
   tmp->dst.y = 0;
   tmp->dst.w = xdim;
   tmp->dst.h = ydim;
-  tmp->cb = NULL;
   buf = (Uint32 *)tmp->surface->pixels;
   disp = tmp->surface->pitch/4;
 
@@ -1167,12 +1158,13 @@ unsigned bx_sdl2_gui_c::headerbar_bitmap(unsigned bmap_id, unsigned alignment,
   if ((bx_headerbar_entries+1) > BX_MAX_HEADERBAR_ENTRIES)
     BX_PANIC(("too many headerbar entries, increase BX_MAX_HEADERBAR_ENTRIES"));
 
-  bx_headerbar_entries++;
-  hb_index = bx_headerbar_entries - 1;
+  hb_index = bx_headerbar_entries++;
 
-  hb_entry[hb_index].bmp_id = bmap_id;
-  hb_entry[hb_index].alignment = alignment;
-  hb_entry[hb_index].f = f;
+  bx_headerbar_entry[hb_index].bmap_id = bmap_id;
+  bx_headerbar_entry[hb_index].xdim = sdl_bitmaps[bmap_id]->src.w;
+  bx_headerbar_entry[hb_index].ydim = sdl_bitmaps[bmap_id]->src.h;
+  bx_headerbar_entry[hb_index].alignment = alignment;
+  bx_headerbar_entry[hb_index].f = f;
 
   if (alignment == BX_GRAVITY_LEFT) {
     sdl_bitmaps[bmap_id]->dst.x = bx_bitmap_left_xorigin;
@@ -1181,6 +1173,7 @@ unsigned bx_sdl2_gui_c::headerbar_bitmap(unsigned bmap_id, unsigned alignment,
     bx_bitmap_right_xorigin += sdl_bitmaps[bmap_id]->src.w;
     sdl_bitmaps[bmap_id]->dst.x = bx_bitmap_right_xorigin;
   }
+  bx_headerbar_entry[hb_index].xorigin = sdl_bitmaps[bmap_id]->dst.x;
 
   return hb_index;
 }
@@ -1192,13 +1185,13 @@ void bx_sdl2_gui_c::replace_bitmap(unsigned hbar_id, unsigned bmap_id)
   unsigned old_id;
 
   if (!sdl_screen) return;
-  old_id = hb_entry[hbar_id].bmp_id;
+  old_id = bx_headerbar_entry[hbar_id].bmap_id;
   hb_dst = sdl_bitmaps[old_id]->dst;
   sdl_bitmaps[old_id]->dst.x = -1;
-  hb_entry[hbar_id].bmp_id = bmap_id;
+  bx_headerbar_entry[hbar_id].bmap_id = bmap_id;
   sdl_bitmaps[bmap_id]->dst.x = hb_dst.x;
   if (sdl_bitmaps[bmap_id]->dst.x != -1) {
-    if (hb_entry[hbar_id].alignment == BX_GRAVITY_RIGHT) {
+    if (bx_headerbar_entry[hbar_id].alignment == BX_GRAVITY_RIGHT) {
       hb_dst.x = res_x - hb_dst.x;
     }
     SDL_BlitSurface(
@@ -1235,10 +1228,10 @@ void bx_sdl2_gui_c::show_headerbar(void)
 
   // go thru the bitmaps and display the active ones
   while (bitmapscount--) {
-    current_bmp = hb_entry[bitmapscount].bmp_id;
+    current_bmp = bx_headerbar_entry[bitmapscount].bmap_id;
     if(sdl_bitmaps[current_bmp]->dst.x != -1) {
       hb_dst = sdl_bitmaps[current_bmp]->dst;
-      if (hb_entry[bitmapscount].alignment == BX_GRAVITY_RIGHT) {
+      if (bx_headerbar_entry[bitmapscount].alignment == BX_GRAVITY_RIGHT) {
         hb_dst.x = res_x - hb_dst.x;
       }
       SDL_BlitSurface(
@@ -1276,13 +1269,20 @@ void bx_sdl2_gui_c::show_headerbar(void)
 
 int bx_sdl2_gui_c::get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)
 {
-  return 0;
+  char *tmp = SDL_GetClipboardText();
+  int len = strlen(tmp) + 1;
+  Bit8u *buf = new Bit8u[len];
+  memcpy(buf, tmp, len);
+  *bytes = buf;
+  *nbytes = len;
+  SDL_free(tmp);
+  return 1;
 }
 
 
 int bx_sdl2_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
 {
-  return 0;
+  return (SDL_SetClipboardText(text_snapshot) == 0);
 }
 
 
@@ -1340,10 +1340,10 @@ bx_svga_tileinfo_t *bx_sdl2_gui_c::graphics_tile_info(bx_svga_tileinfo_t *info)
     info->blue_mask = sdl_fullscreen->format->Bmask;
     info->is_indexed = (sdl_fullscreen->format->palette != NULL);
   }
-#ifdef BX_LITTLE_ENDIAN
-  info->is_little_endian = 1;
-#else
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
   info->is_little_endian = 0;
+#else
+  info->is_little_endian = 1;
 #endif
   return info;
 }
@@ -1389,6 +1389,10 @@ void bx_sdl2_gui_c::set_display_mode(disp_mode_t newmode)
   if (disp_mode == newmode) return;
   // remember the display mode for next time
   disp_mode = newmode;
+  if ((newmode == DISP_MODE_SIM) && console_running()) {
+    console_cleanup();
+    return;
+  }
   // If fullscreen mode is on, we must switch back to windowed mode if
   // the user needs to see the text console.
   if (sdl_fullscreen_toggle) {
@@ -1437,6 +1441,15 @@ void bx_sdl2_gui_c::show_ips(Bit32u ips_count)
 }
 #endif
 
+void bx_sdl2_gui_c::set_console_edit_mode(bx_bool mode)
+{
+  if (mode) {
+    SDL_StartTextInput();
+  } else {
+    SDL_StopTextInput();
+  }
+}
+
 /// key mapping code for SDL2
 
 typedef struct {
@@ -1476,37 +1489,43 @@ int sdl2_ask_dialog(BxEvent *event)
 {
   SDL_MessageBoxData msgboxdata;
   SDL_MessageBoxButtonData buttondata[4];
-  int level, retcode;
-#if BX_DEBUGGER || BX_GDBSTUB
-  int defbtn = 3;
-#else
-  int defbtn = 2;
-#endif
+  int i = 0, level, mode, retcode;
   char message[512];
 
   level = event->u.logmsg.level;
-  sprintf(message, "%s %s", event->u.logmsg.prefix, event->u.logmsg.msg);
+  sprintf(message, "Device: %s\nMessage: %s", event->u.logmsg.prefix,
+          event->u.logmsg.msg);
   msgboxdata.flags = SDL_MESSAGEBOX_ERROR;
   msgboxdata.window = window;
   msgboxdata.title = SIM->get_log_level_name(level);
   msgboxdata.message = message;
-  msgboxdata.numbuttons = defbtn + 1;
   msgboxdata.buttons = buttondata;
   msgboxdata.colorScheme = NULL;
-  buttondata[0].flags = 0;
-  buttondata[0].buttonid = BX_LOG_ASK_CHOICE_CONTINUE;
-  buttondata[0].text = "Continue";
-  buttondata[1].flags = 0;
-  buttondata[1].buttonid = BX_LOG_ASK_CHOICE_CONTINUE_ALWAYS;
-  buttondata[1].text = "Alwayscont";
+  mode = event->u.logmsg.mode;
+  if ((mode == BX_LOG_DLG_ASK) || (mode == BX_LOG_DLG_WARN)) {
+    buttondata[0].flags = 0;
+    buttondata[0].buttonid = BX_LOG_ASK_CHOICE_CONTINUE;
+    buttondata[0].text = "Continue";
+    buttondata[1].flags = 0;
+    buttondata[1].buttonid = BX_LOG_ASK_CHOICE_CONTINUE_ALWAYS;
+    buttondata[1].text = "Alwayscont";
+    i = 2;
+  }
 #if BX_DEBUGGER || BX_GDBSTUB
-  buttondata[2].flags = 0;
-  buttondata[2].buttonid = BX_LOG_ASK_CHOICE_ENTER_DEBUG;
-  buttondata[2].text = "Debugger";
+  if (mode == BX_LOG_DLG_ASK) {
+    buttondata[i].flags = 0;
+    buttondata[i].buttonid = BX_LOG_ASK_CHOICE_ENTER_DEBUG;
+    buttondata[i].text = "Debugger";
+    i++;
+  }
 #endif
-  buttondata[defbtn].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
-  buttondata[defbtn].buttonid = BX_LOG_ASK_CHOICE_DIE;
-  buttondata[defbtn].text = "Quit";
+  if ((mode == BX_LOG_DLG_ASK) || (mode == BX_LOG_DLG_QUIT)) {
+    buttondata[i].flags = SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT;
+    buttondata[i].buttonid = BX_LOG_ASK_CHOICE_DIE;
+    buttondata[i].text = "Quit";
+    i++;
+  }
+  msgboxdata.numbuttons = i;
   if (SDL_ShowMessageBox(&msgboxdata, &retcode) < 0) {
     return -1;
   } else {
@@ -1546,7 +1565,7 @@ BxEvent *sdl2_notify_callback(void *unused, BxEvent *event)
   bx_param_c *param;
 
   switch (event->type) {
-    case BX_SYNC_EVT_LOG_ASK:
+    case BX_SYNC_EVT_LOG_DLG:
       event->retcode = sdl2_ask_dialog(event);
       return event;
     case BX_SYNC_EVT_ASK_PARAM:

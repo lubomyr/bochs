@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vgacore.cc 12550 2014-11-15 10:22:27Z vruppert $
+// $Id: vgacore.cc 13172 2017-04-02 14:01:40Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -278,10 +278,6 @@ void bx_vgacore_c::init_systemtimer(bx_timer_handler_t f_timer, param_event_hand
 
 void bx_vgacore_c::register_state(bx_list_c *parent)
 {
-  unsigned i;
-  char name[6];
-  bx_list_c *reg;
-
   bx_list_c *list = new bx_list_c(parent, "vgacore", "VGA Core State");
   bx_list_c *misc = new bx_list_c(list, "misc_output");
   new bx_shadow_bool_c(misc, "color_emulation", &BX_VGA_THIS s.misc_output.color_emulation);
@@ -292,21 +288,13 @@ void bx_vgacore_c::register_state(bx_list_c *parent)
   new bx_shadow_bool_c(misc, "vert_sync_pol", &BX_VGA_THIS s.misc_output.vert_sync_pol);
   bx_list_c *crtc = new bx_list_c(list, "CRTC");
   new bx_shadow_num_c(crtc, "address", &BX_VGA_THIS s.CRTC.address, BASE_HEX);
-  reg = new bx_list_c(crtc, "reg");
-  for (i=0; i<=0x18; i++) {
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(reg, name, &BX_VGA_THIS s.CRTC.reg[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(crtc, "reg", BX_VGA_THIS s.CRTC.reg, 25, 1);
   new bx_shadow_bool_c(crtc, "write_protect", &BX_VGA_THIS s.CRTC.write_protect);
   bx_list_c *actl = new bx_list_c(list, "attribute_ctrl");
   new bx_shadow_bool_c(actl, "flip_flop", &BX_VGA_THIS s.attribute_ctrl.flip_flop);
   new bx_shadow_num_c(actl, "address", &BX_VGA_THIS s.attribute_ctrl.address, BASE_HEX);
   new bx_shadow_bool_c(actl, "video_enabled", &BX_VGA_THIS s.attribute_ctrl.video_enabled);
-  reg = new bx_list_c(actl, "palette_reg");
-  for (i=0; i<16; i++) {
-    sprintf(name, "0x%02x", i);
-    new bx_shadow_num_c(reg, name, &BX_VGA_THIS s.attribute_ctrl.palette_reg[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(actl, "palette_reg", BX_VGA_THIS s.attribute_ctrl.palette_reg, 16, 1);
   new bx_shadow_num_c(actl, "overscan_color", &BX_VGA_THIS s.attribute_ctrl.overscan_color, BASE_HEX);
   new bx_shadow_num_c(actl, "color_plane_enable", &BX_VGA_THIS s.attribute_ctrl.color_plane_enable, BASE_HEX);
   new bx_shadow_num_c(actl, "horiz_pel_panning", &BX_VGA_THIS s.attribute_ctrl.horiz_pel_panning, BASE_HEX);
@@ -371,8 +359,9 @@ void bx_vgacore_c::register_state(bx_list_c *parent)
   new bx_shadow_num_c(list, "last_xres", &BX_VGA_THIS s.last_xres);
   new bx_shadow_num_c(list, "last_yres", &BX_VGA_THIS s.last_yres);
   new bx_shadow_num_c(list, "last_bpp", &BX_VGA_THIS s.last_bpp);
-  new bx_shadow_num_c(list, "last_msl", &BX_VGA_THIS s.last_msl);
-  new bx_shadow_num_c(list, "vga_override", &BX_VGA_THIS s.vga_override);
+  new bx_shadow_num_c(list, "last_fw", &BX_VGA_THIS s.last_fw);
+  new bx_shadow_num_c(list, "last_fh", &BX_VGA_THIS s.last_fh);
+  new bx_shadow_bool_c(list, "vga_override", &BX_VGA_THIS s.vga_override);
   new bx_shadow_data_c(list, "memory", BX_VGA_THIS s.memory, BX_VGA_THIS s.memsize);
 }
 
@@ -398,13 +387,12 @@ void bx_vgacore_c::after_restore_state(void)
 
 void bx_vgacore_c::determine_screen_dimensions(unsigned *piHeight, unsigned *piWidth)
 {
-  int ai[0x20];
-  int i,h,v;
-  for (i = 0 ; i < 0x19 ; i++)
-   ai[i] = BX_VGA_THIS s.CRTC.reg[i];
+  int h, v;
+#define AI BX_VGA_THIS s.CRTC.reg
 
-  h = (ai[1] + 1) * 8;
-  v = (ai[18] | ((ai[7] & 0x02) << 7) | ((ai[7] & 0x40) << 3)) + 1;
+  h = (AI[1] + 1) * 8;
+  v = (AI[18] | ((AI[7] & 0x02) << 7) | ((AI[7] & 0x40) << 3)) + 1;
+#undef AI
 
   if (BX_VGA_THIS s.graphics_ctrl.shift_reg == 0) {
     *piWidth = 640;
@@ -1311,13 +1299,15 @@ void bx_vgacore_c::write(Bit32u address, Bit32u value, unsigned io_len, bx_bool 
 void bx_vgacore_c::set_override(bx_bool enabled, void *dev)
 {
   BX_VGA_THIS s.vga_override = enabled;
+#if BX_SUPPORT_PCI
   BX_VGA_THIS s.nvgadev = (bx_nonvga_device_c*)dev;
+#endif
   if (enabled) {
     bx_virt_timer.deactivate_timer(BX_VGA_THIS timer_id);
   } else {
     bx_virt_timer.activate_timer(BX_VGA_THIS timer_id, BX_VGA_THIS update_interval, 1);
-    bx_gui->dimension_update(BX_VGA_THIS s.last_xres, BX_VGA_THIS s.last_yres, 8,
-                             BX_VGA_THIS s.last_msl+1, BX_VGA_THIS s.last_bpp);
+    bx_gui->dimension_update(BX_VGA_THIS s.last_xres, BX_VGA_THIS s.last_yres,
+                             BX_VGA_THIS s.last_fw, BX_VGA_THIS s.last_fh, BX_VGA_THIS s.last_bpp);
     BX_VGA_THIS redraw_area(0, 0, BX_VGA_THIS s.last_xres, BX_VGA_THIS s.last_yres);
   }
 }
@@ -1717,15 +1707,18 @@ void bx_vgacore_c::update(void)
       return;
     }
     cWidth = ((BX_VGA_THIS s.sequencer.reg1 & 0x01) == 1) ? 8 : 9;
+    if (BX_VGA_THIS s.x_dotclockdiv2) cWidth <<= 1;
     iWidth = cWidth * cols;
     iHeight = VDE+1;
-    if ((iWidth != BX_VGA_THIS s.last_xres) || (iHeight != BX_VGA_THIS s.last_yres) || (MSL != BX_VGA_THIS s.last_msl) ||
+    if ((iWidth != BX_VGA_THIS s.last_xres) || (iHeight != BX_VGA_THIS s.last_yres) ||
+        (cWidth != BX_VGA_THIS s.last_fw) ||((MSL+1) != BX_VGA_THIS s.last_fh) ||
         (BX_VGA_THIS s.last_bpp > 8))
     {
       bx_gui->dimension_update(iWidth, iHeight, MSL+1, cWidth);
       BX_VGA_THIS s.last_xres = iWidth;
       BX_VGA_THIS s.last_yres = iHeight;
-      BX_VGA_THIS s.last_msl = MSL;
+      BX_VGA_THIS s.last_fw = cWidth;
+      BX_VGA_THIS s.last_fh = MSL+1;
       BX_VGA_THIS s.last_bpp = 8;
     }
     if (skip_update()) return;
@@ -1815,7 +1808,6 @@ Bit8u bx_vgacore_c::mem_read(bx_phy_address addr)
       BX_VGA_THIS s.graphics_ctrl.latch[2] = plane2[offset];
       BX_VGA_THIS s.graphics_ctrl.latch[3] = plane3[offset];
       return(BX_VGA_THIS s.graphics_ctrl.latch[BX_VGA_THIS s.graphics_ctrl.read_map_select]);
-      break;
 
     case 1: /* read mode 1 */
       {
@@ -1843,7 +1835,6 @@ Bit8u bx_vgacore_c::mem_read(bx_phy_address addr)
 
       return retval;
       }
-      break;
     default:
       return 0;
   }
@@ -2365,8 +2356,7 @@ void bx_vgacore_c::debug_dump(void)
 }
 #endif
 
-void bx_vgacore_c::redraw_area(unsigned x0, unsigned y0, unsigned width,
-                      unsigned height)
+void bx_vgacore_c::redraw_area(unsigned x0, unsigned y0, unsigned width, unsigned height)
 {
   unsigned xti, yti, xt0, xt1, yt0, yt1, xmax, ymax;
 

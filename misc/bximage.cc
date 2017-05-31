@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bximage.cc 12690 2015-03-20 18:01:52Z vruppert $
+// $Id: bximage.cc 13069 2017-02-12 16:51:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2013  The Bochs Project
-//  Copyright (C) 2013-2015  Volker Ruppert
+//  Copyright (C) 2013-2017  Volker Ruppert
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -116,7 +116,7 @@ char bx_filename_1[512];
 char bx_filename_2[512];
 
 const char *EOF_ERR = "ERROR: End of input";
-const char *svnid = "$Id: bximage.cc 12690 2015-03-20 18:01:52Z vruppert $";
+const char *svnid = "$Id: bximage.cc 13069 2017-02-12 16:51:52Z vruppert $";
 const char *divider = "========================================================================";
 const char *main_menu_prompt =
 "\n"
@@ -136,7 +136,7 @@ const char *fdhd_choices[] = { "fd", "hd" };
 int fdhd_n_choices = 2;
 
 // menu data for choosing floppy size
-const char *fdsize_menu = "\nChoose the size of floppy disk image to create, in megabytes.\nPlease type 160k, 180k, 320k, 360k, 720k, 1.2M, 1.44M, 1.68M, 1.72M, or 2.88M.\n ";
+const char *fdsize_menu = "\nChoose the size of floppy disk image to create.\nPlease type 160k, 180k, 320k, 360k, 720k, 1.2M, 1.44M, 1.68M, 1.72M, or 2.88M.\n ";
 const char *fdsize_choices[] = { "160k","180k","320k","360k","720k","1.2M","1.44M","1.68M","1.72M","2.88M" };
 const unsigned fdsize_sectors[] = { 320, 360, 640, 720, 1440, 2400, 2880, 3360, 3444, 5760 };
 int fdsize_n_choices = 10;

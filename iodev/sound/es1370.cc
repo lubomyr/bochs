@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: es1370.cc 12717 2015-04-16 21:18:42Z vruppert $
+// $Id: es1370.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // ES1370 soundcard support (ported from QEMU)
 //
 // Copyright (c) 2005  Vassili Karpov (malc)
-// Copyright (C) 2011-2015  The Bochs Project
+// Copyright (C) 2011-2017  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,7 @@
 #if BX_SUPPORT_PCI && BX_SUPPORT_ES1370
 
 #include "soundlow.h"
+#include "soundmod.h"
 #include "pci.h"
 #include "es1370.h"
 
@@ -186,7 +187,7 @@ Bit32s es1370_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libes1370_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libes1370_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theES1370Device = new bx_es1370_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theES1370Device, BX_PLUGIN_ES1370);
@@ -221,6 +222,7 @@ bx_es1370_c::bx_es1370_c()
   midiout[1] = NULL;
   wavemode = 0;
   midimode = 0;
+  s.rt_conf_id = -1;
 }
 
 bx_es1370_c::~bx_es1370_c()
@@ -228,6 +230,7 @@ bx_es1370_c::~bx_es1370_c()
   closemidioutput();
   closewaveoutput();
 
+  SIM->unregister_runtime_config_handler(s.rt_conf_id);
   SIM->get_bochs_root()->remove("es1370");
   bx_list_c *misc_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_MISC);
   misc_rt->remove("es1370");
@@ -290,19 +293,19 @@ void bx_es1370_c::init(void)
   BX_ES1370_THIS s.mpu_outputinit = (BX_ES1370_THIS midimode & 1);
 
   if (BX_ES1370_THIS s.dac1_timer_index == BX_NULL_TIMER_HANDLE) {
-    BX_ES1370_THIS s.dac1_timer_index = bx_pc_system.register_timer
+    BX_ES1370_THIS s.dac1_timer_index = DEV_register_timer
       (BX_ES1370_THIS_PTR, es1370_timer_handler, 1, 1, 0, "es1370.dac1");
     // DAC1 timer: inactive, continuous, frequency variable
     bx_pc_system.setTimerParam(BX_ES1370_THIS s.dac1_timer_index, 0);
   }
   if (BX_ES1370_THIS s.dac2_timer_index == BX_NULL_TIMER_HANDLE) {
-    BX_ES1370_THIS s.dac2_timer_index = bx_pc_system.register_timer
+    BX_ES1370_THIS s.dac2_timer_index = DEV_register_timer
       (BX_ES1370_THIS_PTR, es1370_timer_handler, 1, 1, 0, "es1370.dac2");
     // DAC2 timer: inactive, continuous, frequency variable
     bx_pc_system.setTimerParam(BX_ES1370_THIS s.dac2_timer_index, 1);
   }
   if (BX_ES1370_THIS s.mpu_timer_index == BX_NULL_TIMER_HANDLE) {
-    BX_ES1370_THIS s.mpu_timer_index = bx_pc_system.register_timer
+    BX_ES1370_THIS s.mpu_timer_index = DEV_register_timer
       (BX_ES1370_THIS_PTR, mpu_timer_handler, 500000 / 384, 1, 1, "es1370.mpu");
     // midi timer: active, continuous, 500000 / 384 seconds (384 = delta time, 500000 = sec per beat at 120 bpm. Don't change this!)
   }
@@ -326,7 +329,7 @@ void bx_es1370_c::init(void)
   SIM->get_param_num("midimode", base)->set_handler(es1370_param_handler);
   SIM->get_param_string("midifile", base)->set_handler(es1370_param_string_handler);
   // register handler for correct es1370 parameter handling after runtime config
-  SIM->register_runtime_config_handler(this, runtime_config_handler);
+  BX_ES1370_THIS s.rt_conf_id = SIM->register_runtime_config_handler(this, runtime_config_handler);
   BX_ES1370_THIS wave_changed = 0;
   BX_ES1370_THIS midi_changed = 0;
 
@@ -400,11 +403,8 @@ void bx_es1370_c::register_state(void)
   BXRS_HEX_PARAM_FIELD(list, status, BX_ES1370_THIS s.status);
   BXRS_HEX_PARAM_FIELD(list, mempage, BX_ES1370_THIS s.mempage);
   BXRS_HEX_PARAM_FIELD(list, codec_index, BX_ES1370_THIS s.codec_index);
-  bx_list_c *codec_regs = new bx_list_c(list, "codec_regs", "");
-  for (i = 0; i < BX_ES1370_CODEC_REGS; i++) {
-    sprintf(pname, "0x%02x", i);
-    new bx_shadow_num_c(codec_regs, pname, &BX_ES1370_THIS s.codec_reg[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(list, "codec_regs", BX_ES1370_THIS s.codec_reg,
+                       BX_ES1370_CODEC_REGS, 1);
   BXRS_HEX_PARAM_FIELD(list, sctl, BX_ES1370_THIS s.sctl);
   BXRS_HEX_PARAM_FIELD(list, legacy1B, BX_ES1370_THIS s.legacy1B);
   BXRS_HEX_PARAM_FIELD(list, wave_vol, BX_ES1370_THIS s.wave_vol);
@@ -1085,25 +1085,6 @@ void bx_es1370_c::closemidioutput()
       BX_ES1370_THIS s.mpu_outputinit &= ~2;
     }
   }
-}
-
-// pci configuration space read callback handler
-Bit32u bx_es1370_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_ES1370_THIS pci_conf[address+i] << (i*8));
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%08x", address, value));
-
-  return value;
 }
 
 

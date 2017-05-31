@@ -2,19 +2,19 @@ dnl // Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
 AC_INIT(bochs.h)
-AC_REVISION([[$Id: configure.in 12737 2015-05-03 06:36:30Z vruppert $]])
+AC_REVISION([[$Id: configure.in 13179 2017-04-09 06:45:39Z vruppert $]])
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_HEADER(ltdlconf.h)
 
 dnl // Put Bochs version information right here so that it gets substituted
 dnl // into all the right places.
-VERSION="2.6.8"
-VER_STRING="2.6.8"
+VERSION="2.6.9"
+VER_STRING="2.6.9"
 dnl // WIN_VER_STRING format is "a, b, c, d"
 dnl // c should be > 90 for pre-release of next version otherwise patch level
 dnl // d should be 0 for release and 1 for svn version
-WIN_VER_STRING="2, 6, 8, 0"
-REL_STRING="Built from SVN snapshot on May 3, 2015"
+WIN_VER_STRING="2, 6, 9, 0"
+REL_STRING="Built from SVN snapshot on April 9, 2017"
 
 changequote(<<, >>)
 changequote([, ])
@@ -43,7 +43,14 @@ case "$target" in
   *-pc-windows* | *-pc-winnt*)
     DEFAULT_GUI=win32 # default to win32 gui
     NO_LT=1           # do not use libtool at all
-    MSVC_TARGET=1
+    case "$target" in
+      x86_64*)
+        MSVC_TARGET=64
+        ;;
+      *)
+        MSVC_TARGET=32
+        ;;
+    esac
     ;;
   *-cygwin* | *-mingw32*)
     NO_LT=1   # do not use libtool at all
@@ -133,19 +140,20 @@ if test "$PKGCONFIG" = not_found; then
 fi
 
 AC_C_BIGENDIAN
-AC_C_INLINE
 AC_CHECK_SIZEOF(unsigned char)
 AC_CHECK_SIZEOF(unsigned short)
 AC_CHECK_SIZEOF(unsigned int)
 AC_CHECK_SIZEOF(unsigned long)
 AC_CHECK_SIZEOF(unsigned long long)
-AC_CHECK_SIZEOF(int *)
+if test "$MSVC_TARGET" = 0; then
+  AC_CHECK_SIZEOF(int *)
+fi
 AC_CHECK_FUNCS(getenv, AC_DEFINE(BX_HAVE_GETENV))
 AC_CHECK_FUNCS(setenv, AC_DEFINE(BX_HAVE_SETENV))
 AC_CHECK_FUNCS(snprintf, AC_DEFINE(BX_HAVE_SNPRINTF))
 AC_CHECK_FUNCS(vsnprintf, AC_DEFINE(BX_HAVE_VSNPRINTF))
 
-if test "$MSVC_TARGET" != 1; then
+if test "$MSVC_TARGET" = 0; then
   AC_CHECK_FUNCS(select, AC_DEFINE(BX_HAVE_SELECT))
   AC_CHECK_TYPE(socklen_t, AC_DEFINE(BX_HAVE_SOCKLEN_T), , [#include <sys/types.h>
   #include <sys/socket.h>])
@@ -202,6 +210,11 @@ else
   AC_DEFINE(BX_HAVE_FSEEKO64, 0)
   AC_DEFINE(BX_HAVE_SSIZE_T, 0)
   AC_DEFINE(BX_HAVE_SETENV, 0)
+  if test "$MSVC_TARGET" = 64; then
+    AC_DEFINE(SIZEOF_INT_P, 8)
+  else
+    AC_DEFINE(SIZEOF_INT_P, 4)
+  fi
 fi
 AC_CHECK_FUNCS(sleep, AC_DEFINE(BX_HAVE_SLEEP))
 AC_CHECK_FUNCS(nanosleep, AC_DEFINE(BX_HAVE_NANOSLEEP))
@@ -439,6 +452,7 @@ AC_ARG_ENABLE(plugins,
     ]
   )
 
+USER_PLUGINS_MAKEFILE=''
 if test "$bx_plugins" = 1; then
   AC_MSG_RESULT(yes)
   AC_DEFINE(BX_PLUGINS, 1)
@@ -463,6 +477,9 @@ if test "$bx_plugins" = 1; then
   PLUGIN_TARGET_2=plugins_gcc
   INSTALL_PLUGINS_VAR=install_libtool_plugins
   NONPLUGIN_GUI_LINK_OPTS=''
+  if test -d user_plugins; then
+    USER_PLUGINS_MAKEFILE='user_plugins/Makefile'
+  fi
 else
   AC_MSG_RESULT(no)
   bx_plugins=0
@@ -795,7 +812,7 @@ AC_ARG_ENABLE(debugger,
     AC_PATH_PROG(FLEX, flex, not_found)
     AC_PATH_PROG(YACC, yacc, not_found)
     AC_MSG_CHECKING(whether to generate parser / lexer files)
-    if test "$FLEX" = not_found -o "$YACC" = not_found -o "$MSVC_TARGET" = 1; then
+    if test "$FLEX" = not_found -o "$YACC" = not_found -o "$MSVC_TARGET" != 0; then
       NO_FLEX_YACC='#'
       AC_MSG_RESULT(no)
     else
@@ -877,6 +894,7 @@ AC_ARG_ENABLE(gdb-stub,
     if test "$bx_debugger" = 1; then
       AC_MSG_ERROR([[--enable-debugger and --enable-gdb-stub are mutually exclusive]])
     fi
+    AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
    else
     AC_MSG_RESULT(no)
     AC_DEFINE(BX_GDBSTUB, 0)
@@ -1225,12 +1243,31 @@ AC_ARG_ENABLE(svm,
     ]
   )
 
-if test "$support_svm" -gt 0 -a "$bx_cpu_level" -lt 6; then
-  AC_MSG_ERROR([for SVM support the CPU level must be set to 6])
+if test "$support_svm" -gt 0 -a "$use_x86_64" = 0; then
+  AC_MSG_ERROR([SVM support require x86-64 enabled])
 fi
 
-if test "$support_svm" -gt 1 -a "$use_x86_64" = 0; then
-  AC_MSG_ERROR([SVM support require x86-64 enabled])
+support_pkeys=0
+AC_MSG_CHECKING(for User-Mode Protection Keys support)
+AC_ARG_ENABLE(protection-keys,
+  AS_HELP_STRING([--enable-protection-keys], [User-Mode Protection Keys support (no)]),
+  [if test "$enableval" = yes; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(BX_SUPPORT_PKEYS, 1)
+    support_pkeys=1
+   elif test "$enableval" = no; then
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_PKEYS, 0)
+   fi
+   ],
+  [
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_PKEYS, 0)
+  ]
+  )
+
+if test "$support_pkeys" -gt 0 -a "$use_x86_64" = 0; then
+  AC_MSG_ERROR([User-Mode Protection Keys feature emulation require x86-64 enabled])
 fi
 
 AC_MSG_CHECKING(for 3DNow! support)
@@ -1472,6 +1509,7 @@ AC_ARG_ENABLE(pcidev,
       esac
       AC_DEFINE(BX_SUPPORT_PCIDEV, 1)
       PCI_OBJS="$PCI_OBJS pcidev.o"
+      AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
     else
       AC_MSG_RESULT(no)
       AC_DEFINE(BX_SUPPORT_PCIDEV, 0)
@@ -1485,6 +1523,7 @@ AC_ARG_ENABLE(pcidev,
 
 use_usb=0
 USBHC_OBJS=''
+UHCICORE_OBJ=''
 USBHC_DLL_TARGETS=''
 AC_MSG_CHECKING(for USB UHCI support)
 AC_ARG_ENABLE(usb,
@@ -1493,6 +1532,7 @@ AC_ARG_ENABLE(usb,
     AC_MSG_RESULT(yes)
     AC_DEFINE(BX_SUPPORT_USB_UHCI, 1)
     USBHC_OBJS="usb_uhci.o"
+    UHCICORE_OBJ="uhci_core.o"
     USBHC_DLL_TARGETS="bx_usb_uhci.dll"
     use_usb=1
    else
@@ -1524,9 +1564,28 @@ AC_ARG_ENABLE(usb-ohci,
     ]
   )
 
-AC_MSG_CHECKING(for experimental USB xHCI support)
+AC_MSG_CHECKING(for USB EHCI support)
+AC_ARG_ENABLE(usb-ehci,
+  AS_HELP_STRING([--enable-usb-ehci], [enable USB EHCI support (no)]),
+  [if test "$enableval" = yes; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(BX_SUPPORT_USB_EHCI, 1)
+    USBHC_OBJS="$USBHC_OBJS usb_ehci.o"
+    USBHC_DLL_TARGETS="$USBHC_DLL_TARGETS bx_usb_ehci.dll"
+    use_usb=1
+   else
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_USB_EHCI, 0)
+   fi],
+  [
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_USB_EHCI, 0)
+    ]
+  )
+
+AC_MSG_CHECKING(for USB xHCI support)
 AC_ARG_ENABLE(usb-xhci,
-  AS_HELP_STRING([--enable-usb-xhci], [enable experimental USB xHCI support (no - incomplete)]),
+  AS_HELP_STRING([--enable-usb-xhci], [enable USB xHCI support (no)]),
   [if test "$enableval" = yes; then
     AC_MSG_RESULT(yes)
     AC_DEFINE(BX_SUPPORT_USB_XHCI, 1)
@@ -1548,7 +1607,7 @@ if test "$use_usb" = 1; then
     AC_MSG_ERROR([USB requires PCI support])
   fi
   USBCORE_OBJ="usb_common.o"
-  USBDEV_OBJS="usb_hid.o usb_hub.o usb_msd.o usb_printer.o"
+  USBDEV_OBJS="usb_hid.o usb_hub.o usb_msd.o usb_printer.o usb_cbi.o"
   SCSI_OBJS="scsi_device.o"
   if test "$bx_plugins" = 0; then
     USB_LIB_VAR='iodev/usb/libusb.a'
@@ -1556,6 +1615,7 @@ if test "$use_usb" = 1; then
   fi
 fi
 AC_SUBST(USBHC_OBJS)
+AC_SUBST(UHCICORE_OBJ)
 AC_SUBST(USBCORE_OBJ)
 AC_SUBST(USBDEV_OBJS)
 AC_SUBST(SCSI_OBJS)
@@ -1644,11 +1704,14 @@ if test "$networking" = yes; then
       ;;
   esac
   if test $can_compile_slirp = 1; then
-    NETLOW_OBJS="$NETLOW_OBJS eth_slirp.o \$(SLIRP_OBJS)"
+    NETLOW_OBJS="$NETLOW_OBJS eth_slirp.o"
     ethernet_modules="$ethernet_modules slirp"
     AC_DEFINE(BX_NETMOD_SLIRP, 1)
+    NETLOW_OBJS="$NETLOW_OBJS eth_socket.o"
+    ethernet_modules="$ethernet_modules socket"
+    AC_DEFINE(BX_NETMOD_SOCKET, 1)
   fi
-  if test "$MSVC_TARGET" != 1; then
+  if test "$MSVC_TARGET" = 0; then
     AC_CHECK_HEADER(net/bpf.h, [
         NETLOW_OBJS="$NETLOW_OBJS eth_fbsd.o"
         ethernet_modules="$ethernet_modules fbsd"
@@ -1718,10 +1781,8 @@ if test "$networking" = yes; then
 
     ;;
   esac
-  if test "$bx_plugins" = 0; then
-    NETWORK_LIB_VAR='iodev/network/libnetwork.a'
-    AC_SUBST(NETWORK_LIB_VAR)
-  fi
+  NETWORK_LIB_VAR='iodev/network/libnetwork.a'
+  AC_SUBST(NETWORK_LIB_VAR)
   AC_DEFINE(BX_NETWORKING, 1)
   AC_MSG_CHECKING(for ethernet modules)
   AC_MSG_RESULT($ethernet_modules)
@@ -1915,12 +1976,10 @@ if test "$soundcard_present" = 1; then
       SOUNDLOW_OBJS='soundsdl.o'
       soundlow_drivers="sdl"
       soundlow_default="sdl"
-      $as_echo "#define BX_HAVE_SOUND_SDL 1" >>confdefs.h
-      
-      bx_have_alsa=0
+      AC_DEFINE(BX_HAVE_SOUND_SDL, 1)
       ;;
     *-linux* | *-freebsd*)
-      SOUNDLOW_OBJS='soundlnx.o'
+      SOUNDLOW_OBJS='soundoss.o'
       soundlow_drivers="oss"
       soundlow_default="oss"
       AC_DEFINE(BX_HAVE_SOUND_OSS, 1)
@@ -1984,11 +2043,33 @@ if test "$soundcard_present" = 1; then
       soundlow_default="sdl"
     fi
     AC_DEFINE(BX_HAVE_SOUND_SDL, 1)
+    SDL2_VERSION=`sdl2-config --version`
+    # SDL version >= 2.0.5 supports audio capture
+    sdl2_audio_capture=0
+    [
+    case x$SDL2_VERSION in
+      x2.0.[0-4]) ;;
+      x2.0.[5-9]) sdl2_audio_capture=1 ;;
+      *) ;;
+    esac
+    ]
+    if test "$sdl2_audio_capture" = 1; then
+      AC_DEFINE(BX_HAVE_SDL2_AUDIO_CAPTURE, 1)
+    fi
   fi
-  if test "$bx_plugins" = 0; then
-    SOUND_LIB_VAR='iodev/sound/libsound.a'
-    AC_SUBST(SOUND_LIB_VAR)
+  AC_CHECK_HEADER([samplerate.h], [bx_have_libsamplerate=1])
+  if test "$bx_have_libsamplerate" = 1; then
+    DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsamplerate"
+    AC_DEFINE(BX_HAVE_LIBSAMPLERATE, 1)
+  else
+    AC_CHECK_HEADER([soxr-lsr.h], [bx_have_soxr_lsr=1])
+    if test "$bx_have_soxr_lsr" = 1; then
+      DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsoxr-lsr"
+      AC_DEFINE(BX_HAVE_SOXR_LSR, 1)
+    fi
   fi
+  SOUND_LIB_VAR='iodev/sound/libsound.a'
+  AC_SUBST(SOUND_LIB_VAR)
   AC_MSG_CHECKING(for sound lowlevel modules)
   AC_MSG_RESULT($soundlow_drivers)
   AC_MSG_CHECKING(for default sound lowlevel module)
@@ -2038,7 +2119,7 @@ BUSM_OBJS=''
 bx_busmouse=0
 AC_MSG_CHECKING(for Busmouse support)
 AC_ARG_ENABLE(busmouse,
-  AS_HELP_STRING([--enable-busmouse], [enable Busmouse support (InPort)]),
+  AS_HELP_STRING([--enable-busmouse], [enable Busmouse support (InPort & Standard)]),
   [if test "$enableval" = yes; then
     AC_MSG_RESULT(yes)
     AC_DEFINE(BX_SUPPORT_BUSMOUSE, 1)
@@ -2250,6 +2331,7 @@ AC_MSG_RESULT($DEFAULT_GUI)
 
 display_libs=""
 GUI_DLL_TARGETS=""
+use_gui_console=0
 
 # the $with_* variable tells the gui library to use, but does NOT necessarily
 # indicate the platform.  Settings that depend on the platform should be
@@ -2303,6 +2385,7 @@ if test "$with_x11" = yes; then
   if test "$gui_debugger" = 1; then
     needs_gtk2=1
   fi
+  use_gui_console=1
 fi
 AC_SUBST(X_CFLAGS)
 AC_SUBST(X_LIBS)
@@ -2335,6 +2418,7 @@ if test "$with_sdl" = yes; then
          ;;
     esac
   fi
+  use_gui_console=1
 fi
 
 if test "$with_sdl2" = yes; then
@@ -2365,6 +2449,7 @@ if test "$with_sdl2" = yes; then
          ;;
     esac
   fi
+  use_gui_console=1
 fi
 
 if test "$with_svga" = yes; then
@@ -2376,6 +2461,7 @@ if test "$with_svga" = yes; then
   GUI_CFLAGS="$GUI_CFLAGS"
   GUI_CXXFLAGS="$GUI_CXXFLAGS"
   GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_SVGA)"
+  AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
 fi
 
 if test "$with_rfb" = yes; then
@@ -2384,6 +2470,7 @@ if test "$with_rfb" = yes; then
   AC_DEFINE(BX_WITH_RFB, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_RFB)"
   GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_RFB)"
+  use_gui_console=1
 fi
 
 if test "$with_vncsrv" = yes; then
@@ -2402,6 +2489,7 @@ if test "$with_vncsrv" = yes; then
     AC_MSG_WARN([Bochs for LibVNCServer cannot be compiled here, disabling it])
     with_vncsrv=no
   fi
+  use_gui_console=1
 fi
 
 if test "$with_amigaos" = yes; then
@@ -2441,6 +2529,7 @@ if test "$with_macos" = yes; then
   AC_DEFINE(BX_WITH_MACOS, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_MACOS)"
   GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_MACOS)"
+  AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
 fi
 
 if test "$with_carbon" = yes; then
@@ -2454,6 +2543,7 @@ if test "$with_carbon" = yes; then
     PRIMARY_TARGET=bochs.app/.build   # only for carbon application
   fi
   INSTALL_TARGET='install_macosx'
+  AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
 fi
 
 if test "$with_term" = yes; then
@@ -2570,6 +2660,12 @@ else
   AC_DEFINE(BX_USE_TEXTCONFIG, 1)
 fi
 
+if test "$use_gui_console" = 1; then
+  AC_DEFINE(BX_USE_GUI_CONSOLE, 1)
+else
+  AC_DEFINE(BX_USE_GUI_CONSOLE, 0)
+fi
+
 if test "$bx_plugins" = 1; then
   # every item in this list will be compiled as a plugin. Do not include
   # support objs; they will be mentioned in plugin-specific makefile rules.
@@ -2645,9 +2741,11 @@ case "$target" in
     EXE=".exe"
     PRIMARY_TARGET="bochs.exe"
     BXIMAGE_LINK_OPTS="user32.lib"
-    # also compile niclist if networking is on
+    # also compile bxhub and niclist if networking is on
     if test "$networking" = yes; then
-      OPTIONAL_TARGET="$OPTIONAL_TARGET niclist.exe"
+      OPTIONAL_TARGET="$OPTIONAL_TARGET bxhub.exe niclist.exe"
+      BXHUB_FLAG="/DBXHUB"
+      BXHUB_LINK_OPTS="ws2_32.lib"
     fi
     COMMAND_SEPARATOR=""
     CD_UP_ONE="cd .."
@@ -2655,7 +2753,7 @@ case "$target" in
     CD_UP_THREE="cd ..\..\.."
     have_gettimeofday=0  # even though it may exist in build environment
     AC_DEFINE(BX_64BIT_CONSTANTS_USE_LL, 0)
-    AC_DEFINE(inline, __forceinline)
+    AC_DEFINE(BX_CPP_INLINE, __forceinline)
     AC_DEFINE(BX_NO_ATTRIBUTES, 1)
     AC_DEFINE(HAVE_LIBREADLINE, 0)
     AC_DEFINE(HAVE_READLINE_HISTORY_H, 0)
@@ -2668,16 +2766,26 @@ case "$target" in
     PRIMARY_TARGET="bochs.exe"
     BXIMAGE_LINK_OPTS="-luser32"
     if test "$networking" = yes; then
-      OPTIONAL_TARGET="$OPTIONAL_TARGET niclist.exe"
+      OPTIONAL_TARGET="$OPTIONAL_TARGET bxhub.exe niclist.exe"
+      BXHUB_FLAG="-DBXHUB"
+      BXHUB_LINK_OPTS="-lws2_32"
     fi
     AC_DEFINE(BX_HAVE_SELECT, 1)
     ;;
   *-pc-mingw*)
     BXIMAGE_LINK_OPTS="-luser32"
     if test "$networking" = yes; then
-      OPTIONAL_TARGET="$OPTIONAL_TARGET niclist"
+      OPTIONAL_TARGET="$OPTIONAL_TARGET bxhub niclist"
+      BXHUB_FLAG="-DBXHUB"
+      BXHUB_LINK_OPTS="-lws2_32"
     fi
     AC_DEFINE(BX_HAVE_SELECT, 1)
+    ;;
+  *)
+    if test "$networking" = yes; then
+      OPTIONAL_TARGET="$OPTIONAL_TARGET bxhub"
+      BXHUB_FLAG="-DBXHUB"
+    fi
     ;;
 esac
 
@@ -2694,6 +2802,8 @@ case "$target" in
 esac
 AC_SUBST(BXIMAGE_FLAG)
 AC_SUBST(BXIMAGE_LINK_OPTS)
+AC_SUBST(BXHUB_FLAG)
+AC_SUBST(BXHUB_LINK_OPTS)
 AC_SUBST(CXXFLAGS_CONSOLE)
 
 ENH_DBG_OBJS=""
@@ -3028,62 +3138,48 @@ ACX_PTHREAD([
 # But on win32 platforms, the pthread library is not needed.
 if test "$cross_configure" = 0; then
   # assuming that the GUI debuggers require pthreads or are for Win32
-  if test "$with_rfb" = yes -o "$with_vncsrv" = yes -o \
-          "$soundcard_present" = 1 -o "$gui_debugger" = 1
-  then
-    if test "$pthread_ok" = yes; then
-      if test "$with_rfb" = yes; then
-        RFB_LIBS="$RFB_LIBS $PTHREAD_LIBS"
-      fi
-      if test "$with_vncsrv" = yes; then
-        GUI_LINK_OPTS_VNCSRV="$GUI_LINK_OPTS_VNCSRV $PTHREAD_LIBS"
-      fi
-      if test "$soundcard_present" = 1; then
-        if test "$bx_plugins" = 1; then
-          SOUND_LINK_OPTS="$SOUND_LINK_OPTS $PTHREAD_LIBS"
-        else
-          DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS $PTHREAD_LIBS"
-        fi
-      fi
-      CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-      CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
-      CC="$PTHREAD_CC"
-    else
-      case "$target" in
-        *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
-          # pthread not needed for win32 platform
-          ;;
-        *)
-          echo ERROR: the pthread library is required, but could not be found.; exit 1
-      esac
+  if test "$pthread_ok" = yes; then
+    if test "$with_rfb" = yes; then
+      RFB_LIBS="$RFB_LIBS $PTHREAD_LIBS"
     fi
+    if test "$with_vncsrv" = yes; then
+      GUI_LINK_OPTS_VNCSRV="$GUI_LINK_OPTS_VNCSRV $PTHREAD_LIBS"
+    fi
+    if test "$soundcard_present" = 1; then
+      if test "$bx_plugins" = 1; then
+        SOUND_LINK_OPTS="$SOUND_LINK_OPTS $PTHREAD_LIBS"
+      else
+        DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS $PTHREAD_LIBS"
+      fi
+    fi
+    CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
+    CC="$PTHREAD_CC"
+  else
+    case "$target" in
+      *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+        # pthread not needed for win32 platform
+        ;;
+      *)
+        echo ERROR: the pthread library is required, but could not be found.; exit 1
+    esac
   fi
 fi
 
 dnl // DEPRECATED configure options - force users to remove them
 
-AC_MSG_CHECKING(for instruction trace cache support (deprecated))
-AC_ARG_ENABLE(trace-cache,
-  AS_HELP_STRING([--enable-trace-cache], [support instruction trace cache (deprecated)]),
-  [AC_MSG_RESULT($enableval)
-   AC_MSG_ERROR([DEPRECATED - this feature will be enabled in all configurations])
-  ],
-  [
-   AC_MSG_RESULT(no)
-  ])
-
-AC_MSG_CHECKING(for misaligned SSE support (deprecated))
-AC_ARG_ENABLE(misaligned-sse,
-  AS_HELP_STRING([--enable-misaligned-sse], [misaligned SSE support (deprecated)]),
-  [AC_MSG_RESULT($enableval)
-   AC_MSG_ERROR([DEPRECATED - moved to runtime .bochsrc option])
-  ],
-  [
-   AC_MSG_RESULT(no)
-  ])
+dnl AC_MSG_CHECKING(for misaligned SSE support (deprecated))
+dnl AC_ARG_ENABLE(misaligned-sse,
+dnl   AS_HELP_STRING([--enable-misaligned-sse], [misaligned SSE support (deprecated)]),
+dnl   [AC_MSG_RESULT($enableval)
+dnl    AC_MSG_ERROR([DEPRECATED - moved to runtime .bochsrc option])
+dnl   ],
+dnl   [
+dnl    AC_MSG_RESULT(no)
+dnl   ])
 
 # Create some subdirectories for when you run configure from some other
-# directory.
+# directory (part #1).
 if test ! -d instrument; then mkdir instrument; fi
 if test ! -d build; then mkdir build; fi
 if test ! -d build/linux; then mkdir build/linux; fi
@@ -3151,4 +3247,11 @@ AC_OUTPUT(Makefile iodev/Makefile iodev/display/Makefile iodev/hdimage/Makefile 
 	 disasm/Makefile ${INSTRUMENT_DIR}/Makefile misc/Makefile \
 	 doc/docbook/Makefile build/linux/bochs-dlx bxversion.h bxversion.rc \
 	 build/macosx/Info.plist build/win32/nsis/Makefile \
-	 build/win32/nsis/bochs.nsi host/linux/pcidev/Makefile)
+	 build/win32/nsis/bochs.nsi host/linux/pcidev/Makefile ${USER_PLUGINS_MAKEFILE})
+
+# Create some subdirectories for when you run configure from some other
+# directory (part #2).
+if test ! -d cpu/cpudb/amd; then mkdir cpu/cpudb/amd; fi
+if test ! -d cpu/cpudb/intel; then mkdir cpu/cpudb/intel; fi
+if test ! -d cpu/decoder; then mkdir cpu/decoder; fi
+if test ! -d iodev/network/slirp; then mkdir iodev/network/slirp; fi

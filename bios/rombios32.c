@@ -1,10 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios32.c 12720 2015-04-18 13:18:01Z vruppert $
+// $Id: rombios32.c 13093 2017-03-02 18:38:48Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  32 bit Bochs BIOS init code
 //  Copyright (C) 2006       Fabrice Bellard
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -522,10 +522,22 @@ void setup_mtrr(void)
     wrmsr_smp(MSR_MTRRfix4K_E8000, 0);
     wrmsr_smp(MSR_MTRRfix4K_F0000, 0);
     wrmsr_smp(MSR_MTRRfix4K_F8000, 0);
+
+    int phys_bits = 32;
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(0x80000000u, eax, ebx, ecx, edx);
+    if (eax >= 0x80000008) {
+      /* Get physical bits from leaf 0x80000008 (if available) */
+      cpuid(0x80000008u, eax, ebx, ecx, edx);
+      phys_bits = eax & 0xff;
+    }
+    uint64_t phys_mask = ((1ull << phys_bits) - 1);
+
     /* Mark 3-4GB as UC, anything not specified defaults to WB */
     wrmsr_smp(MTRRphysBase_MSR(0), 0xc0000000 | MTRR_MEMTYPE_UC);
     /* Make sure no reserved bit set to '1 in MTRRphysMask_MSR */
-    wrmsr_smp(MTRRphysMask_MSR(0), (uint32_t)(~(0x40000000 - 1)) | 0x800);
+    wrmsr_smp(MTRRphysMask_MSR(0), (~(0x40000000 - 1) & phys_mask) | 0x800);
+
     wrmsr_smp(MSR_MTRRdefType, 0xc00 | MTRR_MEMTYPE_WB);
 }
 
@@ -920,7 +932,7 @@ static void pci_bios_init_device(PCIDevice *d)
         /* default memory mappings */
         for(i = 0; i < PCI_NUM_REGIONS; i++) {
             int ofs;
-            uint32_t val, size ;
+            uint32_t val, size, align;
 
             if (i == PCI_ROM_SLOT) {
                 ofs = PCI_ROM_ADDRESS;
@@ -932,16 +944,23 @@ static void pci_bios_init_device(PCIDevice *d)
             val = pci_config_readl(d, ofs);
             if (val != 0) {
                 size = (~(val & ~0xf)) + 1;
-                if (val & PCI_ADDRESS_SPACE_IO)
+                if (val & PCI_ADDRESS_SPACE_IO) {
                     paddr = &pci_bios_io_addr;
-                else
+                    align = 0x10;
+                } else {
                     paddr = &pci_bios_mem_addr;
+                    align = 0x10000;
+                }
                 *paddr = (*paddr + size - 1) & ~(size - 1);
                 pci_set_io_region_addr(d, i, *paddr);
                 if ((i == PCI_ROM_SLOT) && (class == PCI_CLASS_DISPLAY_VGA)) {
                     pci_bios_init_pcirom(d, *paddr);
                 }
-                *paddr += size;
+                if (size < align) {
+                    *paddr += align;
+                } else {
+                    *paddr += size;
+                }
             }
         }
         break;
@@ -1094,7 +1113,7 @@ static void mptable_init(void)
     putstr(&q, "0.1         "); /* vendor id */
     putle32(&q, 0); /* OEM table ptr */
     putle16(&q, 0); /* OEM table size */
-    putle16(&q, smp_cpus + 18); /* entry count */
+    putle16(&q, smp_cpus + 17); /* entry count */
     putle32(&q, 0xfee00000); /* local APIC addr */
     putle16(&q, 0); /* ext table length */
     putb(&q, 0); /* ext table checksum */
@@ -1182,10 +1201,10 @@ static void mptable_init(void)
     putb(&q, 1); /* length in 16 byte units */
     putb(&q, 4); /* MP spec revision */
     putb(&q, 0); /* checksum (patched later) */
-    putb(&q, 0); /* MP feature byte 1 */
+    putb(&q, 0); /* MP feature byte 1: MP configuration table present */
+    putb(&q, 0); /* MP feature byte 2: no IMCR present */
 
-    putb(&q, 0);
-    putb(&q, 0);
+    putb(&q, 0); /* 3 bytes reserved */
     putb(&q, 0);
     putb(&q, 0);
     float_pointer_struct[10] =

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo.h 12112 2014-01-15 17:29:28Z vruppert $
+// $Id: voodoo.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012-2014  The Bochs Project
+//  Copyright (C) 2012-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -43,7 +43,7 @@ typedef struct {
 } bx_voodoo_t;
 
 
-class bx_voodoo_c : public bx_nonvga_device_c, bx_pci_device_stub_c {
+class bx_voodoo_c : public bx_nonvga_device_c {
 public:
   bx_voodoo_c();
   virtual ~bx_voodoo_c();
@@ -56,8 +56,7 @@ public:
   virtual void redraw_area(unsigned x0, unsigned y0,
                            unsigned width, unsigned height);
 
-  virtual Bit32u pci_read_handler(Bit8u address, unsigned io_len);
-  virtual void   pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+  virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 
   static Bit16u get_retrace(void);
   static void output_enable(bx_bool enabled);

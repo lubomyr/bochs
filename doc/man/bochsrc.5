@@ -1,5 +1,5 @@
 .\"Document Author:  Timothy R. Butler   -   tbutler@uninetsolutions.com"
-.TH bochsrc 5 "2 May 2015" "bochsrc" "The Bochs Project"
+.TH bochsrc 5 "28 Mar 2017" "bochsrc" "The Bochs Project"
 .\"SKIP_SECTION"
 .SH NAME
 bochsrc \- Configuration file for Bochs.
@@ -53,7 +53,7 @@ These plugins will be loaded by default (if present): 'biosdev', 'extfpuirq',
 
 These plugins are also supported, but they are usually loaded directly with
 their bochsrc option: 'e1000', 'es1370', 'ne2k', 'pcidev', 'pcipnic', 'sb16',
-\&'usb_ohci', 'usb_uhci', 'usb_xhci' and 'voodoo'.
+\&'usb_ehci', 'usb_ohci', 'usb_uhci', 'usb_xhci' and 'voodoo'.
 
 Example:
   plugin_ctrl: unmapped=0, e1000=1 # unload 'unmapped' and load 'e1000'
@@ -419,12 +419,13 @@ You can use the environment variable $BXSHARE to specify the location of the BIO
 The usage of external large BIOS images (up to 512k) at memory top is
 now supported, but we still recommend to use the BIOS distributed with Bochs.
 The start address is optional, since it can be calculated from image size.
+The Bochs BIOS currently supports only the option "fastboot" to skip the
+boot menu delay.
 
 Examples:
-  romimage: file=bios/BIOS-bochs-latest
+  romimage: file=bios/BIOS-bochs-latest, options=fastboot
   romimage: file=$BXSHARE/BIOS-bochs-legacy
   romimage: file=mybios.bin, address=0xfff80000
-  romimage: file=mybios.bin
 
 .TP
 .I "vgaromimage:"
@@ -547,9 +548,9 @@ type
 With the mouse type option you can select the type of mouse to emulate.
 The default value is 'ps2'. The other choices are 'imps2' (wheel mouse
 on PS/2), 'serial', 'serial_wheel', 'serial_msys' (one com port requires
-setting 'mode=mouse') and 'bus' (if present). To connect a mouse to an
-USB port, see the 'usb_uhci', 'usb_ohci' or 'usb_xhci' option (requires
-PCI and USB support).
+setting 'mode=mouse') 'inport' and 'bus' (if present). To connect a mouse
+to a USB port, see the 'usb_uhci', 'usb_ohci', 'usb_ehci' or 'usb_xhci'
+option (requires PCI and USB support).
 
 enabled
 
@@ -564,7 +565,7 @@ toggle
 The default method to toggle the mouse capture at runtime is to press the
 CTRL key and the middle mouse button ('ctrl+mbutton'). This option allows
 to change the method to 'ctrl+f10' (like DOSBox), 'ctrl+alt' (like QEMU)
-or 'f12' (replaces win32 'legacyF12' option).
+or 'f12'.
 
 Examples:
   mouse: enabled=1
@@ -580,7 +581,7 @@ connected to PCI slots. Up to 5 slots are available. For these combined PCI/ISA
 devices assigning to slot is mandatory if you want to emulate the PCI model:
 cirrus, ne2k and pcivga. These PCI-only devices are also supported, but they are
 auto-assigned if you don't use the slot configuration: e1000, es1370, pcidev,
-pcipnic, usb_ohci and usb_xhci.
+pcipnic, usb_ohci, usb_ehci and usb_xhci.
 
 Example:
   pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
@@ -625,10 +626,11 @@ Example:
 
 .TP
 .I "cmosimage:"
-This defines image file that can be loaded into the CMOS RAM at startup.
-The rtc_init parameter controls whether initialize the RTC with values stored
-in the image. By default the time0 argument given to the clock option is used.
-With 'rtc_init=image' the image is the source for the initial time.
+This defines a binary image file with size 128 bytes that can be loaded into
+the CMOS RAM at startup. The rtc_init parameter controls whether initialize
+the RTC with values stored in the image. By default the time0 argument given
+to the clock option is used. With 'rtc_init=image' the image is the source
+for the initial time.
 
 Example:
   cmosimage: file=cmos.img, rtc_init=time0
@@ -714,7 +716,7 @@ This defines the type and characteristics of all attached ata devices:
    heads=      only valid for disks
    spt=        only valid for disks
    status=     only valid for cdroms [inserted|ejected]
-   biosdetect= type of biosdetection [none|auto], only for disks on ata0 [cmos]
+   biosdetect= type of biosdetection [auto|cmos|none]
    translation=type of translation of the bios, only for disks [none|lba|large|rechs|auto]
    model=      string returned by identify device command
    journal=    optional filename of the redolog for undoable, volatile and vvfat disks
@@ -817,54 +819,52 @@ Examples:
 
 .TP
 .I "panic:"
-If Bochs reaches  a condition  where it cannot
-emulate correctly, it does a panic.  This  can
-be a configuration problem  (like a misspelled
-bochsrc line) or an emulation problem (like an
-unsupported video mode). The  "panic"  setting
-in  bochsrc  tells  Bochs  how to respond to a
-panic.  You  can  set this to fatal (terminate
-the session),  report   (print information  to
-the console), or ignore (do nothing).
+If Bochs  reaches  a condition  where  it cannot emulate
+correctly, it does a panic. This  can be a configuration
+problem (like a misspelled bochsrc line) or an emulation
+problem  (like an  unsupported video mode). The  "panic"
+setting  in  bochsrc  tells  Bochs  how  to respond to a
+panic.   You  can  set  this  to  fatal  (terminate  the
+session), ask (ask user how to proceed) or report (print
+information to the log file).
 
-The safest setting is action=fatal. If you are
-getting  panics,  you  can  try  action=report
-instead.  If you allow Bochs to continue after
-a panic, don't be surprised if you get strange
-behavior or crashes if a panic occurs.  Please
-report  panic  messages  unless  it is just  a
-configuration  problem  like  "could  not find
-hard drive image."
+The safest setting is action=fatal or action=ask. If you
+are  getting  panics, you can try action=report instead.
+If you allow Bochs to continue after a panic,  don't  be
+surprised  if  you  get strange behavior or crashes if a
+panic occurs.  Please report panic messages unless it is
+just a configuration  problem like "could  not find hard
+drive image."
 
-Example:
+Examples:
   panic: action=fatal
+  panic: action=ask
 
 
 .TP
 .I "error:"
-Bochs produces an error message when it  finds
-a condition that really shouldn't happen,  but
-doesn't endanger the simulation. An example of
-an error  might be  if the  emulated  software
-produces an illegal disk command.
+Bochs  produces  an  error   message  when  it  finds  a
+condition  that  really  shouldn't  happen,  but doesn't
+endanger the  simulation.  An example of an error  might
+be  if the  emulated  software  produces an illegal disk
+command.
 
-The "error" setting tells Bochs how to respond
-to an error condition.   You can set  this  to
-fatal  (terminate the session),  report (print
-information to the  console),  or  ignore  (do
-nothing).
+The "error"  setting  tells  Bochs  how to respond to an
+error condition. You can set  this  to fatal  (terminate
+the  session), ask (ask user how to proceed), warn (show
+dialog   with  message   and  continue),  report  (print
+information  to the log file),  or ignore  (do nothing).
 
 Example:
   error: action=report
+  error: action=warn
 
 .TP
 .I "info:"
-This setting tells Bochs what to  do  when  an
-event  occurs   that  generates  informational
-messages.  You can  set this  to  fatal  (that
-would not be very smart though), report (print
-information to the  console),  or  ignore  (do
-nothing).   For  general  usage,  the "report"
+This  setting  tells Bochs  what  to  do  when  an event
+occurs   that generates  informational messages. You can
+set this  to report (print information to the log file),
+or  ignore (do nothing). For general usage, the "report"
 option is probably a good choice.
 
 Example:
@@ -872,13 +872,11 @@ Example:
 
 .TP
 .I "debug:"
-This  setting  tells  Bochs what  to  do  with
-messages intended to assist in debugging.  You
-can set  this  to  fatal  (but you shouldn't),
-report (print information to the  console), or
-ignore (do nothing). You should generally  set
-this  to  ignore,  unless  you are  trying  to
-diagnose a particular problem.
+This  setting  tells  Bochs  what  to  do  with messages
+intended to assist in  debugging.  You can set  this  to
+report (print  information to  the log file),  or ignore
+(do nothing). You should generally set this  to  ignore,
+unless  you are trying to diagnose a particular problem.
 
 .B NOTE:
 When  action=report,   Bochs   may  spit  out
@@ -909,10 +907,20 @@ using the `tty' command, and use that as the `dev' parameter.  Then do
 and run bochs in the other window.  Serial I/O to com1 (port 0x3f8) will all
 go to the other window.
 
+In socket* and pipe* (win32 only) modes Bochs becomes either socket/named pipe
+client or server. In client mode it connects to an already running server (if
+connection fails Bochs treats com port as not connected). In server mode it
+opens socket/named pipe and waits until a client application connects to it
+before starting simulation. This mode is useful for remote debugging (e.g.
+with gdb's "target remote host:port" command or windbg's command line option
+-k com:pipe,port=\\.\pipe\pipename). Socket modes use simple TCP communication,
+pipe modes use duplex byte mode pipes.
+
 Other serial modes are 'null' (no input/output), 'file' (output to a file
-specified as the 'dev' parameter), 'raw' (use the real serial port - under
-construction for win32) and 'mouse' (standard serial mouse - requires
-mouse option setting 'type=serial' or 'type=serial_wheel')
+specified as the 'dev' parameter and changeable at runtime), 'raw' (use the
+real serial port - partly implemented on win32) and 'mouse' (standard serial
+mouse - requires mouse option setting 'type=serial', 'type=serial_wheel'
+or 'type=serial_msys')
 
 Examples:
   com1: enabled=1, mode=term, dev=/dev/ttyp7
@@ -924,7 +932,8 @@ Examples:
 This defines a parallel (printer) port. When turned on and an output file is
 defined the emulated printer port sends characters printed by the guest
 OS into the output file. On some platforms a device filename can be used to
-send the data to the real parallel port (e.g. "/dev/lp0" on Linux).
+send the data to the real parallel port (e.g. "/dev/lp0" on Linux). The
+output file can be changed at runtime.
 
 Examples:
   parport1: enabled=1, file=parport.out
@@ -951,10 +960,10 @@ waveout:
 waveindrv:
   This defines the driver to be used for the wavein feature.
   Possible values are 'dummy' (recording silence) and platform-dependent
-  drivers 'alsa', 'oss' and 'win'.
+  drivers 'alsa', 'oss', 'sdl' and 'win'.
 
 wavein:
-  This defines the device to be used for wave output (if necessary).
+  This defines the device to be used for wave input (if necessary).
 
 midioutdrv:
   This defines the driver to be used for the MIDI output feature.
@@ -1112,6 +1121,9 @@ you can use the following 'ethmod's to simulate a virtual network.
             DHCP assigns 192.168.10.2 to the guest
             The TFTP server use 'ethdev' for the root directory and doesn't
             overwrite files
+ - socket : Connect up to 6 Bochs instances with external program 'bxhub'
+            (simulating an ethernet hub). It provides the same services as the
+            'vnet' module and assigns IP addresses like 'slirp' (10.0.2.x).
 
 ETHDEV:
 The ethdev value is the name of the network interface on your host
@@ -1119,6 +1131,8 @@ platform.  On UNIX machines, you can get the name by running ifconfig. On
 Windows machines, you must run niclist to get the name of the ethdev.
 Niclist source code is in misc/niclist.c and it is included in Windows
 binary releases.
+The 'socket' module uses this parameter to specify the UDP port for
+receiving packets and (optional) the host to connect.
 
 SCRIPT:
 The script value is optional, and is the name of a script that
@@ -1128,7 +1142,8 @@ This is mainly useful for the tun/tap devices that only exist during
 Bochs execution. The network interface name is supplied to the script
 as first parameter. The 'slirp' module uses this parameter to specify
 a config file for setting up an alternative IP configuration or additional
-features.
+features. The 'vnet' module uses this parameter to specify an alternative
+log file name.
 
 BOOTROM:
 The bootrom value is optional, and is the name of the ROM image
@@ -1143,6 +1158,8 @@ Examples:
   ne2k: ioaddr=0x300, irq=9, mac=fe:fd:00:00:00:01, ethmod=tuntap, ethdev=/dev/net/tun0, script=./tunconfig
   ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vde, ethdev="/tmp/vde.ctl"
   ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vnet, ethdev="c:/temp"
+  ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=40000 # use localhost
+  ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=mymachine:40000
   ne2k: mac=b0:c4:20:00:00:01, ethmod=slirp, script=slirp.conf, bootrom=ne2k_pci.rom
 
 .TP
@@ -1168,42 +1185,60 @@ Example:
 .TP
 .I "usb_uhci:"
 This option controls the presence of the USB root hub which is a part
-of the i440FX PCI chipset. With the portX option you can connect devices
+of the i440FX PCI chipset. With the portX parameter you can connect devices
 to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'disk', 'cdrom',
-'hub' and 'printer').
+\&'floppy', 'hub' and 'printer').
 
 If you connect the mouse or tablet to one of the ports, Bochs forwards the
 mouse movement data to the USB device instead of the selected mouse type.
 When connecting the keypad to one of the ports, Bochs forwards the input of
 the numeric keypad to the USB device instead of the PS/2 keyboard.
 
-To connect a 'flat' mode image as an USB hardisk you can use the 'disk' device
+To connect a 'flat' mode image as a USB hardisk you can use the 'disk' device
 with the path to the image separated with a colon. To use other disk image modes
 similar to ATA disks the syntax 'disk:mode:filename' must be used (see below).
 
-To emulate an USB cdrom you can use the 'cdrom' device name and the path to
+To emulate a USB cdrom you can use the 'cdrom' device name and the path to
 an ISO image or raw device name also separated with a colon. An option to
 insert/eject media is available in the runtime configuration.
 
+To emulate a USB floppy you can use the 'floppy' device with the path to the
+image separated with a colon. To use the VVFAT image mode similar to the
+legacy floppy the syntax 'floppy:vvfat:directory' must be used (see below).
+An option to insert/eject media is available in the runtime configuration.
+
+The device name 'hub' connects an external hub with max. 8 ports (default: 4)
+to the root hub. To specify the number of ports you have to add the value
+separated with a colon. Connecting devices to the external hub ports is only
+available in the runtime configuration.
+
 The device 'printer' emulates the HP Deskjet 920C printer. The PCL data is
 sent to a file specified in bochsrc.txt. The current code appends the PCL
-code to the file if the file already existed. It would probably be nice to
-overwrite the file instead, asking user first.
+code to the file if the file already existed. The output file can be
+changed at runtime.
 
 The optionsX parameter can be used to assign specific options to the device
 connected to the corresponding USB port. Currently this feature is used to
 set the speed reported by device ('low', 'full', 'high' or 'super'). The
-availabe speed choices depend on both HC and device. For the USB 'disk' device
-the optionsX parameter can be used to specify an alternative redolog file
-(journal) of some image modes. For 'vvfat' mode USB disks the optionsX
-parameter can be used to specify the disk size (range 128M ... 128G). If the
-size is not specified, it defaults to 504M.
+availabe speed choices depend on both HC and device. The option 'debug' turns
+on debug output for the device at connection time.
+For the USB 'disk' device the optionsX parameter can be used to specify an
+alternative redolog file (journal) of some image modes. For 'vvfat' mode USB
+disks the optionsX parameter can be used to specify the disk size (range
+128M ... 128G). If the size is not specified, it defaults to 504M.
+For the USB 'floppy' device the optionsX parameter can be used to specify an
+alternative device ID to be reported. Currently only the model "teac" is
+supported (can fix hw detection in some guest OS). The USB floppy also
+accepts the parameter "write_protected" with valid values 0 and 1 to select
+the access mode (default is 0).
 
-Example:
+Examples:
   usb_uhci: enabled=1, port1=mouse, port2=disk:usbstick.img
   usb_uhci: enabled=1, port1=hub:7, port2=disk:growing:usbdisk.img
-  usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2=speed:full
+  usb_uhci: enabled=1, port2=disk:undoable:usbdisk.img, options2=journal:redo.log
+  usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2="debug,speed:full"
   usb_uhci: enabled=1, port1=printer:printdata.bin, port2=cdrom:image.iso
+  usb_uhci: enabled=1, port2=floppy:vvfat:diskette, options2="model:teac"
 
 .TP
 .I "usb_ohci:"
@@ -1216,12 +1251,22 @@ Example:
   usb_ohci: enabled=1
 
 .TP
+.I "usb_ehci:"
+This option controls the presence of the USB EHCI host controller with a
+6-port hub. The portX parameter accepts the same device types with the same
+syntax as the UHCI controller (see above). The optionsX parameter is also
+available on EHCI.
+
+Example:
+  usb_ehci: enabled=1, port1=tablet, options1="speed:high"
+
+.TP
 .I "usb_xhci:"
-This option controls the presence of the experimental USB xHCI host controller
-with a 4-port hub. The portX parameter accepts the same device types with the
-same syntax as the UHCI controller (see above). The optionsX parameter is also
-available on xHCI. NOTE: port 1 and 2 are USB3 and only support super-speed
-devices, but port 3 and 4 are USB2 and support speed settings low, full and high.
+This option controls the presence of the USB xHCI host controller with a 4-port
+hub. The portX parameter accepts the same device types with the same syntax as
+the UHCI controller (see above). The optionsX parameter is also available on
+xHCI. NOTE: port 1 and 2 are USB3 and only support super-speed devices, but
+port 3 and 4 are USB2 and support speed settings low, full and high.
 
 Example:
   usb_xhci: enabled=1
@@ -1236,7 +1281,7 @@ Example:
 
 The vendor and device arguments should contain the vendor ID respectively the
 device ID of the PCI device you want to map within Bochs.
-.B The PCI mapping is still very experimental.
+.B The PCI mapping is still very experimental and not maintained yet.
 
 .TP
 .I "user_plugin:"

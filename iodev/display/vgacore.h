@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vgacore.h 11519 2012-10-28 08:23:39Z vruppert $
+// $Id: vgacore.h 13150 2017-03-26 08:09:28Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2012  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -45,18 +45,16 @@
 #define X_TILESIZE 16
 #define Y_TILESIZE 24
 
-class bx_nonvga_device_c : public bx_devmodel_c {
+#if BX_SUPPORT_PCI
+class bx_nonvga_device_c : public bx_pci_device_c {
 public:
   virtual void redraw_area(unsigned x0, unsigned y0,
                            unsigned width, unsigned height) {}
   virtual void refresh_display(void *this_ptr, bx_bool redraw) {}
 };
-
-class bx_vgacore_c : public bx_vga_stub_c
-#if BX_SUPPORT_PCI
-  , public bx_pci_device_stub_c
 #endif
-{
+
+class bx_vgacore_c : public bx_vga_stub_c {
 public:
   bx_vgacore_c();
   virtual ~bx_vgacore_c();
@@ -168,7 +166,7 @@ protected:
       Bit8u   raster_op;
       Bit8u   read_map_select;
       Bit8u   write_mode;
-      bx_bool read_mode;
+      Bit32u  read_mode;
       bx_bool odd_even;
       bx_bool chain_odd_even;
       Bit8u   shift_reg;
@@ -226,7 +224,8 @@ protected:
     Bit16u last_xres;
     Bit16u last_yres;
     Bit8u last_bpp;
-    Bit8u last_msl;
+    Bit8u last_fw;
+    Bit8u last_fh;
     // maximum resolution and number of tiles
     Bit16u max_xres;
     Bit16u max_yres;
@@ -234,7 +233,9 @@ protected:
     Bit16u num_y_tiles;
     // vga override mode
     bx_bool vga_override;
+#if BX_SUPPORT_PCI
     bx_nonvga_device_c *nvgadev;
+#endif
   } s;  // state information
 
   int timer_id;

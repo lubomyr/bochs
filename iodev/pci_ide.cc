@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci_ide.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: pci_ide.cc 13154 2017-03-27 19:38:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2014  The Bochs Project
+//  Copyright (C) 2004-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ bx_pci_ide_c *thePciIdeController = NULL;
 
 const Bit8u bmdma_iomask[16] = {1, 0, 1, 0, 4, 0, 0, 0, 1, 0, 1, 0, 4, 0, 0, 0};
 
-int CDECL libpci_ide_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libpci_ide_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   thePciIdeController = new bx_pci_ide_c();
   bx_devices.pluginPciIdeController = thePciIdeController;
@@ -360,7 +360,7 @@ Bit32u bx_pci_ide_c::read(Bit32u address, unsigned io_len)
       break;
     case 0x04:
       value = BX_PIDE_THIS s.bmdma[channel].dtpr;
-      BX_DEBUG(("BM-DMA read DTP register, channel %d, value = 0x%04x", channel, value));
+      BX_DEBUG(("BM-DMA read DTP register, channel %d, value = 0x%08x", channel, value));
       break;
   }
 
@@ -399,11 +399,11 @@ void bx_pci_ide_c::write(Bit32u address, Bit32u value, unsigned io_len)
         BX_PIDE_THIS s.bmdma[channel].prd_current = BX_PIDE_THIS s.bmdma[channel].dtpr;
         BX_PIDE_THIS s.bmdma[channel].buffer_top = BX_PIDE_THIS s.bmdma[channel].buffer;
         BX_PIDE_THIS s.bmdma[channel].buffer_idx = BX_PIDE_THIS s.bmdma[channel].buffer;
-        BX_PIDE_THIS s.bmdma[channel].data_ready = 0;
         bx_pc_system.activate_timer(BX_PIDE_THIS s.bmdma[channel].timer_index, 1000, 0);
       } else if (!(value & 0x01) && BX_PIDE_THIS s.bmdma[channel].cmd_ssbm) {
         BX_PIDE_THIS s.bmdma[channel].cmd_ssbm = 0;
         BX_PIDE_THIS s.bmdma[channel].status &= ~0x01;
+        BX_PIDE_THIS s.bmdma[channel].data_ready = 0;
       }
       break;
     case 0x02:
@@ -414,23 +414,11 @@ void bx_pci_ide_c::write(Bit32u address, Bit32u value, unsigned io_len)
       break;
     case 0x04:
       BX_PIDE_THIS s.bmdma[channel].dtpr = value & 0xfffffffc;
-      BX_DEBUG(("BM-DMA write DTP register, channel %d, value = 0x%04x", channel, value));
+      BX_DEBUG(("BM-DMA write DTP register, channel %d, value = 0x%08x", channel, value));
       break;
   }
 }
 
-
-// pci configuration space read callback handler
-Bit32u bx_pci_ide_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_PIDE_THIS pci_conf[address+i] << (i*8));
-  }
-  BX_DEBUG(("PIIX3 PCI IDE read  register 0x%02x value 0x%08x", address, value));
-  return value;
-}
 
 // pci configuration space write callback handler
 void bx_pci_ide_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)

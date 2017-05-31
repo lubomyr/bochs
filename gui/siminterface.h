@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.h 12698 2015-03-29 14:27:32Z vruppert $
+// $Id: siminterface.h 13073 2017-02-16 21:43:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -168,6 +168,7 @@ typedef enum {
 typedef enum {
   ACT_IGNORE = 0,
   ACT_REPORT,
+  ACT_WARN,
   ACT_ASK,
   ACT_FATAL,
   N_ACT
@@ -178,11 +179,11 @@ typedef enum {
 // normally all action choices are available for all event types. The exclude
 // expression allows some choices to be eliminated if they don't make any
 // sense.  For example, it would be stupid to ignore a panic.
-#define BX_LOG_OPTS_EXCLUDE(type, choice)  (                           \
-   /* can't die or ask, on debug or info events */                     \
-   (type <= LOGLEV_INFO && (choice == ACT_ASK || choice == ACT_FATAL)) \
-   /* can't ignore panics */                                           \
-   || (type == LOGLEV_PANIC && choice == ACT_IGNORE)                   \
+#define BX_LOG_OPTS_EXCLUDE(type, choice)  (             \
+   /* can't die, ask or warn, on debug or info events */ \
+   (type <= LOGLEV_INFO && (choice >= ACT_WARN))         \
+   /* can't ignore panics */                             \
+   || (type == LOGLEV_PANIC && choice == ACT_IGNORE)     \
    )
 
 // floppy / cdrom media status
@@ -272,7 +273,7 @@ typedef enum {
   BX_SYNC_EVT_GET_PARAM,          // CI -> simulator -> CI
   BX_SYNC_EVT_ASK_PARAM,          // simulator -> CI -> simulator
   BX_SYNC_EVT_TICK,               // simulator -> CI, wait for response.
-  BX_SYNC_EVT_LOG_ASK,            // simulator -> CI, wait for response.
+  BX_SYNC_EVT_LOG_DLG,            // simulator -> CI, wait for response.
   BX_SYNC_EVT_GET_DBG_COMMAND,    // simulator -> CI, wait for response.
   __ALL_EVENTS_BELOW_ARE_ASYNC__,
   BX_ASYNC_EVT_KEY,               // vga window -> simulator
@@ -392,6 +393,7 @@ typedef struct {
 // synchronizing threads, etc. for each.
 typedef struct {
   Bit8u level;
+  Bit8u mode;
   const char *prefix;
   const char *msg;
 } BxLogMsgEvent;
@@ -401,11 +403,11 @@ typedef struct {
 // Also uses BxLogMsgEvent, but this is a message to be displayed in
 // the debugger history window.
 
-// Event type: BX_SYNC_EVT_LOG_ASK
+// Event type: BX_SYNC_EVT_LOG_DLG
 //
 // This is a synchronous version of BX_ASYNC_EVT_LOG_MSG, which is used
 // when the "action=ask" setting is used.  If the simulator runs into a
-// panic, it sends a synchronous BX_SYNC_EVT_LOG_ASK to the CI to be
+// panic, it sends a synchronous BX_SYNC_EVT_LOG_DLG to the CI to be
 // displayed.  The CI shows a dialog that asks if the user wants to
 // continue, quit, etc. and sends the answer back to the simulator.
 // This event also uses BxLogMsgEvent.
@@ -417,6 +419,12 @@ enum {
   BX_LOG_ASK_CHOICE_ENTER_DEBUG,
   BX_LOG_ASK_N_CHOICES,
   BX_LOG_NOTIFY_FAILED
+};
+
+enum {
+  BX_LOG_DLG_ASK,
+  BX_LOG_DLG_WARN,
+  BX_LOG_DLG_QUIT
 };
 
 // Event type: BX_SYNC_EVT_GET_DBG_COMMAND
@@ -482,6 +490,7 @@ enum {
   BX_MOUSE_TYPE_PS2,
   BX_MOUSE_TYPE_IMPS2,
 #if BX_SUPPORT_BUSMOUSE
+  BX_MOUSE_TYPE_INPORT,
   BX_MOUSE_TYPE_BUS,
 #endif
   BX_MOUSE_TYPE_SERIAL,
@@ -521,9 +530,9 @@ enum {
 #define BX_ATA_DEVICE_DISK       1
 #define BX_ATA_DEVICE_CDROM      2
 
-#define BX_ATA_BIOSDETECT_NONE   0
-#define BX_ATA_BIOSDETECT_AUTO   1
-#define BX_ATA_BIOSDETECT_CMOS   2
+#define BX_ATA_BIOSDETECT_AUTO   0
+#define BX_ATA_BIOSDETECT_CMOS   1
+#define BX_ATA_BIOSDETECT_NONE   2
 
 enum {
   BX_ATA_TRANSLATION_NONE,
@@ -674,6 +683,7 @@ public:
   virtual int get_default_log_action(int level) {return -1;}
   virtual void set_default_log_action(int level, int action) {}
   virtual const char *get_action_name(int action) {return NULL;}
+  virtual int is_action_name(const char *val) {return -1;}
   virtual const char *get_log_level_name(int level) {return NULL;}
   virtual int get_max_log_level() {return -1;}
 
@@ -714,9 +724,11 @@ public:
   // send an event from the simulator to the CI.
   virtual BxEvent* sim_to_ci_event(BxEvent *event) {return NULL;}
 
-  // called from simulator when it hits serious errors, to ask if the user
-  // wants to continue or not
-  virtual int log_ask(const char *prefix, int level, const char *msg) {return -1;}
+  // called from simulator to display a gui dialog in particular situations.
+  // 1. When it hits serious errors, to ask if the user wants to continue or not.
+  // 2. When it hits errors, to warn the user before continuing simulation
+  // 3. When it hits critical errors, inform the user before terminating simulation.
+  virtual int log_dlg(const char *prefix, int level, const char *msg, int mode) {return -1;}
   // called from simulator when writing a message to log file
   virtual void log_msg(const char *prefix, int level, const char *msg) {}
   // set this to 1 if the gui has a log viewer
@@ -765,7 +777,8 @@ public:
     void *userdata) {}
   virtual int configuration_interface(const char* name, ci_command_t command) {return -1; }
   virtual int begin_simulation(int argc, char *argv[]) {return -1;}
-  virtual bx_bool register_runtime_config_handler(void *dev, rt_conf_handler_t handler) {return 0;}
+  virtual int register_runtime_config_handler(void *dev, rt_conf_handler_t handler) {return 0;}
+  virtual void unregister_runtime_config_handler(int id) {}
   virtual void update_runtime_options() {}
   typedef bx_bool (*is_sim_thread_func_t)();
   is_sim_thread_func_t is_sim_thread_func;
@@ -813,6 +826,11 @@ public:
                                      const char *param, int maxports, bx_list_c *base) {return 0;}
   virtual int  write_param_list(FILE *fp, bx_list_c *base, const char *optname, bx_bool multiline) {return 0;}
   virtual int  write_usb_options(FILE *fp, int maxports, bx_list_c *base) {return 0;}
+
+#if BX_USE_GUI_CONSOLE
+  virtual int  bx_printf(const char *fmt, ...) {return 0;}
+  virtual char* bx_gets(char *s, int size, FILE *stream) {return NULL;}
+#endif
 };
 
 BOCHSAPI extern bx_simulator_interface_c *SIM;

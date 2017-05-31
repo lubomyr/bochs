@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: wxmain.cc 13076 2017-02-18 16:28:04Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -141,7 +141,7 @@ virtual int OnExit();
   public:
   // This default callback is installed when the simthread is NOT running,
   // so that events coming from the simulator code can be handled.
-  // The primary culprit is panics which cause an BX_SYNC_EVT_LOG_ASK.
+  // The primary culprit is panics which cause an BX_SYNC_EVT_LOG_DLG.
   static BxEvent *DefaultCallback(void *thisptr, BxEvent *event);
 };
 
@@ -209,8 +209,7 @@ static int ci_callback(void *userdata, ci_command_t command)
   return 0;
 }
 
-extern "C" int libwx_LTX_plugin_init(plugin_t *plugin, plugintype_t type,
-  int argc, char *argv[])
+extern "C" int libwx_gui_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   wxLogDebug(wxT("plugin_init for wxmain.cc"));
   wxLogDebug(wxT("installing wxWidgets as the configuration interface"));
@@ -221,7 +220,7 @@ extern "C" int libwx_LTX_plugin_init(plugin_t *plugin, plugintype_t type,
   return 0; // success
 }
 
-extern "C" void libwx_LTX_plugin_fini()
+extern "C" void libwx_gui_plugin_fini()
 {
   // Nothing here yet
 }
@@ -279,21 +278,19 @@ BxEvent *MyApp::DefaultCallback(void *thisptr, BxEvent *event)
   switch (event->type)
   {
     case BX_ASYNC_EVT_LOG_MSG:
-    case BX_SYNC_EVT_LOG_ASK: {
+    case BX_SYNC_EVT_LOG_DLG: {
       wxLogDebug(wxT("DefaultCallback: log ask event"));
-      wxString text;
-      text.Printf(wxT("Error: %s"), event->u.logmsg.msg);
       if (wxBochsClosing) {
         // gui closing down, do something simple and nongraphical.
+        wxString text;
+        text.Printf(wxT("Error: %s"), event->u.logmsg.msg);
         fprintf(stderr, "%s\n", (const char *)text.mb_str(wxConvUTF8));
+        event->retcode = BX_LOG_ASK_CHOICE_DIE;
       } else {
-        wxMessageBox(text, wxT("Error"), wxOK | wxICON_ERROR);
-        // maybe I can make OnLogAsk display something that looks appropriate.
-        // theFrame->OnLogAsk(event);
+        wxString levelName(SIM->get_log_level_name(event->u.logmsg.level), wxConvUTF8);
+        wxMessageBox(wxString(event->u.logmsg.msg, wxConvUTF8), levelName, wxOK | wxICON_ERROR);
+        event->retcode = BX_LOG_ASK_CHOICE_CONTINUE;
       }
-      event->retcode = BX_LOG_ASK_CHOICE_DIE;
-      // There is only one thread at this point.  if I choose DIE here, it will
-      // call fatal() and kill the whole app.
       break;
     }
     case BX_SYNC_EVT_TICK:
@@ -1126,10 +1123,10 @@ void MyFrame::OnSim2CIEvent(wxCommandEvent& event)
     break;
   case BX_ASYNC_EVT_LOG_MSG:
     showLogView->AppendText(be->u.logmsg.level, wxString(be->u.logmsg.msg, wxConvUTF8));
-    free((void*)be->u.logmsg.msg);
+    delete [] be->u.logmsg.msg;
     break;
-  case BX_SYNC_EVT_LOG_ASK:
-    OnLogAsk(be);
+  case BX_SYNC_EVT_LOG_DLG:
+    OnLogDlg(be);
     break;
   case BX_ASYNC_EVT_QUIT_SIM:
     wxMessageBox(wxT("Bochs simulation has stopped."), wxT("Bochs Stopped"),
@@ -1148,17 +1145,23 @@ void MyFrame::OnSim2CIEvent(wxCommandEvent& event)
     delete be;
 }
 
-void MyFrame::OnLogAsk(BxEvent *be)
+void MyFrame::OnLogDlg(BxEvent *be)
 {
   wxLogDebug(wxT("log msg: level=%d, prefix='%s', msg='%s'"),
       be->u.logmsg.level,
       be->u.logmsg.prefix,
       be->u.logmsg.msg);
-  wxASSERT(be->type == BX_SYNC_EVT_LOG_ASK);
+  wxASSERT(be->type == BX_SYNC_EVT_LOG_DLG);
   wxString levelName(SIM->get_log_level_name(be->u.logmsg.level), wxConvUTF8);
   LogMsgAskDialog dlg(this, -1, levelName);  // panic, error, etc.
+  int mode = be->u.logmsg.mode;
+  dlg.EnableButton(dlg.CONT, mode != BX_LOG_DLG_QUIT);
+  dlg.EnableButton(dlg.DUMP, mode == BX_LOG_DLG_ASK);
+  dlg.EnableButton(dlg.DIE, mode != BX_LOG_DLG_WARN);
 #if !BX_DEBUGGER && !BX_GDBSTUB
   dlg.EnableButton(dlg.DEBUG, FALSE);
+#else
+  dlg.EnableButton(dlg.DEBUG, mode == BX_LOG_DLG_ASK);
 #endif
   dlg.SetContext(wxString(be->u.logmsg.prefix, wxConvUTF8));
   dlg.SetMessage(wxString(be->u.logmsg.msg, wxConvUTF8));

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: avx512_conflict.cc 12437 2014-07-25 08:35:06Z vruppert $
+// $Id: avx512_conflict.cc 12996 2016-12-17 13:47:45Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2014 Stanislav Shwartsman
@@ -102,6 +102,30 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VPLZCNTQ_MASK_VdqWdqR(bxInstructio
 
   for (unsigned n=0; n < QWORD_ELEMENTS(len); n++)
     op.vmm64u(n) = lzcntq(op.vmm64u(n));
+
+  avx512_write_regq_masked(i, &op, len, BX_READ_8BIT_OPMASK(i->opmask()));
+  BX_NEXT_INSTR(i);
+}
+
+BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VPOPCNTD_MASK_VdqWdqR(bxInstruction_c *i)
+{
+  BxPackedAvxRegister op = BX_READ_AVX_REG(i->src());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < DWORD_ELEMENTS(len); n++)
+    op.vmm32u(n) = popcntd(op.vmm32u(n));
+
+  avx512_write_regd_masked(i, &op, len, BX_READ_16BIT_OPMASK(i->opmask()));
+  BX_NEXT_INSTR(i);
+}
+
+BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VPOPCNTQ_MASK_VdqWdqR(bxInstruction_c *i)
+{
+  BxPackedAvxRegister op = BX_READ_AVX_REG(i->src());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < QWORD_ELEMENTS(len); n++)
+    op.vmm64u(n) = popcntq(op.vmm64u(n));
 
   avx512_write_regq_masked(i, &op, len, BX_READ_8BIT_OPMASK(i->opmask()));
   BX_NEXT_INSTR(i);

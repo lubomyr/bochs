@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paramtree.h 12684 2015-03-13 21:28:40Z vruppert $
+// $Id: paramtree.h 13020 2017-01-01 17:45:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2010-2015  The Bochs Project
+//  Copyright (C) 2010-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -117,41 +117,61 @@ public:
     // indirectly from one or more other options (e.g. cpu count)
     CI_ONLY = (1<<31)
   } bx_param_opt_bits;
+
   bx_param_c(Bit32u id, const char *name, const char *description);
   bx_param_c(Bit32u id, const char *name, const char *label, const char *description);
   virtual ~bx_param_c();
+
+  virtual void reset() {}
+
+  const char *get_name() const { return name; }
   bx_param_c *get_parent() { return (bx_param_c *) parent; }
+
   int get_param_path(char *path_out, int maxlen);
+
   void set_format(const char *format) {text_format = format;}
   const char *get_format() const {return text_format;}
+
   void set_long_format(const char *format) {long_text_format = format;}
   const char *get_long_format() const {return long_text_format;}
+
   void set_ask_format(const char *format);
   const char *get_ask_format() const {return ask_format;}
+
   void set_label(const char *text);
-  void set_description(const char *text);
   const char *get_label() const {return label;}
+
+  void set_description(const char *text);
+  const char *get_description() const { return description; }
+
   virtual void set_runtime_param(int val) { runtime_param = val; }
   int get_runtime_param() { return runtime_param; }
+
   void set_group(const char *group);
   const char *get_group() const {return group_name;}
-  const char *get_name() const { return name; }
-  const char *get_description() const { return description; }
+
   int get_enabled() const { return enabled; }
   virtual void set_enabled(int enabled) { this->enabled = enabled; }
-  virtual void reset() {}
+
   int getint() const {return -1;}
+
   static const char* set_default_format(const char *f);
   static const char *get_default_format() { return default_text_format; }
+
   bx_list_c *get_dependent_list() { return dependent_list; }
+
   void set_options(Bit32u options) { this->options = options; }
   Bit32u get_options() const { return options; }
+
   void set_device_param(void *dev) { device = dev; }
   void *get_device_param() { return device; }
+
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *fp) {}
-  virtual int text_ask(FILE *fpin, FILE *fpout) {return -1;}
+  virtual void text_print() {}
+  virtual int text_ask() { return -1; }
 #endif
+
+  virtual int parse_param(const char *value) { return -1; }
 };
 
 typedef Bit64s (*param_event_handler)(class bx_param_c *, int set, Bit64s val);
@@ -210,9 +230,10 @@ public:
   static Bit32u set_default_base(Bit32u val);
   static Bit32u get_default_base() { return default_base; }
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *fp);
-  virtual int text_ask(FILE *fpin, FILE *fpout);
+  virtual void text_print();
+  virtual int text_ask();
 #endif
+  virtual int parse_param(const char *value);
 };
 
 // a bx_shadow_num_c is like a bx_param_num_c except that it doesn't
@@ -293,9 +314,10 @@ public:
       Bit64s initial_val,
       bx_bool is_shadow = 0);
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *fp);
-  virtual int text_ask(FILE *fpin, FILE *fpout);
+  virtual void text_print();
+  virtual int text_ask();
 #endif
+  virtual int parse_param(const char *value);
 };
 
 // a bx_shadow_bool_c is a shadow param based on bx_param_bool_c.
@@ -333,17 +355,18 @@ public:
   virtual ~bx_param_enum_c();
   const char *get_choice(int n) { return choices[n]; }
   const char *get_selected() { return choices[val.number - min]; }
-  int find_by_name(const char *string);
+  int find_by_name(const char *s);
   virtual void set(Bit64s val);
-  bx_bool set_by_name(const char *string);
+  bx_bool set_by_name(const char *s);
   void set_dependent_list(bx_list_c *l, bx_bool enable_all);
   void set_dependent_bitmap(Bit64s value, Bit64u bitmap);
   Bit64u get_dependent_bitmap(Bit64s value);
   virtual void set_enabled(int enabled);
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *fp);
-  virtual int text_ask(FILE *fpin, FILE *fpout);
+  virtual void text_print();
+  virtual int text_ask();
 #endif
+  virtual int parse_param(const char *value);
 };
 
 typedef const char* (*param_string_event_handler)(class bx_param_string_c *,
@@ -389,9 +412,10 @@ public:
   bx_bool isempty();
   int sprint(char *buf, int buflen, bx_bool dquotes);
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *fp);
-  virtual int text_ask(FILE *fpin, FILE *fpout);
+  virtual void text_print();
+  virtual int text_ask();
 #endif
+  virtual int parse_param(const char *value);
 };
 
 // Declare a filename class.  It is identical to a string, except that
@@ -413,13 +437,17 @@ public:
 class BOCHSAPI bx_shadow_data_c : public bx_param_c {
   Bit32u data_size;
   Bit8u *data_ptr;
+  bx_bool text_fmt;
 public:
   bx_shadow_data_c(bx_param_c *parent,
       const char *name,
       Bit8u *ptr_to_data,
-      Bit32u data_size);
+      Bit32u data_size, bx_bool text_fmt=0);
   Bit8u *getptr() {return data_ptr;}
   Bit32u get_size() const {return data_size;}
+  bx_bool get_format() const {return text_fmt;}
+  Bit8u get(Bit32u index);
+  void set(Bit32u index, Bit8u value);
 };
 
 typedef void (*filedata_save_handler)(void *devptr, FILE *save_fp);
@@ -446,6 +474,8 @@ typedef struct _bx_listitem_t {
   struct _bx_listitem_t *next;
 } bx_listitem_t;
 
+typedef void (*list_restore_handler)(void *devptr, class bx_list_c *);
+
 class BOCHSAPI bx_list_c : public bx_param_c {
 protected:
   // chained list of bx_listitem_t
@@ -458,6 +488,9 @@ protected:
   // title of the menu or series
   char *title;
   void init(const char *list_title);
+  // save / restore support
+  void *sr_devptr;
+  list_restore_handler restore_handler;
 public:
   enum {
     // When a bx_list_c is displayed as a menu, SHOW_PARENT controls whether or
@@ -505,9 +538,11 @@ public:
   virtual void clear();
   virtual void remove(const char *name);
   virtual void set_runtime_param(int val);
+  void set_restore_handler(void *devptr, list_restore_handler restore);
+  void restore();
 #if BX_USE_TEXTCONFIG
-  virtual void text_print(FILE *);
-  virtual int text_ask(FILE *fpin, FILE *fpout);
+  virtual void text_print();
+  virtual int text_ask();
 #endif
 };
 

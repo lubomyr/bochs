@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paging.cc 12725 2015-04-21 08:20:28Z sshwarts $
+// $Id: paging.cc 12986 2016-12-10 05:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -225,12 +225,6 @@
 // - Processor running at CPL=0,1,2 maps to U/S=0
 //   Processor running at CPL=3     maps to U/S=1
 
-#if BX_SUPPORT_X86_64
-  #define BX_INVALID_TLB_ENTRY BX_CONST64(0xffffffffffffffff)
-#else
-  #define BX_INVALID_TLB_ENTRY 0xffffffff
-#endif
-
 // bit [11] of the TLB lpf used for TLB_NoHostPtr valid indication
 #define TLB_LPFOf(laddr) AlignedAccessLPFOf(laddr, 0x7ff)
 
@@ -253,6 +247,26 @@
 //    |  |  +--+------> u/s,r/w combined of page dir & table (cached)
 //    |  +------------> u/s of current access
 //    +---------------> Current CR0.WP value
+//
+//                                                                  CR0.WP = 0     CR0.WP = 1
+//    -----------------------------------------------------------------------------------------
+//       0  0  0  0 | sys read from supervisor page             | Allowed       | Allowed
+//       0  0  0  1 | sys write to read only supervisor page    | Allowed       | Not Allowed
+//       0  0  1  0 | sys read from supervisor page             | Allowed       | Allowed
+//       0  0  1  1 | sys write to supervisor page              | Allowed       | Allowed
+//       0  1  0  0 | sys read from read only user page         | Allowed       | Allowed
+//       0  1  0  1 | sys write to read only user page          | Allowed       | Not Allowed
+//       0  1  1  0 | sys read from user page                   | Allowed       | Allowed
+//       0  1  1  1 | sys write to user page                    | Allowed       | Allowed
+//       1  0  0  0 | user read from read only supervisor page  | Not Allowed   | Not Allowed
+//       1  0  0  1 | user write to read only supervisor page   | Not Allowed   | Not Allowed
+//       1  0  1  0 | user read from supervisor page            | Not Allowed   | Not Allowed
+//       1  0  1  1 | user write to supervisor page             | Not Allowed   | Not Allowed
+//       1  1  0  0 | user read from read only user page        | Allowed       | Allowed
+//       1  1  0  1 | user write to read only user page         | Not Allowed   | Not Allowed
+//       1  1  1  0 | user read from user page                  | Allowed       | Allowed
+//       1  1  1  1 | user write to user page                   | Allowed       | Allowed
+//
 
 /* 0xff0bbb0b */
 static const Bit8u priv_check[BX_PRIV_CHECK_SIZE] =
@@ -330,15 +344,8 @@ static const Bit8u priv_check[BX_PRIV_CHECK_SIZE] =
 //       result when the direct access is not allowed.
 //
 
-#define TLB_NoHostPtr   (0x800) /* set this bit when direct access is NOT allowed */
-#define TLB_GlobalPage  (0x80000000)
-
-#define TLB_SysReadOK     (0x01)
-#define TLB_UserReadOK    (0x02)
-#define TLB_SysWriteOK    (0x04)
-#define TLB_UserWriteOK   (0x08)
-#define TLB_SysExecuteOK  (0x10)
-#define TLB_UserExecuteOK (0x20)
+#define TLB_NoHostPtr     (0x800) /* set this bit when direct access is NOT allowed */
+#define TLB_GlobalPage    (0x80000000)
 
 #include "cpustats.h"
 
@@ -352,9 +359,8 @@ void BX_CPU_C::TLB_flush(void)
 
   invalidate_stack_cache();
 
-  for (unsigned n=0; n<BX_TLB_SIZE; n++) {
-    BX_CPU_THIS_PTR TLB.entry[n].lpf = BX_INVALID_TLB_ENTRY;
-    BX_CPU_THIS_PTR TLB.entry[n].accessBits = 0;
+  for (unsigned n=0; n < BX_TLB_SIZE; n++) {
+    BX_CPU_THIS_PTR TLB.entry[n].invalidate();
   }
 
 #if BX_CPU_LEVEL >= 5
@@ -366,6 +372,9 @@ void BX_CPU_C::TLB_flush(void)
   // and cause subsequent MWAIT instruction to wait forever
   BX_CPU_THIS_PTR monitor.reset_monitor();
 #endif
+
+  // break all links bewteen traces
+  BX_CPU_THIS_PTR iCache.breakLinks();
 }
 
 #if BX_CPU_LEVEL >= 6
@@ -382,12 +391,13 @@ void BX_CPU_C::TLB_flushNonGlobal(void)
 
   for (unsigned n=0; n<BX_TLB_SIZE; n++) {
     bx_TLB_entry *tlbEntry = &BX_CPU_THIS_PTR TLB.entry[n];
-    if (!(tlbEntry->accessBits & TLB_GlobalPage)) {
-      tlbEntry->lpf = BX_INVALID_TLB_ENTRY;
-      tlbEntry->accessBits = 0;
-    }
-    else {
-      lpf_mask |= tlbEntry->lpf_mask;
+    if (tlbEntry->valid()) {
+      if (!(tlbEntry->accessBits & TLB_GlobalPage)) {
+        tlbEntry->invalidate();
+      }
+      else {
+        lpf_mask |= tlbEntry->lpf_mask;
+      }
     }
   }
 
@@ -399,6 +409,9 @@ void BX_CPU_C::TLB_flushNonGlobal(void)
   // and cause subsequent MWAIT instruction to wait forever
   BX_CPU_THIS_PTR monitor.reset_monitor();
 #endif
+
+  // break all links bewteen traces
+  BX_CPU_THIS_PTR iCache.breakLinks();
 }
 #endif
 
@@ -419,13 +432,14 @@ void BX_CPU_C::TLB_invlpg(bx_address laddr)
     // make sure INVLPG handles correctly large pages
     for (unsigned n=0; n<BX_TLB_SIZE; n++) {
       bx_TLB_entry *tlbEntry = &BX_CPU_THIS_PTR TLB.entry[n];
-      bx_address entry_lpf_mask = tlbEntry->lpf_mask;
-      if ((laddr & ~entry_lpf_mask) == (tlbEntry->lpf & ~entry_lpf_mask)) {
-        tlbEntry->lpf = BX_INVALID_TLB_ENTRY;
-        tlbEntry->accessBits = 0;
-      }
-      else {
-        lpf_mask |= entry_lpf_mask;
+      if (tlbEntry->valid()) {
+        bx_address entry_lpf_mask = tlbEntry->lpf_mask;
+        if ((laddr & ~entry_lpf_mask) == (tlbEntry->lpf & ~entry_lpf_mask)) {
+          tlbEntry->invalidate();
+        }
+        else {
+          lpf_mask |= entry_lpf_mask;
+        }
       }
     }
 
@@ -435,12 +449,10 @@ void BX_CPU_C::TLB_invlpg(bx_address laddr)
   else
 #endif
   {
-    unsigned TLB_index = BX_TLB_INDEX_OF(laddr, 0);
+    bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
     bx_address lpf = LPFOf(laddr);
-    bx_TLB_entry *tlbEntry = &BX_CPU_THIS_PTR TLB.entry[TLB_index];
     if (TLB_LPFOf(tlbEntry->lpf) == lpf) {
-      tlbEntry->lpf = BX_INVALID_TLB_ENTRY;
-      tlbEntry->accessBits = 0;
+      tlbEntry->invalidate();
     }
   }
 
@@ -449,6 +461,9 @@ void BX_CPU_C::TLB_invlpg(bx_address laddr)
   // page and cause subsequent MWAIT instruction to wait forever
   BX_CPU_THIS_PTR monitor.reset_monitor();
 #endif
+
+  // break all links bewteen traces
+  BX_CPU_THIS_PTR iCache.breakLinks();
 }
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVLPG(bxInstruction_c* i)
@@ -459,7 +474,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVLPG(bxInstruction_c* i)
     exception(BX_GP_EXCEPTION, 0);
   }
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   bx_address laddr = get_laddr(i->seg(), eaddr);
 
 #if BX_SUPPORT_VMX
@@ -491,6 +506,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVLPG(bxInstruction_c* i)
 #define ERROR_PROTECTION        0x01
 #define ERROR_RESERVED          0x08
 #define ERROR_CODE_ACCESS       0x10
+#define ERROR_PKEY              0x20
 
 void BX_CPU_C::page_fault(unsigned fault, bx_address laddr, unsigned user, unsigned rw)
 {
@@ -665,7 +681,7 @@ BX_CPP_INLINE Bit32u calculate_pat(Bit32u entry, Bit32u lpf_mask)
 #if BX_SUPPORT_X86_64
 
 // Translate a linear address to a physical address in long mode
-bx_phy_address BX_CPU_C::translate_linear_long_mode(bx_address laddr, Bit32u &lpf_mask, unsigned user, unsigned rw)
+bx_phy_address BX_CPU_C::translate_linear_long_mode(bx_address laddr, Bit32u &lpf_mask, Bit32u &pkey, unsigned user, unsigned rw)
 {
   bx_phy_address ppf = BX_CPU_THIS_PTR cr3 & BX_CR3_PAGING_MASK;
 
@@ -739,6 +755,24 @@ bx_phy_address BX_CPU_C::translate_linear_long_mode(bx_address laddr, Bit32u &lp
   unsigned priv_index = (BX_CPU_THIS_PTR cr0.get_WP() << 4) | // bit 4
                         (user<<3) |                           // bit 3
                         (combined_access | isWrite);          // bit 2,1,0
+
+#if BX_SUPPORT_PKEYS
+  if (BX_CPU_THIS_PTR cr4.get_PKE()) {
+    pkey = (entry[leaf] >> 59) & 0xf;
+
+    if (rw != BX_EXECUTE) {
+      // check of accessDisable bit set
+      if (BX_CPU_THIS_PTR pkru & (1<<(pkey*2)))
+        page_fault(ERROR_PROTECTION | ERROR_PKEY, laddr, user, rw);
+
+      // check of writeDisable bit set
+      if (BX_CPU_THIS_PTR pkru & (1<<(pkey*2+1))) {
+        if (isWrite && (user || BX_CPU_THIS_PTR cr0.get_WP()))
+          page_fault(ERROR_PROTECTION | ERROR_PKEY, laddr, user, rw);
+      }
+    }
+  }
+#endif
 
   if (!priv_check[priv_index] || nx_fault)
     page_fault(ERROR_PROTECTION, laddr, user, rw);
@@ -1141,18 +1175,32 @@ bx_phy_address BX_CPU_C::translate_linear(bx_TLB_entry *tlbEntry, bx_address lad
   bx_phy_address paddress, ppf, poffset = PAGE_OFFSET(laddr);
   unsigned isWrite = rw & 1; // write or r-m-w
   unsigned isExecute = (rw == BX_EXECUTE);
+  bx_address lpf = LPFOf(laddr);
 
   INC_TLB_STAT(tlbLookups);
-
-  bx_address lpf = LPFOf(laddr);
+  if (isExecute)
+    INC_TLB_STAT(tlbExecuteLookups);
+  if (isWrite)
+    INC_TLB_STAT(tlbWriteLookups);
 
   // already looked up TLB for code access
   if (! isExecute && TLB_LPFOf(tlbEntry->lpf) == lpf)
   {
     paddress = tlbEntry->ppf | poffset;
 
+#if BX_SUPPORT_PKEYS
+    if (isWrite) {
+      if (tlbEntry->accessBits & (1 << (0x2 | user)) & BX_CPU_THIS_PTR wr_pkey[tlbEntry->pkey])
+        return paddress;
+    }
+    else {
+      if (tlbEntry->accessBits & (1 << user) & BX_CPU_THIS_PTR rd_pkey[tlbEntry->pkey])
+        return paddress;
+    }
+#else
     if (tlbEntry->accessBits & (1 << (/*(isExecute<<2) |*/ (isWrite<<1) | user)))
       return paddress;
+#endif
 
     // The current access does not have permission according to the info
     // in our TLB cache entry.  Re-walk the page tables, in case there is
@@ -1161,9 +1209,16 @@ bx_phy_address BX_CPU_C::translate_linear(bx_TLB_entry *tlbEntry, bx_address lad
   }
 
   INC_TLB_STAT(tlbMisses);
+  if (isExecute)
+    INC_TLB_STAT(tlbExecuteMisses);
+  if (isWrite)
+    INC_TLB_STAT(tlbWriteMisses);
 
   Bit32u lpf_mask = 0xfff; // 4K pages
   Bit32u combined_access = 0x06;
+#if BX_SUPPORT_X86_64
+  Bit32u pkey = 0;
+#endif
 
   if(BX_CPU_THIS_PTR cr0.get_PG())
   {
@@ -1172,7 +1227,7 @@ bx_phy_address BX_CPU_C::translate_linear(bx_TLB_entry *tlbEntry, bx_address lad
 #if BX_CPU_LEVEL >= 6
 #if BX_SUPPORT_X86_64
     if (long_mode())
-      paddress = translate_linear_long_mode(laddr, lpf_mask, user, rw);
+      paddress = translate_linear_long_mode(laddr, lpf_mask, pkey, user, rw);
     else
 #endif
       if (BX_CPU_THIS_PTR cr4.get_PAE())
@@ -1219,6 +1274,9 @@ bx_phy_address BX_CPU_C::translate_linear(bx_TLB_entry *tlbEntry, bx_address lad
   // direct memory access is NOT allowed by default
   tlbEntry->lpf = lpf | TLB_NoHostPtr;
   tlbEntry->lpf_mask = lpf_mask;
+#if BX_SUPPORT_PKEYS
+  tlbEntry->pkey = pkey;
+#endif
   tlbEntry->ppf = ppf;
   tlbEntry->accessBits = 0;
 
@@ -1765,6 +1823,13 @@ bx_phy_address BX_CPU_C::translate_guest_physical(bx_phy_address guest_paddr, bx
       ppf += (bx_phy_address)(guest_paddr & offset_mask);
       break;
     }
+
+    // EPT non leaf entry, check for reserved bits
+    if ((curr_entry >> 3) & 0xf) {
+      BX_DEBUG(("EPT %s: EPT misconfiguration, reserved bits set for non-leaf entry", bx_paging_level[leaf]));
+      vmexit_reason = VMX_VMEXIT_EPT_MISCONFIGURATION;
+      break;
+    }
   }
 
   if (!vmexit_reason && (access_mask & combined_access) != access_mask) {
@@ -1799,6 +1864,11 @@ bx_phy_address BX_CPU_C::translate_guest_physical(bx_phy_address guest_paddr, bx
   }
 
   if (BX_VMX_EPT_ACCESS_DIRTY_ENABLED) {
+    // write access and Dirty-bit is not set in the leaf entry
+    unsigned dirty_update = (rw & 1) && !(entry[leaf] & 0x200);
+    if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_PML_ENABLE))
+      vmx_page_modification_logging(guest_paddr, dirty_update);
+
     update_ept_access_dirty(entry_addr, entry, MEMTYPE(eptptr_memtype), leaf, rw & 1);
   }
 
@@ -1954,19 +2024,6 @@ bx_bool BX_CPU_C::dbg_xlate_linear2phy(bx_address laddr, bx_phy_address *phy, bx
   else {
     bx_phy_address pt_address = BX_CPU_THIS_PTR cr3 & BX_CR3_PAGING_MASK;
 
-    // see if page is in the TLB first
-    if (! verbose) {
-      bx_address lpf = LPFOf(laddr);
-      unsigned TLB_index = BX_TLB_INDEX_OF(lpf, 0);
-      bx_TLB_entry *tlbEntry  = &BX_CPU_THIS_PTR TLB.entry[TLB_index];
-
-      if (TLB_LPFOf(tlbEntry->lpf) == lpf) {
-        paddress = tlbEntry->ppf | PAGE_OFFSET(laddr);
-        *phy = paddress;
-        return 1;
-      }
-    }
-
 #if BX_CPU_LEVEL >= 6
     if (BX_CPU_THIS_PTR cr4.get_PAE()) {
       Bit64u offset_mask = BX_CONST64(0x0000ffffffffffff);
@@ -2075,7 +2132,9 @@ int BX_CPU_C::access_write_linear(bx_address laddr, unsigned len, unsigned curr_
 {
   Bit32u pageOffset = PAGE_OFFSET(laddr);
 
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr);
+  bx_bool user = (curr_pl == 3);
+
+  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
 
 #if BX_SUPPORT_X86_64
   if (! IsCanonical(laddr)) {
@@ -2085,7 +2144,7 @@ int BX_CPU_C::access_write_linear(bx_address laddr, unsigned len, unsigned curr_
 #endif
 
 #if BX_CPU_LEVEL >= 4 && BX_SUPPORT_ALIGNMENT_CHECK
-  if (BX_CPU_THIS_PTR alignment_check() && (curr_pl == 3)) {
+  if (BX_CPU_THIS_PTR alignment_check() && user) {
     if (pageOffset & ac_mask) {
       BX_ERROR(("access_write_linear(): #AC misaligned access"));
       exception(BX_AC_EXCEPTION, 0);
@@ -2096,7 +2155,7 @@ int BX_CPU_C::access_write_linear(bx_address laddr, unsigned len, unsigned curr_
   /* check for reference across multiple pages */
   if ((pageOffset + len) <= 4096) {
     // Access within single page.
-    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, (curr_pl==3), BX_WRITE);
+    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, user, BX_WRITE);
     BX_CPU_THIS_PTR address_xlation.pages     = 1;
 #if BX_SUPPORT_MEMTYPE
     BX_CPU_THIS_PTR address_xlation.memtype1  = tlbEntry->get_memtype();
@@ -2127,10 +2186,10 @@ int BX_CPU_C::access_write_linear(bx_address laddr, unsigned len, unsigned curr_
     }
 #endif
 
-    bx_TLB_entry *tlbEntry2 = BX_TLB_ENTRY_OF(laddr2);
+    bx_TLB_entry *tlbEntry2 = BX_TLB_ENTRY_OF(laddr2, 0);
 
-    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, (curr_pl == 3), BX_WRITE);
-    BX_CPU_THIS_PTR address_xlation.paddress2 = translate_linear(tlbEntry2, laddr2, (curr_pl == 3), BX_WRITE);
+    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, user, BX_WRITE);
+    BX_CPU_THIS_PTR address_xlation.paddress2 = translate_linear(tlbEntry2, laddr2, user, BX_WRITE);
 #if BX_SUPPORT_MEMTYPE
     BX_CPU_THIS_PTR address_xlation.memtype1 = tlbEntry->get_memtype();
     BX_CPU_THIS_PTR address_xlation.memtype2 = tlbEntry2->get_memtype();
@@ -2177,6 +2236,8 @@ int BX_CPU_C::access_read_linear(bx_address laddr, unsigned len, unsigned curr_p
 
   Bit32u pageOffset = PAGE_OFFSET(laddr);
 
+  bx_bool user = (curr_pl == 3);
+
 #if BX_SUPPORT_X86_64
   if (! IsCanonical(laddr)) {
     BX_ERROR(("access_read_linear(): canonical failure"));
@@ -2185,7 +2246,7 @@ int BX_CPU_C::access_read_linear(bx_address laddr, unsigned len, unsigned curr_p
 #endif
 
 #if BX_CPU_LEVEL >= 4 && BX_SUPPORT_ALIGNMENT_CHECK
-  if (BX_CPU_THIS_PTR alignment_check() && (curr_pl == 3)) {
+  if (BX_CPU_THIS_PTR alignment_check() && user) {
     if (pageOffset & ac_mask) {
       BX_ERROR(("access_read_linear(): #AC misaligned access"));
       exception(BX_AC_EXCEPTION, 0);
@@ -2193,12 +2254,12 @@ int BX_CPU_C::access_read_linear(bx_address laddr, unsigned len, unsigned curr_p
   }
 #endif
 
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr);
+  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
 
   /* check for reference across multiple pages */
   if ((pageOffset + len) <= 4096) {
     // Access within single page.
-    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, (curr_pl == 3), xlate_rw);
+    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, user, xlate_rw);
     BX_CPU_THIS_PTR address_xlation.pages     = 1;
 #if BX_SUPPORT_MEMTYPE
     BX_CPU_THIS_PTR address_xlation.memtype1  = tlbEntry->get_memtype();
@@ -2226,10 +2287,10 @@ int BX_CPU_C::access_read_linear(bx_address laddr, unsigned len, unsigned curr_p
     }
 #endif
 
-    bx_TLB_entry *tlbEntry2 = BX_TLB_ENTRY_OF(laddr2);
+    bx_TLB_entry *tlbEntry2 = BX_TLB_ENTRY_OF(laddr2, 0);
 
-    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, (curr_pl == 3), xlate_rw);
-    BX_CPU_THIS_PTR address_xlation.paddress2 = translate_linear(tlbEntry2, laddr2, (curr_pl == 3), xlate_rw);
+    BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, user, xlate_rw);
+    BX_CPU_THIS_PTR address_xlation.paddress2 = translate_linear(tlbEntry2, laddr2, user, xlate_rw);
 #if BX_SUPPORT_MEMTYPE
     BX_CPU_THIS_PTR address_xlation.memtype1 = tlbEntry->get_memtype();
     BX_CPU_THIS_PTR address_xlation.memtype2 = tlbEntry2->get_memtype();
@@ -2326,9 +2387,12 @@ bx_hostpageaddr_t BX_CPU_C::getHostMemAddr(bx_phy_address paddr, unsigned rw)
 bx_bool BX_CPU_C::check_addr_in_tlb_buffers(const Bit8u *addr, const Bit8u *end)
 {
   for (unsigned tlb_entry_num=0; tlb_entry_num < BX_TLB_SIZE; tlb_entry_num++) {
-    if (((BX_CPU_THIS_PTR TLB.entry[tlb_entry_num].hostPageAddr)>=(const bx_hostpageaddr_t)addr) &&
-        ((BX_CPU_THIS_PTR TLB.entry[tlb_entry_num].hostPageAddr)<(const bx_hostpageaddr_t)end))
-      return true;
+    bx_TLB_entry *tlbEntry = &BX_CPU_THIS_PTR TLB.entry[tlb_entry_num];
+    if (tlbEntry->valid()) {
+      if (((tlbEntry->hostPageAddr) >= (const bx_hostpageaddr_t)addr) &&
+          ((tlbEntry->hostPageAddr)  < (const bx_hostpageaddr_t)end))
+        return true;
+    }
   }
   return false;
 }

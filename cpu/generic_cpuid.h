@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: generic_cpuid.h 12640 2015-02-11 21:31:17Z sshwarts $
+// $Id: generic_cpuid.h 12895 2016-03-02 20:44:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2015 Stanislav Shwartsman
@@ -75,7 +75,6 @@ private:
   void get_std_cpuid_leaf_6(cpuid_function_t *leaf) const;
   void get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t *leaf) const;
   void get_std_cpuid_leaf_A(cpuid_function_t *leaf) const;
-  void get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *leaf) const;
 
   void get_ext_cpuid_leaf_0(cpuid_function_t *leaf) const;
   void get_ext_cpuid_leaf_1(cpuid_function_t *leaf) const;
@@ -90,6 +89,7 @@ private:
   Bit32u get_std2_cpuid_features(void) const;
   Bit32u get_ext2_cpuid_features(void) const;
   Bit32u get_ext3_cpuid_features(void) const;
+  Bit32u get_ext4_cpuid_features(void) const;
   Bit32u get_extended_cpuid_features(void) const;
 #endif
 

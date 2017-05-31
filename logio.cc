@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: logio.cc 12590 2015-01-03 13:53:52Z sshwarts $
+// $Id: logio.cc 13017 2016-12-30 10:04:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2016  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,10 @@
 #include "cpu/cpu.h"
 #include <assert.h>
 
+#ifndef WIN32
+#include <pthread.h>
+#endif
+
 #if BX_WITH_CARBON
 #include <Carbon/Carbon.h>
 #endif
@@ -31,6 +35,7 @@
 // Just for the iofunctions
 
 static int Allocio=0;
+BX_MUTEX(logio_mutex);
 
 const char* iofunctions::getlevel(int i) const
 {
@@ -45,11 +50,25 @@ const char* iofunctions::getlevel(int i) const
   else return "?";
 }
 
+static const char *act_name[N_ACT] = { "ignore", "report", "warn", "ask", "fatal" };
+
 const char* iofunctions::getaction(int i) const
 {
-  static const char *name[] = { "ignore", "report", "ask", "fatal" };
   assert (i>=ACT_IGNORE && i<N_ACT);
-  return name[i];
+  return act_name[i];
+}
+
+int iofunctions::isaction(const char *val) const
+{
+  int action = -1;
+
+  for (int i = 0; i < N_ACT; i++) {
+    if (!strcmp(val, act_name[i])) {
+      action = ACT_IGNORE + i;
+      break;
+    }
+  }
+  return action;
 }
 
 void iofunctions::flush(void)
@@ -64,6 +83,8 @@ void iofunctions::init(void)
   // iofunctions methods must not be called before this magic
   // number is set.
   magic=MAGIC_LOGNUM;
+
+  BX_INIT_MUTEX(logio_mutex);
 
   // sets the default logprefix
   strcpy(logprefix,"%t%e%d");
@@ -183,6 +204,8 @@ void iofunctions::out(int level, const char *prefix, const char *fmt, va_list ap
   assert(this != NULL);
   assert(logfd != NULL);
 
+  BX_LOCK(logio_mutex);
+
   switch (level) {
     case LOGLEV_INFO: c='i'; break;
     case LOGLEV_PANIC: c='p'; break;
@@ -238,6 +261,7 @@ void iofunctions::out(int level, const char *prefix, const char *fmt, va_list ap
   if (SIM->has_log_viewer()) {
     SIM->log_msg(msgpfx, level, msg);
   }
+  BX_UNLOCK(logio_mutex);
 }
 
 iofunctions::iofunctions(FILE *fs)
@@ -265,6 +289,8 @@ iofunctions::iofunctions()
 
 iofunctions::~iofunctions(void)
 {
+  BX_FINI_MUTEX(logio_mutex);
+
   // flush before erasing magic number, or flush does nothing.
   flush();
   magic=0;
@@ -373,21 +399,13 @@ void logfunctions::info(const char *fmt, ...)
 
   assert(logio != NULL);
 
-  if (!onoff[LOGLEV_INFO]) return;
+  if (onoff[LOGLEV_INFO] == ACT_IGNORE) return;
 
   va_start(ap, fmt);
   logio->out(LOGLEV_INFO, prefix, fmt, ap);
   va_end(ap);
 
-  if (onoff[LOGLEV_INFO] == ACT_ASK) {
-    va_start(ap, fmt);
-    ask(LOGLEV_INFO, prefix, fmt, ap);
-    va_end(ap);
-  }
-  if (onoff[LOGLEV_INFO] == ACT_FATAL) {
-    va_start(ap, fmt);
-    fatal(prefix, fmt, ap, 1);
-  }
+  // the actions warn(), ask() and fatal() are not supported here
 }
 
 void logfunctions::error(const char *fmt, ...)
@@ -396,20 +414,24 @@ void logfunctions::error(const char *fmt, ...)
 
   assert(logio != NULL);
 
-  if(!onoff[LOGLEV_ERROR]) return;
+  if (onoff[LOGLEV_ERROR] == ACT_IGNORE) return;
 
   va_start(ap, fmt);
   logio->out(LOGLEV_ERROR, prefix, fmt, ap);
   va_end(ap);
 
-  if (onoff[LOGLEV_ERROR] == ACT_ASK) {
+  if (onoff[LOGLEV_ERROR] == ACT_WARN) {
+    va_start(ap, fmt);
+    warn(LOGLEV_ERROR, prefix, fmt, ap);
+    va_end(ap);
+  } else if (onoff[LOGLEV_ERROR] == ACT_ASK) {
     va_start(ap, fmt);
     ask(LOGLEV_ERROR, prefix, fmt, ap);
     va_end(ap);
   }
   if (onoff[LOGLEV_ERROR] == ACT_FATAL) {
     va_start(ap, fmt);
-    fatal(prefix, fmt, ap, 1);
+    fatal(LOGLEV_ERROR, prefix, fmt, ap, 1);
   }
 }
 
@@ -426,15 +448,18 @@ void logfunctions::panic(const char *fmt, ...)
   logio->out(LOGLEV_PANIC, prefix, fmt, ap);
   va_end(ap);
 
-  if (onoff[LOGLEV_PANIC] == ACT_ASK) {
+  if (onoff[LOGLEV_PANIC] == ACT_WARN) {
+    va_start(ap, fmt);
+    warn(LOGLEV_PANIC, prefix, fmt, ap);
+    va_end(ap);
+  } else if (onoff[LOGLEV_PANIC] == ACT_ASK) {
     va_start(ap, fmt);
     ask(LOGLEV_PANIC, prefix, fmt, ap);
     va_end(ap);
   }
   if (onoff[LOGLEV_PANIC] == ACT_FATAL) {
     va_start(ap, fmt);
-    fatal(prefix, fmt, ap, 1);
-    va_end(ap);
+    fatal(LOGLEV_PANIC, prefix, fmt, ap, 1);
   }
 }
 
@@ -444,13 +469,47 @@ void logfunctions::ldebug(const char *fmt, ...)
 
   assert(logio != NULL);
 
-  if(!onoff[LOGLEV_DEBUG]) return;
+  if (onoff[LOGLEV_DEBUG] == ACT_IGNORE) return;
 
   va_start(ap, fmt);
   logio->out(LOGLEV_DEBUG, prefix, fmt, ap);
   va_end(ap);
 
-  // the actions ask() and fatal() are not supported here
+  // the actions warn(), ask() and fatal() are not supported here
+}
+
+void logfunctions::warn(int level, const char *prefix, const char *fmt, va_list ap)
+{
+  // Guard against reentry on warn() function.  The danger is that some
+  // function that's called within warn() could trigger another
+  // BX_ERROR that could call warn() again, leading to infinite
+  // recursion and infinite asks.
+  static char in_warn_already = 0;
+  char buf1[1024];
+  if (in_warn_already) {
+    fprintf(stderr, "logfunctions::warn() should not reenter!!\n");
+    return;
+  }
+  in_warn_already = 1;
+  vsnprintf(buf1, sizeof(buf1), fmt, ap);
+  // FIXME: facility set to 0 because it's unknown.
+
+  // update vga screen.  This is useful because sometimes useful messages
+  // are printed on the screen just before a panic.  It's also potentially
+  // dangerous if this function calls ask again...  That's why I added
+  // the reentry check above.
+  SIM->refresh_vga();
+
+  // ensure the text screen is showing
+  SIM->set_display_mode(DISP_MODE_CONFIG);
+  int val = SIM->log_dlg(prefix, level, buf1, BX_LOG_DLG_WARN);
+  if (val == BX_LOG_ASK_CHOICE_CONTINUE_ALWAYS) {
+    // user said continue, and don't "ask" for this facility again.
+    setonoff(level, ACT_REPORT);
+  }
+  // return to simulation mode
+  SIM->set_display_mode(DISP_MODE_SIM);
+  in_warn_already = 0;
 }
 
 void logfunctions::ask(int level, const char *prefix, const char *fmt, va_list ap)
@@ -477,7 +536,7 @@ void logfunctions::ask(int level, const char *prefix, const char *fmt, va_list a
 
   // ensure the text screen is showing
   SIM->set_display_mode(DISP_MODE_CONFIG);
-  int val = SIM->log_ask(prefix, level, buf1);
+  int val = SIM->log_dlg(prefix, level, buf1, BX_LOG_DLG_ASK);
   switch(val)
   {
     case BX_LOG_ASK_CHOICE_CONTINUE:
@@ -569,28 +628,41 @@ static void carbonFatalDialog(const char *error, const char *exposition)
 }
 #endif
 
-void logfunctions::fatal(const char *prefix, const char *fmt, va_list ap, int exit_status)
+void logfunctions::fatal1(const char *fmt, ...)
+{
+  va_list ap;
+
+  assert(logio != NULL);
+
+  va_start(ap, fmt);
+  logio->out(LOGLEV_PANIC, prefix, fmt, ap);
+  va_end(ap);
+
+  va_start(ap, fmt);
+  fatal(LOGLEV_PANIC, prefix, fmt, ap, 1);
+}
+
+void logfunctions::fatal(int level, const char *prefix, const char *fmt, va_list ap, int exit_status)
 {
   char tmpbuf[1024];
   char exit_msg[1024];
 
+  vsnprintf(tmpbuf, sizeof(tmpbuf), fmt, ap);
+  va_end(ap);
+  if (!bx_user_quit) {
+    SIM->log_dlg(prefix, level, tmpbuf, BX_LOG_DLG_QUIT);
+  }
   if (!SIM->is_wx_selected()) {
     // store prefix and message in 'exit_msg' before unloading device plugins
-    vsnprintf(tmpbuf, sizeof(tmpbuf), fmt, ap);
-    va_end(ap);
     sprintf(exit_msg, "%s %s", prefix, tmpbuf);
   }
 #if !BX_DEBUGGER
   bx_atexit();
 #endif
 #if BX_WITH_CARBON
-  if(!isatty(STDIN_FILENO) && !SIM->get_init_done())
-  {
-    char buf1[1024];
-    char buf2[1024];
-    vsnprintf(buf1, sizeof(buf1), fmt, ap);
-    snprintf(buf2, sizeof(buf2), "Bochs startup error\n%s", buf1);
-    carbonFatalDialog(buf2,
+  if (!isatty(STDIN_FILENO) && !SIM->get_init_done()) {
+    snprintf(exit_msg, sizeof(exit_msg), "Bochs startup error\n%s", tmpbuf);
+    carbonFatalDialog(exit_msg,
       "For more information, try running Bochs within Terminal by clicking on \"bochs.scpt\".");
   }
 #endif

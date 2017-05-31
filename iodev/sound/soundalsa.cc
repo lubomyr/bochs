@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundalsa.cc 12687 2015-03-16 19:02:31Z vruppert $
+// $Id: soundalsa.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2013-2015  The Bochs Project
+//  Copyright (C) 2013-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,27 +21,41 @@
 
 // ALSA PCM input/output and MIDI output support written by Volker Ruppert
 
+// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
+// platforms that require a special tag on exported symbols, BX_PLUGGABLE
+// is used to know when we are exporting symbols and when we are importing.
+#define BX_PLUGGABLE
+
 #include "iodev.h"
 #include "soundlow.h"
+#include "soundmod.h"
 #include "soundalsa.h"
 
 #if BX_HAVE_SOUND_ALSA && BX_SUPPORT_SOUNDLOW
 
-#ifndef WIN32
-#include <pthread.h>
-#endif
-
 #define LOG_THIS log->
+
+// sound driver plugin entry points
+
+int CDECL libalsa_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL libalsa_sound_plugin_fini(void)
+{
+  // Nothing here yet
+}
 
 // helper function for wavein / waveout
 
 int alsa_pcm_open(bx_bool mode, alsa_pcm_t *alsa_pcm, bx_pcm_param_t *param, logfunctions *log)
 {
-  int ret;
   snd_pcm_format_t fmt;
   snd_pcm_hw_params_t *hwparams;
   unsigned int size, freq;
-  int dir, signeddata = param->format & 1;
+  int dir, ret, signeddata = param->format & 1;
 
   alsa_pcm->audio_bufsize = 0;
 
@@ -75,9 +89,22 @@ int alsa_pcm_open(bx_bool mode, alsa_pcm_t *alsa_pcm, bx_pcm_param_t *param, log
 
   if (param->channels == 2) size *= 2;
 
-  snd_pcm_hw_params_set_format(alsa_pcm->handle, hwparams, fmt);
-  snd_pcm_hw_params_set_channels(alsa_pcm->handle, hwparams, param->channels);
-  snd_pcm_hw_params_set_rate_near(alsa_pcm->handle, hwparams, &freq, &dir);
+  ret = snd_pcm_hw_params_set_format(alsa_pcm->handle, hwparams, fmt);
+  if (ret < 0)
+    return BX_SOUNDLOW_ERR;
+  ret = snd_pcm_hw_params_set_channels(alsa_pcm->handle, hwparams, param->channels);
+  if (ret < 0)
+    return BX_SOUNDLOW_ERR;
+#if BX_HAVE_LIBSAMPLERATE || BX_HAVE_SOXR_LSR
+  snd_pcm_hw_params_set_rate_resample(alsa_pcm->handle, hwparams, 0);
+#endif
+  ret =snd_pcm_hw_params_set_rate_near(alsa_pcm->handle, hwparams, &freq, &dir);
+  if (ret < 0)
+    return BX_SOUNDLOW_ERR;
+  if (freq != param->samplerate) {
+    param->samplerate = freq;
+    BX_INFO(("changed sample rate to %d", freq));
+  }
 
   alsa_pcm->frames = 32;
   snd_pcm_hw_params_set_period_size_near(alsa_pcm->handle, hwparams, &alsa_pcm->frames, &dir);
@@ -99,7 +126,7 @@ int alsa_pcm_open(bx_bool mode, alsa_pcm_t *alsa_pcm, bx_pcm_param_t *param, log
 #undef LOG_THIS
 #define LOG_THIS
 
-// bx_soundlow_waveout_alsa_c class implemenzation
+// bx_soundlow_waveout_alsa_c class implementation
 
 bx_soundlow_waveout_alsa_c::bx_soundlow_waveout_alsa_c()
     :bx_soundlow_waveout_c()
@@ -121,6 +148,7 @@ int bx_soundlow_waveout_alsa_c::openwaveoutput(const char *wavedev)
 {
   set_pcm_params(&real_pcm_param);
   pcm_callback_id = register_wave_callback(this, pcm_callback);
+  start_resampler_thread();
   start_mixer_thread();
   return BX_SOUNDLOW_OK;
 }
@@ -153,7 +181,7 @@ int bx_soundlow_waveout_alsa_c::output(int length, Bit8u data[])
   return BX_SOUNDLOW_OK;
 }
 
-// bx_soundlow_wavein_alsa_c class implemenzation
+// bx_soundlow_wavein_alsa_c class implementation
 
 bx_soundlow_wavein_alsa_c::bx_soundlow_wavein_alsa_c()
     :bx_soundlow_wavein_c()
@@ -175,7 +203,7 @@ int bx_soundlow_wavein_alsa_c::openwaveinput(const char *wavedev, sound_record_h
 {
   record_handler = rh;
   if (rh != NULL) {
-    record_timer_index = bx_pc_system.register_timer(this, record_timer_handler, 1, 1, 0, "wavein");
+    record_timer_index = DEV_register_timer(this, record_timer_handler, 1, 1, 0, "wavein");
     // record timer: inactive, continuous, frequency variable
   }
   wavein_param.samplerate = 0;
@@ -211,7 +239,7 @@ int bx_soundlow_wavein_alsa_c::getwavepacket(int length, Bit8u data[])
   int ret;
 
   if (alsa_wavein.buffer == NULL) {
-    alsa_wavein.buffer = (char *)malloc(alsa_wavein.alsa_bufsize);
+    alsa_wavein.buffer = new char[alsa_wavein.alsa_bufsize];
   }
   while (alsa_wavein.audio_bufsize < length) {
     ret = snd_pcm_readi(alsa_wavein.handle, alsa_wavein.buffer, alsa_wavein.frames);
@@ -232,7 +260,7 @@ int bx_soundlow_wavein_alsa_c::getwavepacket(int length, Bit8u data[])
   memcpy(data, audio_buffer, length);
   alsa_wavein.audio_bufsize -= length;
   if ((alsa_wavein.audio_bufsize <= 0) && (alsa_wavein.buffer != NULL)) {
-    free(alsa_wavein.buffer);
+    delete [] alsa_wavein.buffer;
     alsa_wavein.buffer = NULL;
   }
   return BX_SOUNDLOW_OK;
@@ -262,7 +290,7 @@ void bx_soundlow_wavein_alsa_c::record_timer(void)
   record_handler(this, record_packet_size);
 }
 
-// bx_soundlow_midiout_alsa_c class implemenzation
+// bx_soundlow_midiout_alsa_c class implementation
 
 bx_soundlow_midiout_alsa_c::bx_soundlow_midiout_alsa_c()
     :bx_soundlow_midiout_c()
@@ -421,13 +449,7 @@ int bx_soundlow_midiout_alsa_c::closemidioutput()
   return BX_SOUNDLOW_OK;
 }
 
-// bx_sound_alsa_c class implemenzation
-
-bx_sound_alsa_c::bx_sound_alsa_c()
-    :bx_sound_lowlevel_c()
-{
-  BX_INFO(("Sound lowlevel module 'alsa' initialized"));
-}
+// bx_sound_alsa_c class implementation
 
 bx_soundlow_waveout_c* bx_sound_alsa_c::get_waveout()
 {

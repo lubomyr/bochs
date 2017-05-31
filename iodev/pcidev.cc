@@ -1,10 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcidev.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: pcidev.cc 13075 2017-02-18 11:13:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
  *  PCIDEV: PCI host device mapping
- *  Copyright (C) 2003 - Frank Cornelis
+ *  Copyright (C) 2003       Frank Cornelis
+ *  Copyright (C) 2003-2017  The Bochs Project
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -114,7 +115,7 @@ Bit32s pcidev_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libpcidev_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libpcidev_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   thePciDevAdapter = new bx_pcidev_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePciDevAdapter, BX_PLUGIN_PCIDEV);
@@ -436,7 +437,7 @@ void bx_pcidev_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
       /*
        * Remap our I/O port handlers here.
        */
-      iomask = (Bit8u*)malloc(BX_PCIDEV_THIS regions[io_reg_idx].size);
+      iomask = new Bit8u[BX_PCIDEV_THIS regions[io_reg_idx].size];
       memset(iomask, 7, BX_PCIDEV_THIS regions[io_reg_idx].size);
       if (DEV_pci_set_base_io(&(BX_PCIDEV_THIS regions[io_reg_idx]),
             read_handler, write_handler,
@@ -446,7 +447,7 @@ void bx_pcidev_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
         BX_INFO(("new base #%d i/o address: 0x%04x", io_reg_idx,
                  (Bit16u)BX_PCIDEV_THIS regions[io_reg_idx].start));
       }
-      free(iomask);
+      delete [] iomask;
     }
     return;
   }

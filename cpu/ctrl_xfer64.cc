@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ctrl_xfer64.cc 12600 2015-01-11 20:50:26Z sshwarts $
+// $Id: ctrl_xfer64.cc 12769 2015-05-16 21:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -166,7 +166,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CALL64_Ep(bxInstruction_c *i)
   BX_CPU_THIS_PTR show_flag |= Flag_call;
 #endif
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   /* pointer, segment address pair */
   Bit64u op1_64 = read_linear_qword(i->seg(), get_laddr64(i->seg(), eaddr));
@@ -415,7 +415,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::JMP64_Ep(bxInstruction_c *i)
 
   BX_INSTR_FAR_BRANCH_ORIGIN();
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   Bit64u op1_64 = read_linear_qword(i->seg(), get_laddr64(i->seg(), eaddr));
   Bit16u cs_raw = read_linear_word(i->seg(), get_laddr64(i->seg(), (eaddr+8) & i->asize_mask()));

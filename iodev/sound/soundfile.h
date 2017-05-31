@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundfile.h 12656 2015-02-19 21:31:18Z vruppert $
+// $Id: soundfile.h 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2015  The Bochs Project
@@ -63,9 +63,9 @@ private:
 
 class bx_sound_file_c : public bx_sound_lowlevel_c {
 public:
-  bx_sound_file_c();
+  bx_sound_file_c() : bx_sound_lowlevel_c("file") {}
   virtual ~bx_sound_file_c() {}
 
   virtual bx_soundlow_waveout_c* get_waveout();
   virtual bx_soundlow_midiout_c* get_midiout();
-};
+} bx_sound_file;

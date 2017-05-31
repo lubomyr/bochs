@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ohci.cc 12733 2015-05-02 08:42:44Z vruppert $
+// $Id: usb_ohci.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009       Benjamin D Lunt (fys at frontiernet net)
-//                2009-2015  The Bochs Project
+//  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
+//                2009-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -81,11 +81,11 @@ Bit32s usb_ohci_options_parser(const char *context, int num_params, char *params
       if (!strncmp(params[i], "enabled=", 8)) {
         SIM->get_param_bool(BXPN_OHCI_ENABLED)->set(atol(&params[i][8]));
       } else if (!strncmp(params[i], "port", 4)) {
-        if (SIM->parse_usb_port_params(context, 0, params[i], BX_N_USB_OHCI_PORTS, base) < 0) {
+        if (SIM->parse_usb_port_params(context, 0, params[i], USB_OHCI_PORTS, base) < 0) {
           return -1;
         }
       } else if (!strncmp(params[i], "options", 7)) {
-        if (SIM->parse_usb_port_params(context, 1, params[i], BX_N_USB_OHCI_PORTS, base) < 0) {
+        if (SIM->parse_usb_port_params(context, 1, params[i], USB_OHCI_PORTS, base) < 0) {
           return -1;
         }
       } else {
@@ -101,18 +101,18 @@ Bit32s usb_ohci_options_parser(const char *context, int num_params, char *params
 Bit32s usb_ohci_options_save(FILE *fp)
 {
   bx_list_c *base = (bx_list_c*) SIM->get_param(BXPN_USB_OHCI);
-  SIM->write_usb_options(fp, BX_N_USB_OHCI_PORTS, base);
+  SIM->write_usb_options(fp, USB_OHCI_PORTS, base);
   return 0;
 }
 
 // device plugin entry points
 
-int CDECL libusb_ohci_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libusb_ohci_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theUSB_OHCI = new bx_usb_ohci_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_OHCI, BX_PLUGIN_USB_OHCI);
   // add new configuration parameter for the config interface
-  SIM->init_usb_options("OHCI", "ohci", BX_N_USB_OHCI_PORTS);
+  SIM->init_usb_options("OHCI", "ohci", USB_OHCI_PORTS);
   // register add-on option for bochsrc and command line
   SIM->register_addon_option("usb_ohci", usb_ohci_options_parser, usb_ohci_options_save);
   return 0; // Success
@@ -132,18 +132,17 @@ bx_usb_ohci_c::bx_usb_ohci_c()
 {
   put("usb_ohci", "OHCI");
   memset((void*)&hub, 0, sizeof(bx_usb_ohci_t));
-  device_buffer = NULL;
   hub.frame_timer_index = BX_NULL_TIMER_HANDLE;
+  hub.rt_conf_id = -1;
 }
 
 bx_usb_ohci_c::~bx_usb_ohci_c()
 {
   char pname[16];
 
-  if (BX_OHCI_THIS device_buffer != NULL)
-    delete [] BX_OHCI_THIS device_buffer;
+  SIM->unregister_runtime_config_handler(hub.rt_conf_id);
 
-  for (int i=0; i<BX_N_USB_OHCI_PORTS; i++) {
+  for (int i=0; i<USB_OHCI_PORTS; i++) {
     sprintf(pname, "port%d.device", i+1);
     SIM->get_param_string(pname, SIM->get_param(BXPN_USB_OHCI))->set_handler(NULL);
     remove_device(i);
@@ -172,12 +171,10 @@ void bx_usb_ohci_c::init(void)
     return;
   }
 
-  BX_OHCI_THIS device_buffer = new Bit8u[65536];
-
   // Call our frame timer routine every 1mS (1,000uS)
   // Continuous and active
   BX_OHCI_THIS hub.frame_timer_index =
-                   bx_pc_system.register_timer(this, usb_frame_handler, 1000, 1,1, "ohci.frame_timer");
+                   DEV_register_timer(this, usb_frame_handler, 1000, 1,1, "ohci.frame_timer");
 
   BX_OHCI_THIS hub.devfunc = 0x00;
   DEV_register_pci_handlers(this, &BX_OHCI_THIS hub.devfunc, BX_PLUGIN_USB_OHCI,
@@ -192,13 +189,10 @@ void bx_usb_ohci_c::init(void)
   BX_OHCI_THIS hub.use_bulk_head = 0;
   BX_OHCI_THIS hub.sof_time = 0;
 
-  //FIXME: for now, we want a status bar // hub zero, port zero
-  BX_OHCI_THIS hub.statusbar_id = bx_gui->register_statusitem("OHCI", 1);
-
   bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
   bx_list_c *ohci_rt = new bx_list_c(usb_rt, "ohci", "OHCI Runtime Options");
   ohci_rt->set_options(ohci_rt->SHOW_PARENT);
-  for (i=0; i<BX_N_USB_OHCI_PORTS; i++) {
+  for (i=0; i<USB_OHCI_PORTS; i++) {
     sprintf(pname, "port%d", i+1);
     port = (bx_list_c*)SIM->get_param(pname, ohci);
     ohci_rt->add(port);
@@ -210,8 +204,9 @@ void bx_usb_ohci_c::init(void)
   }
 
   // register handler for correct device connect handling after runtime config
-  SIM->register_runtime_config_handler(BX_OHCI_THIS_PTR, runtime_config_handler);
+  BX_OHCI_THIS hub.rt_conf_id = SIM->register_runtime_config_handler(BX_OHCI_THIS_PTR, runtime_config_handler);
   BX_OHCI_THIS hub.device_change = 0;
+  BX_OHCI_THIS packets = NULL;
 
   BX_INFO(("USB OHCI initialized"));
 }
@@ -277,7 +272,7 @@ void bx_usb_ohci_c::reset_hc()
   BX_OHCI_THIS hub.op_regs.HcControl.rwe       =          0;
   BX_OHCI_THIS hub.op_regs.HcControl.rwc       =          0;
   BX_OHCI_THIS hub.op_regs.HcControl.ir        =          0;
-  BX_OHCI_THIS hub.op_regs.HcControl.hcfs      =          0;
+  BX_OHCI_THIS hub.op_regs.HcControl.hcfs      =          OHCI_USB_RESET;
   BX_OHCI_THIS hub.op_regs.HcControl.ble       =          0;
   BX_OHCI_THIS hub.op_regs.HcControl.cle       =          0;
   BX_OHCI_THIS hub.op_regs.HcControl.ie        =          0;
@@ -346,10 +341,10 @@ void bx_usb_ohci_c::reset_hc()
   BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.dt       =    0;
   BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.nps      =    0;
   BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.psm      =    1;
-  BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ndp      =    BX_N_USB_OHCI_PORTS;
+  BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ndp      =    USB_OHCI_PORTS;
 
   // HcRhDescriptorB
-  BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm     = ((1 << BX_N_USB_OHCI_PORTS) - 1) << 1;
+  BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm     = ((1 << USB_OHCI_PORTS) - 1) << 1;
   BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.dr       = 0x0000;
 
   // HcRhStatus
@@ -363,7 +358,7 @@ void bx_usb_ohci_c::reset_hc()
   BX_OHCI_THIS hub.op_regs.HcRhStatus.lps       = 0;
 
   // HcRhPortStatus[x]
-  for (i=0; i<BX_N_USB_OHCI_PORTS; i++) {
+  for (i=0; i<USB_OHCI_PORTS; i++) {
     reset_port(i);
     if (BX_OHCI_THIS hub.usb_port[i].device == NULL) {
       sprintf(pname, "port%d", i+1);
@@ -371,6 +366,11 @@ void bx_usb_ohci_c::reset_hc()
     } else {
       usb_set_connect_status(i, BX_OHCI_THIS hub.usb_port[i].device->get_type(), 1);
     }
+  }
+
+  while (BX_OHCI_THIS packets != NULL) {
+    usb_cancel_packet(&BX_OHCI_THIS packets->packet);
+    remove_async_packet(&BX_OHCI_THIS packets, BX_OHCI_THIS packets);
   }
 }
 
@@ -400,78 +400,77 @@ void bx_usb_ohci_c::register_state(void)
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "usb_ohci", "USB OHCI State");
   hub = new bx_list_c(list, "hub");
   reg = new bx_list_c(hub, "HcControl");
-  new bx_shadow_bool_c(reg, "rwe", &BX_OHCI_THIS hub.op_regs.HcControl.rwe);
-  new bx_shadow_bool_c(reg, "rwc", &BX_OHCI_THIS hub.op_regs.HcControl.rwc);
-  new bx_shadow_bool_c(reg, "ir", &BX_OHCI_THIS hub.op_regs.HcControl.ir);
-  new bx_shadow_num_c(reg, "hcfs", &BX_OHCI_THIS hub.op_regs.HcControl.hcfs);
-  new bx_shadow_bool_c(reg, "ble", &BX_OHCI_THIS hub.op_regs.HcControl.ble);
-  new bx_shadow_bool_c(reg, "cle", &BX_OHCI_THIS hub.op_regs.HcControl.cle);
-  new bx_shadow_bool_c(reg, "ie", &BX_OHCI_THIS hub.op_regs.HcControl.ie);
-  new bx_shadow_bool_c(reg, "ple", &BX_OHCI_THIS hub.op_regs.HcControl.ple);
-  new bx_shadow_num_c(reg, "cbsr", &BX_OHCI_THIS hub.op_regs.HcControl.cbsr);
+  BXRS_PARAM_BOOL(reg, rwe, BX_OHCI_THIS hub.op_regs.HcControl.rwe);
+  BXRS_PARAM_BOOL(reg, rwc, BX_OHCI_THIS hub.op_regs.HcControl.rwc);
+  BXRS_PARAM_BOOL(reg, ir, BX_OHCI_THIS hub.op_regs.HcControl.ir);
+  BXRS_HEX_PARAM_FIELD(reg, hcfs, BX_OHCI_THIS hub.op_regs.HcControl.hcfs);
+  BXRS_PARAM_BOOL(reg, ble, BX_OHCI_THIS hub.op_regs.HcControl.ble);
+  BXRS_PARAM_BOOL(reg, cle, BX_OHCI_THIS hub.op_regs.HcControl.cle);
+  BXRS_PARAM_BOOL(reg, ie, BX_OHCI_THIS hub.op_regs.HcControl.ie);
+  BXRS_PARAM_BOOL(reg, ple, BX_OHCI_THIS hub.op_regs.HcControl.ple);
+  BXRS_HEX_PARAM_FIELD(reg, cbsr, BX_OHCI_THIS hub.op_regs.HcControl.cbsr);
   reg = new bx_list_c(hub, "HcCommandStatus");
-  new bx_shadow_num_c(reg, "soc", &BX_OHCI_THIS hub.op_regs.HcCommandStatus.soc);
-  new bx_shadow_bool_c(reg, "ocr", &BX_OHCI_THIS hub.op_regs.HcCommandStatus.ocr);
-  new bx_shadow_bool_c(reg, "blf", &BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf);
-  new bx_shadow_bool_c(reg, "clf", &BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf);
-  new bx_shadow_bool_c(reg, "hcr", &BX_OHCI_THIS hub.op_regs.HcCommandStatus.hcr);
-  new bx_shadow_num_c(hub, "HcInterruptStatus", &BX_OHCI_THIS hub.op_regs.HcInterruptStatus, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcInterruptEnable", &BX_OHCI_THIS hub.op_regs.HcInterruptEnable, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcHCCA", &BX_OHCI_THIS hub.op_regs.HcHCCA, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcPeriodCurrentED", &BX_OHCI_THIS hub.op_regs.HcPeriodCurrentED, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcControlHeadED", &BX_OHCI_THIS hub.op_regs.HcControlHeadED, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcControlCurrentED", &BX_OHCI_THIS hub.op_regs.HcControlCurrentED, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcBulkHeadED", &BX_OHCI_THIS hub.op_regs.HcBulkHeadED, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcBulkCurrentED", &BX_OHCI_THIS hub.op_regs.HcBulkCurrentED, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcDoneHead", &BX_OHCI_THIS hub.op_regs.HcDoneHead, BASE_HEX);
+  BXRS_HEX_PARAM_FIELD(reg, soc, BX_OHCI_THIS hub.op_regs.HcCommandStatus.soc);
+  BXRS_PARAM_BOOL(reg, ocr, BX_OHCI_THIS hub.op_regs.HcCommandStatus.ocr);
+  BXRS_PARAM_BOOL(reg, blf, BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf);
+  BXRS_PARAM_BOOL(reg, clf, BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf);
+  BXRS_PARAM_BOOL(reg, hcr, BX_OHCI_THIS hub.op_regs.HcCommandStatus.hcr);
+  BXRS_HEX_PARAM_FIELD(hub, HcInterruptStatus, BX_OHCI_THIS hub.op_regs.HcInterruptStatus);
+  BXRS_HEX_PARAM_FIELD(hub, HcInterruptEnable, BX_OHCI_THIS hub.op_regs.HcInterruptEnable);
+  BXRS_HEX_PARAM_FIELD(hub, HcHCCA, BX_OHCI_THIS hub.op_regs.HcHCCA);
+  BXRS_HEX_PARAM_FIELD(hub, HcPeriodCurrentED, BX_OHCI_THIS hub.op_regs.HcPeriodCurrentED);
+  BXRS_HEX_PARAM_FIELD(hub, HcControlHeadED, BX_OHCI_THIS hub.op_regs.HcControlHeadED);
+  BXRS_HEX_PARAM_FIELD(hub, HcControlCurrentED, BX_OHCI_THIS hub.op_regs.HcControlCurrentED);
+  BXRS_HEX_PARAM_FIELD(hub, HcBulkHeadED, BX_OHCI_THIS hub.op_regs.HcBulkHeadED);
+  BXRS_HEX_PARAM_FIELD(hub, HcBulkCurrentED, BX_OHCI_THIS hub.op_regs.HcBulkCurrentED);
+  BXRS_HEX_PARAM_FIELD(hub, HcDoneHead, BX_OHCI_THIS hub.op_regs.HcDoneHead);
   reg = new bx_list_c(hub, "HcFmInterval");
-  new bx_shadow_bool_c(reg, "fit", &BX_OHCI_THIS hub.op_regs.HcFmInterval.fit);
-  new bx_shadow_num_c(reg, "fsmps", &BX_OHCI_THIS hub.op_regs.HcFmInterval.fsmps);
-  new bx_shadow_num_c(reg, "fi", &BX_OHCI_THIS hub.op_regs.HcFmInterval.fi, BASE_HEX);
-  new bx_shadow_bool_c(hub, "HcFmRemainingToggle", &BX_OHCI_THIS hub.op_regs.HcFmRemainingToggle);
-  new bx_shadow_num_c(hub, "HcFmNumber", &BX_OHCI_THIS hub.op_regs.HcFmNumber, BASE_HEX);
-  new bx_shadow_num_c(hub, "HcPeriodicStart", &BX_OHCI_THIS hub.op_regs.HcPeriodicStart, BASE_HEX);
+  BXRS_PARAM_BOOL(reg, fit, BX_OHCI_THIS hub.op_regs.HcFmInterval.fit);
+  BXRS_HEX_PARAM_FIELD(reg, fsmps, BX_OHCI_THIS hub.op_regs.HcFmInterval.fsmps);
+  BXRS_HEX_PARAM_FIELD(reg, fi, BX_OHCI_THIS hub.op_regs.HcFmInterval.fi);
+  BXRS_PARAM_BOOL(hub, HcFmRemainingToggle, BX_OHCI_THIS hub.op_regs.HcFmRemainingToggle);
+  BXRS_HEX_PARAM_FIELD(hub, HcFmNumber, BX_OHCI_THIS hub.op_regs.HcFmNumber);
+  BXRS_HEX_PARAM_FIELD(hub, HcPeriodicStart, BX_OHCI_THIS hub.op_regs.HcPeriodicStart);
   reg = new bx_list_c(hub, "HcRhDescriptorA");
-  new bx_shadow_num_c(reg, "potpgt", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.potpgt, BASE_HEX);
-  new bx_shadow_bool_c(reg, "nocp", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.nocp);
-  new bx_shadow_bool_c(reg, "ocpm", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ocpm);
-  new bx_shadow_bool_c(reg, "dt", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.dt);
-  new bx_shadow_bool_c(reg, "nps", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.nps);
-  new bx_shadow_bool_c(reg, "psm", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.psm);
-  new bx_shadow_num_c(reg, "ndp", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ndp);
+  BXRS_HEX_PARAM_FIELD(reg, potpgt, BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.potpgt);
+  BXRS_PARAM_BOOL(reg, nocp, BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.nocp);
+  BXRS_PARAM_BOOL(reg, ocpm, BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ocpm);
+  BXRS_PARAM_BOOL(reg, nps, BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.nps);
+  BXRS_PARAM_BOOL(reg, psm, BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.psm);
   reg = new bx_list_c(hub, "HcRhDescriptorB");
-  new bx_shadow_num_c(reg, "ppcm", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm, BASE_HEX);
-  new bx_shadow_num_c(reg, "dr", &BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.dr, BASE_HEX);
+  BXRS_HEX_PARAM_FIELD(reg, ppcm, BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm);
+  BXRS_HEX_PARAM_FIELD(reg, dr, BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.dr);
   reg = new bx_list_c(hub, "HcRhStatus");
-  new bx_shadow_bool_c(reg, "crwe", &BX_OHCI_THIS hub.op_regs.HcRhStatus.crwe);
-  new bx_shadow_bool_c(reg, "ocic", &BX_OHCI_THIS hub.op_regs.HcRhStatus.ocic);
-  new bx_shadow_bool_c(reg, "lpsc", &BX_OHCI_THIS hub.op_regs.HcRhStatus.lpsc);
-  new bx_shadow_bool_c(reg, "drwe", &BX_OHCI_THIS hub.op_regs.HcRhStatus.drwe);
-  new bx_shadow_bool_c(reg, "oci", &BX_OHCI_THIS hub.op_regs.HcRhStatus.oci);
-  new bx_shadow_bool_c(reg, "lps", &BX_OHCI_THIS hub.op_regs.HcRhStatus.lps);
-  for (i=0; i<BX_N_USB_OHCI_PORTS; i++) {
+  BXRS_PARAM_BOOL(reg, crwe, BX_OHCI_THIS hub.op_regs.HcRhStatus.crwe);
+  BXRS_PARAM_BOOL(reg, ocic, BX_OHCI_THIS hub.op_regs.HcRhStatus.ocic);
+  BXRS_PARAM_BOOL(reg, lpsc, BX_OHCI_THIS hub.op_regs.HcRhStatus.lpsc);
+  BXRS_PARAM_BOOL(reg, drwe, BX_OHCI_THIS hub.op_regs.HcRhStatus.drwe);
+  BXRS_PARAM_BOOL(reg, oci, BX_OHCI_THIS hub.op_regs.HcRhStatus.oci);
+  BXRS_PARAM_BOOL(reg, lps, BX_OHCI_THIS hub.op_regs.HcRhStatus.lps);
+  for (i=0; i<USB_OHCI_PORTS; i++) {
     sprintf(portnum, "port%d", i+1);
     port = new bx_list_c(hub, portnum);
     reg = new bx_list_c(port, "HcRhPortStatus");
-    new bx_shadow_bool_c(reg, "prsc", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.prsc);
-    new bx_shadow_bool_c(reg, "ocic", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ocic);
-    new bx_shadow_bool_c(reg, "pssc", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pssc);
-    new bx_shadow_bool_c(reg, "pesc", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pesc);
-    new bx_shadow_bool_c(reg, "csc", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.csc);
-    new bx_shadow_bool_c(reg, "lsda", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.lsda);
-    new bx_shadow_bool_c(reg, "pps", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pps);
-    new bx_shadow_bool_c(reg, "prs", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.prs);
-    new bx_shadow_bool_c(reg, "poci", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.poci);
-    new bx_shadow_bool_c(reg, "pss", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pss);
-    new bx_shadow_bool_c(reg, "pes", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pes);
-    new bx_shadow_bool_c(reg, "ccs", &BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ccs);
+    BXRS_PARAM_BOOL(reg, prsc, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.prsc);
+    BXRS_PARAM_BOOL(reg, ocic, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ocic);
+    BXRS_PARAM_BOOL(reg, pssc, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pssc);
+    BXRS_PARAM_BOOL(reg, pesc, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pesc);
+    BXRS_PARAM_BOOL(reg, csc, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.csc);
+    BXRS_PARAM_BOOL(reg, lsda, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.lsda);
+    BXRS_PARAM_BOOL(reg, pps, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pps);
+    BXRS_PARAM_BOOL(reg, prs, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.prs);
+    BXRS_PARAM_BOOL(reg, poci, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.poci);
+    BXRS_PARAM_BOOL(reg, pss, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pss);
+    BXRS_PARAM_BOOL(reg, pes, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.pes);
+    BXRS_PARAM_BOOL(reg, ccs, BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ccs);
     // empty list for USB device state
     new bx_list_c(port, "device");
   }
-  new bx_shadow_num_c(hub, "ohci_done_count", &BX_OHCI_THIS hub.ohci_done_count, BASE_DEC);
-  new bx_shadow_bool_c(hub, "use_control_head", &BX_OHCI_THIS hub.use_control_head);
-  new bx_shadow_bool_c(hub, "use_bulk_head", &BX_OHCI_THIS hub.use_bulk_head);
-  new bx_shadow_num_c(hub, "sof_time", &BX_OHCI_THIS hub.sof_time);
+  BXRS_DEC_PARAM_FIELD(hub, ohci_done_count, BX_OHCI_THIS hub.ohci_done_count);
+  BXRS_PARAM_BOOL(hub, use_control_head, BX_OHCI_THIS hub.use_control_head);
+  BXRS_PARAM_BOOL(hub, use_bulk_head, BX_OHCI_THIS hub.use_bulk_head);
+  BXRS_DEC_PARAM_FIELD(hub, sof_time, BX_OHCI_THIS hub.sof_time);
+  // TODO: handle async packets
   register_pci_state(hub);
 }
 
@@ -483,7 +482,7 @@ void bx_usb_ohci_c::after_restore_state(void)
                          4096))  {
      BX_INFO(("new base address: 0x%04x", BX_OHCI_THIS pci_base_address[0]));
   }
-  for (int j=0; j<BX_N_USB_OHCI_PORTS; j++) {
+  for (int j=0; j<USB_OHCI_PORTS; j++) {
     if (BX_OHCI_THIS hub.usb_port[j].device != NULL) {
       BX_OHCI_THIS hub.usb_port[j].device->after_restore_state();
     }
@@ -514,14 +513,9 @@ void bx_usb_ohci_c::init_device(Bit8u port, bx_list_c *portconf)
 
 void bx_usb_ohci_c::remove_device(Bit8u port)
 {
-  char pname[BX_PATHNAME_LEN];
-
   if (BX_OHCI_THIS hub.usb_port[port].device != NULL) {
     delete BX_OHCI_THIS hub.usb_port[port].device;
     BX_OHCI_THIS hub.usb_port[port].device = NULL;
-    sprintf(pname, "usb_ohci.hub.port%d.device", port+1);
-    bx_list_c *devlist = (bx_list_c*)SIM->get_param(pname, SIM->get_bochs_root());
-    devlist->clear();
   }
 }
 
@@ -674,17 +668,17 @@ bx_bool bx_usb_ohci_c::read_handler(bx_phy_address addr, unsigned len, void *dat
       break;
 
     case 0x60: // HcRhPortStatus[3]
-#if (BX_N_USB_OHCI_PORTS < 4)
+#if (USB_OHCI_PORTS < 4)
       val = 0;
       break;
 #endif
     case 0x5C: // HcRhPortStatus[2]
-#if (BX_N_USB_OHCI_PORTS < 3)
+#if (USB_OHCI_PORTS < 3)
       val = 0;
       break;
 #endif
     case 0x58: // HcRhPortStatus[1]
-#if (BX_N_USB_OHCI_PORTS < 2)
+#if (USB_OHCI_PORTS < 2)
       val = 0;
       break;
 #endif
@@ -762,9 +756,9 @@ bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *da
       BX_OHCI_THIS hub.op_regs.HcControl.ie       = (value & (1<< 3)) ? 1 : 0;
       BX_OHCI_THIS hub.op_regs.HcControl.ple      = (value & (1<< 2)) ? 1 : 0;
       BX_OHCI_THIS hub.op_regs.HcControl.cbsr     = (value & (3<< 0)) >>  0;
-      if (BX_OHCI_THIS hub.op_regs.HcControl.hcfs == 0x02) {
+      if (BX_OHCI_THIS hub.op_regs.HcControl.hcfs == OHCI_USB_OPERATIONAL) {
         BX_OHCI_THIS hub.op_regs.HcFmRemainingToggle = 0;
-        if (org_state != 2)
+        if (org_state != OHCI_USB_OPERATIONAL)
           BX_OHCI_THIS hub.use_control_head = BX_OHCI_THIS hub.use_bulk_head = 1;
       }
       break;
@@ -780,8 +774,8 @@ bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *da
       if (value & (1<< 0)) {
         BX_OHCI_THIS hub.op_regs.HcCommandStatus.hcr = 1;
         BX_OHCI_THIS reset_hc();
-        BX_OHCI_THIS hub.op_regs.HcControl.hcfs = 3;      // suspend state
-        for (unsigned i=0; i<BX_N_USB_OHCI_PORTS; i++)
+        BX_OHCI_THIS hub.op_regs.HcControl.hcfs = OHCI_USB_SUSPEND;
+        for (unsigned i=0; i<USB_OHCI_PORTS; i++)
           if (BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ccs && (BX_OHCI_THIS hub.usb_port[i].device != NULL))
             DEV_usb_send_msg(BX_OHCI_THIS hub.usb_port[i].device, USB_MSG_RESET);
       }
@@ -871,13 +865,13 @@ bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *da
       break;
 
     case 0x44: // HcLSThreshold
-      BX_ERROR(("Write to HcLSThreshold not allowed."));
+      BX_OHCI_THIS hub.op_regs.HcLSThreshold = (value & 0x00000FFF);
       break;
 
     case 0x48: // HcRhDescriptorA
       if (value & 0x00FFE000)
         BX_ERROR(("Write to a reserved field in HcRhDescriptorA."));
-      if (value & 0x000000FF)
+      if ((value & 0x000000FF) != BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.ndp)
         BX_ERROR(("Write to HcRhDescriptorA.ndp not allowed."));
       if (value & (1<<10))
         BX_ERROR(("Write to HcRhDescriptorA.dt not allowed."));
@@ -919,20 +913,20 @@ bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *da
       if (value & (1<<17)) BX_OHCI_THIS hub.op_regs.HcRhStatus.ocic = 1;
       if (value & (1<<16)) {
         if (BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.psm == 0) {
-          for (p=0; p<BX_N_USB_OHCI_PORTS; p++)
+          for (p=0; p<USB_OHCI_PORTS; p++)
             BX_OHCI_THIS hub.usb_port[p].HcRhPortStatus.pps = 1;
         } else {
-          for (p=0; p<BX_N_USB_OHCI_PORTS; p++)
+          for (p=0; p<USB_OHCI_PORTS; p++)
             if ((BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm & (1<<p)) == 0)
               BX_OHCI_THIS hub.usb_port[p].HcRhPortStatus.pps = 1;
         }
       }
       if (value & (1<<0)) {
         if (BX_OHCI_THIS hub.op_regs.HcRhDescriptorA.psm == 0) {
-          for (p=0; p<BX_N_USB_OHCI_PORTS; p++)
+          for (p=0; p<USB_OHCI_PORTS; p++)
             BX_OHCI_THIS hub.usb_port[p].HcRhPortStatus.pps = 0;
         } else {
-          for (p=0; p<BX_N_USB_OHCI_PORTS; p++)
+          for (p=0; p<USB_OHCI_PORTS; p++)
             if (!(BX_OHCI_THIS hub.op_regs.HcRhDescriptorB.ppcm & (1<<p)))
               BX_OHCI_THIS hub.usb_port[p].HcRhPortStatus.pps = 0;
         }
@@ -941,15 +935,15 @@ bx_bool bx_usb_ohci_c::write_handler(bx_phy_address addr, unsigned len, void *da
     }
 
     case 0x60: // HcRhPortStatus[3]
-#if (BX_N_USB_OHCI_PORTS < 4)
+#if (USB_OHCI_PORTS < 4)
       break;
 #endif
     case 0x5C: // HcRhPortStatus[2]
-#if (BX_N_USB_OHCI_PORTS < 3)
+#if (USB_OHCI_PORTS < 3)
       break;
 #endif
     case 0x58: // HcRhPortStatus[1]
-#if (BX_N_USB_OHCI_PORTS < 2)
+#if (USB_OHCI_PORTS < 2)
       break;
 #endif
     case 0x54: { // HcRhPortStatus[0]
@@ -1021,7 +1015,7 @@ Bit32u bx_usb_ohci_c::get_frame_remaining(void)
   Bit16u bit_time, fr;
 
   bit_time = (Bit16u)((bx_pc_system.time_usec() - BX_OHCI_THIS hub.sof_time) * 12);
-  if ((BX_OHCI_THIS hub.op_regs.HcControl.hcfs != 2) ||
+  if ((BX_OHCI_THIS hub.op_regs.HcControl.hcfs != OHCI_USB_OPERATIONAL) ||
       (bit_time > BX_OHCI_THIS hub.op_regs.HcFmInterval.fi)) {
     fr = 0;
   } else {
@@ -1043,7 +1037,7 @@ void bx_usb_ohci_c::usb_frame_timer(void)
   Bit32u address, ed_address;
   Bit16u zero = 0;
 
-  if (BX_OHCI_THIS hub.op_regs.HcControl.hcfs == 2) {
+  if (BX_OHCI_THIS hub.op_regs.HcControl.hcfs == OHCI_USB_OPERATIONAL) {
     // set remaining to the interval amount.
     BX_OHCI_THIS hub.op_regs.HcFmRemainingToggle = BX_OHCI_THIS hub.op_regs.HcFmInterval.fit;
     BX_OHCI_THIS hub.sof_time = bx_pc_system.time_usec();
@@ -1079,55 +1073,8 @@ void bx_usb_ohci_c::usb_frame_timer(void)
     if ((BX_OHCI_THIS hub.ohci_done_count != 7) && (BX_OHCI_THIS hub.ohci_done_count > 0))
       BX_OHCI_THIS hub.ohci_done_count--;
 
-    // TODO:  Rather than just comparing .fr to <8000 here, and <4000 below, see the highlighted
-    //   statement on page 45.
+    BX_OHCI_THIS process_lists();
 
-    // if the control list is enabled *and* the control list filled bit is set, do a control list ED
-    if (BX_OHCI_THIS hub.op_regs.HcControl.cle) {
-      if (BX_OHCI_THIS hub.use_control_head) {
-        BX_OHCI_THIS hub.op_regs.HcControlCurrentED = 0;
-        BX_OHCI_THIS hub.use_control_head = 0;
-      }
-      if (!BX_OHCI_THIS hub.op_regs.HcControlCurrentED && BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf) {
-        BX_OHCI_THIS hub.op_regs.HcControlCurrentED = BX_OHCI_THIS hub.op_regs.HcControlHeadED;
-        BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf = 0;
-      }
-      while (BX_OHCI_THIS hub.op_regs.HcControlCurrentED) {
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED,      4, (Bit8u*) &cur_ed.dword0);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED +  4, 4, (Bit8u*) &cur_ed.dword1);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED +  8, 4, (Bit8u*) &cur_ed.dword2);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED + 12, 4, (Bit8u*) &cur_ed.dword3);
-        process_ed(&cur_ed, BX_OHCI_THIS hub.op_regs.HcControlCurrentED);
-        BX_OHCI_THIS hub.op_regs.HcControlCurrentED = ED_GET_NEXTED(&cur_ed);
-        if (get_frame_remaining() < 8000)
-          goto do_bulk_eds;
-      }
-    }
-
-do_bulk_eds:
-    // if the bulk list is enabled *and* the bulk list filled bit is set, do a bulk list ED
-    if (BX_OHCI_THIS hub.op_regs.HcControl.ble) {
-      if (BX_OHCI_THIS hub.use_bulk_head) {
-        BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = 0;
-        BX_OHCI_THIS hub.use_bulk_head = 0;
-      }
-      if (!BX_OHCI_THIS hub.op_regs.HcBulkCurrentED && BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf) {
-        BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = BX_OHCI_THIS hub.op_regs.HcBulkHeadED;
-        BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf = 0;
-      }
-      while (BX_OHCI_THIS hub.op_regs.HcBulkCurrentED) {
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED,      4, (Bit8u*) &cur_ed.dword0);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED +  4, 4, (Bit8u*) &cur_ed.dword1);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED +  8, 4, (Bit8u*) &cur_ed.dword2);
-        DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED + 12, 4, (Bit8u*) &cur_ed.dword3);
-        process_ed(&cur_ed, BX_OHCI_THIS hub.op_regs.HcBulkCurrentED);
-        BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = ED_GET_NEXTED(&cur_ed);
-        if (get_frame_remaining() < 4000)
-          goto do_iso_eds;
-      }
-    }
-
-do_iso_eds:
     // do the ED's in the interrupt table
     if (BX_OHCI_THIS hub.op_regs.HcControl.ple) {
       address = BX_OHCI_THIS hub.op_regs.HcHCCA + ((BX_OHCI_THIS hub.op_regs.HcFmNumber & 0x1F) * 4);
@@ -1145,9 +1092,64 @@ do_iso_eds:
   }  // end run schedule
 }
 
-void bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
+void bx_usb_ohci_c::process_lists(void)
+{
+  struct OHCI_ED cur_ed;
+
+  // TODO:  Rather than just comparing .fr to <8000 here, and <4000 below, see the highlighted
+  //   statement on page 45.
+
+  // if the control list is enabled *and* the control list filled bit is set, do a control list ED
+  if (BX_OHCI_THIS hub.op_regs.HcControl.cle) {
+    if (BX_OHCI_THIS hub.use_control_head) {
+      BX_OHCI_THIS hub.op_regs.HcControlCurrentED = 0;
+      BX_OHCI_THIS hub.use_control_head = 0;
+    }
+    if (!BX_OHCI_THIS hub.op_regs.HcControlCurrentED && BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf) {
+      BX_OHCI_THIS hub.op_regs.HcControlCurrentED = BX_OHCI_THIS hub.op_regs.HcControlHeadED;
+      BX_OHCI_THIS hub.op_regs.HcCommandStatus.clf = 0;
+    }
+    while (BX_OHCI_THIS hub.op_regs.HcControlCurrentED) {
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED,      4, (Bit8u*) &cur_ed.dword0);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED +  4, 4, (Bit8u*) &cur_ed.dword1);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED +  8, 4, (Bit8u*) &cur_ed.dword2);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcControlCurrentED + 12, 4, (Bit8u*) &cur_ed.dword3);
+      process_ed(&cur_ed, BX_OHCI_THIS hub.op_regs.HcControlCurrentED);
+      BX_OHCI_THIS hub.op_regs.HcControlCurrentED = ED_GET_NEXTED(&cur_ed);
+      if (get_frame_remaining() < 8000)
+        break;
+    }
+  }
+
+  // if the bulk list is enabled *and* the bulk list filled bit is set, do a bulk list ED
+  if (BX_OHCI_THIS hub.op_regs.HcControl.ble) {
+    if (BX_OHCI_THIS hub.use_bulk_head) {
+      BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = 0;
+      BX_OHCI_THIS hub.use_bulk_head = 0;
+    }
+    if (!BX_OHCI_THIS hub.op_regs.HcBulkCurrentED && BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf) {
+      BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = BX_OHCI_THIS hub.op_regs.HcBulkHeadED;
+      BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf = 0;
+    }
+    while (BX_OHCI_THIS hub.op_regs.HcBulkCurrentED) {
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED,      4, (Bit8u*) &cur_ed.dword0);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED +  4, 4, (Bit8u*) &cur_ed.dword1);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED +  8, 4, (Bit8u*) &cur_ed.dword2);
+      DEV_MEM_READ_PHYSICAL(BX_OHCI_THIS hub.op_regs.HcBulkCurrentED + 12, 4, (Bit8u*) &cur_ed.dword3);
+      if (process_ed(&cur_ed, BX_OHCI_THIS hub.op_regs.HcBulkCurrentED)) {
+        BX_OHCI_THIS hub.op_regs.HcCommandStatus.blf = 1;
+      }
+      BX_OHCI_THIS hub.op_regs.HcBulkCurrentED = ED_GET_NEXTED(&cur_ed);
+      if (get_frame_remaining() < 4000)
+        break;
+    }
+  }
+}
+
+bx_bool bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
 {
   struct OHCI_TD cur_td;
+  bx_bool ret = 0;
 
   if (!ED_GET_H(ed) && !ED_GET_K(ed) && (ED_GET_HEADP(ed) != ED_GET_TAILP(ed))) {
     // if the isochronous is enabled and ed is a isochronous, do TD
@@ -1159,6 +1161,7 @@ void bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
       }
     } else {
       BX_DEBUG(("Found a valid ED that points to an control/bulk/int TD"));
+      ret = 1;
       while (ED_GET_HEADP(ed) != ED_GET_TAILP(ed)) {
         DEV_MEM_READ_PHYSICAL(ED_GET_HEADP(ed),      4, (Bit8u*) &cur_td.dword0);
         DEV_MEM_READ_PHYSICAL(ED_GET_HEADP(ed) +  4, 4, (Bit8u*) &cur_td.dword1);
@@ -1183,13 +1186,54 @@ void bx_usb_ohci_c::process_ed(struct OHCI_ED *ed, const Bit32u ed_address)
     }
     DEV_MEM_WRITE_PHYSICAL(ed_address +  8, 4, (Bit8u*) &ed->dword2);
   }
+  return ret;
+}
+
+void ohci_event_handler(int event, USBPacket *packet, void *dev, int port)
+{
+  ((bx_usb_ohci_c*)dev)->event_handler(event, packet, port);
+}
+
+void bx_usb_ohci_c::event_handler(int event, USBPacket *packet, int port)
+{
+  Bit32u intr = 0;
+
+  if (event == USB_EVENT_ASYNC) {
+    BX_DEBUG(("Async packet completion"));
+    USBAsync *p = container_of_usb_packet(packet);
+    p->done = 1;
+    BX_OHCI_THIS process_lists();
+  } else if (event == USB_EVENT_WAKEUP) {
+    if (BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pss) {
+      BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pss = 0;
+      BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pssc = 1;
+      intr = OHCI_INTR_RHSC;
+    }
+    if (BX_OHCI_THIS hub.op_regs.HcControl.hcfs == OHCI_USB_SUSPEND) {
+      BX_OHCI_THIS hub.op_regs.HcControl.hcfs = OHCI_USB_RESUME;
+      intr = OHCI_INTR_RD;
+    }
+    set_interrupt(intr);
+  } else {
+    BX_ERROR(("unknown/unsupported event (id=%d) on port #%d", event, port+1));
+  }
 }
 
 bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
 {
   unsigned pid = 0, len = 0, len1, len2;
-  int ilen, r, ret = 0;
-  char buf_str[1025], temp_str[17];
+  int ilen, ret = 0, ret2 = 1;
+  Bit32u addr;
+  Bit16u maxlen = 0;
+  USBAsync *p;
+  bx_bool completion;
+
+  addr = ED_GET_HEADP(ed);
+  p = find_async_packet(&packets, addr);
+  completion = (p != NULL);
+  if (completion && !p->done) {
+    return 0;
+  }
 
   // The td->cc field should be 111x if it hasn't been processed yet.
   if (TD_GET_CC(td) < NotAccessed) {
@@ -1224,82 +1268,68 @@ bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
   } else
     len = 0;
 
-  BX_OHCI_THIS usb_packet.pid = pid;
-  BX_OHCI_THIS usb_packet.devaddr = ED_GET_FA(ed);
-  BX_OHCI_THIS usb_packet.devep = ED_GET_EN(ed);
-  BX_OHCI_THIS usb_packet.data = BX_OHCI_THIS device_buffer;
-  switch (pid) {
-    case USB_TOKEN_SETUP:
-    case USB_TOKEN_OUT:
-      BX_OHCI_THIS usb_packet.len = (len <= ED_GET_MPS(ed)) ? len : ED_GET_MPS(ed);
-      break;
-    case USB_TOKEN_IN:
-      BX_OHCI_THIS usb_packet.len = len;
-      break;
-  }
-
-  BX_DEBUG(("    pid = %s  addr = %i   endpnt = %i    len = %i  mps = %i (td->cbp = 0x%08X, td->be = 0x%08X)", 
-    (pid == USB_TOKEN_IN)? "IN" : (pid == USB_TOKEN_OUT) ? "OUT" : (pid == USB_TOKEN_SETUP) ? "SETUP" : "UNKNOWN", 
-    ED_GET_FA(ed), ED_GET_EN(ed), len, ED_GET_MPS(ed), TD_GET_CBP(td), TD_GET_BE(td)));
-  BX_DEBUG(("    td->t = %i  ed->c = %i  td->di = %i  td->r = %i", TD_GET_T(td), ED_GET_C(ed), TD_GET_DI(td), TD_GET_R(td)));
-
-  /* set status bar conditions for device */
-  if ((len > 0) && (BX_OHCI_THIS hub.statusbar_id >= 0)) {
-    if (pid == USB_TOKEN_IN)
-      bx_gui->statusbar_setitem(BX_OHCI_THIS hub.statusbar_id, 1);     // read
-    else
-      bx_gui->statusbar_setitem(BX_OHCI_THIS hub.statusbar_id, 1, 1);  // write
-  }
-
-  switch (pid) {
-    case USB_TOKEN_SETUP:
-      if (len > 0)
-        DEV_MEM_READ_PHYSICAL_DMA(TD_GET_CBP(td), len, device_buffer);
-      // TODO: This is a hack.  dev->handle_packet() should return the amount of bytes
-      //  it received, not the amount it anticipates on receiving/sending in the next packet.
-      if ((ret = BX_OHCI_THIS broadcast_packet(&BX_OHCI_THIS usb_packet)) >= 0)
-        ret = 8;
-      break;
-    case USB_TOKEN_OUT:
-      if (len > 0)
-        DEV_MEM_READ_PHYSICAL_DMA(TD_GET_CBP(td), len, device_buffer);
-      ret = BX_OHCI_THIS broadcast_packet(&BX_OHCI_THIS usb_packet);
-      break;
-    case USB_TOKEN_IN:
-      ret = BX_OHCI_THIS broadcast_packet(&BX_OHCI_THIS usb_packet);
-      if (ret > 0) {
-        if (((TD_GET_CBP(td) & 0xfff) + ret) > 0x1000) {
-          len1 = 0x1000 - (TD_GET_CBP(td) & 0xfff);
-          len2 = ret - len1;
-          DEV_MEM_WRITE_PHYSICAL_DMA(TD_GET_CBP(td), len1, device_buffer);
-          DEV_MEM_WRITE_PHYSICAL_DMA((TD_GET_BE(td) & ~0xfff), len2, device_buffer+len1);
-        } else {
-          DEV_MEM_WRITE_PHYSICAL_DMA(TD_GET_CBP(td), ret, device_buffer);
-        }
-      } else
-        ret = 0;
-      break;
-    default:
-      TD_SET_CC(td, UnexpectedPID);
-      TD_SET_EC(td, 3);
-      return 1;
-  }
-
-  // print the buffer used, to the log file
-  if (ret > 0) {
-    BX_DEBUG(("buffer dump (%i bytes)", ret));
-    buf_str[0] = 0;
-    for (r=0; r<ret; r++) {
-      sprintf(temp_str, "%02X ", device_buffer[r]);
-      strcat(buf_str, temp_str);
-      if ((r % 16) == 15) {
-        BX_DEBUG(("%s", buf_str));
-        buf_str[0] = 0;
-      }
+  if (completion) {
+    ret = p->packet.len;
+  } else {
+    switch (pid) {
+      case USB_TOKEN_SETUP:
+      case USB_TOKEN_OUT:
+        maxlen = (len <= ED_GET_MPS(ed)) ? len : ED_GET_MPS(ed);
+        break;
+      case USB_TOKEN_IN:
+        maxlen = len;
+        break;
     }
-    if (strlen(buf_str) > 0) BX_DEBUG(("%s", buf_str));
-  }
+    p = create_async_packet(&packets, addr, maxlen);
+    p->packet.pid = pid;
+    p->packet.devaddr = ED_GET_FA(ed);
+    p->packet.devep = ED_GET_EN(ed);
+    p->packet.complete_cb = ohci_event_handler;
+    p->packet.complete_dev = this;
 
+    BX_DEBUG(("    pid = %s  addr = %i   endpnt = %i    len = %i  mps = %i (td->cbp = 0x%08X, td->be = 0x%08X)", 
+      (pid == USB_TOKEN_IN)? "IN" : (pid == USB_TOKEN_OUT) ? "OUT" : (pid == USB_TOKEN_SETUP) ? "SETUP" : "UNKNOWN", 
+      ED_GET_FA(ed), ED_GET_EN(ed), len, ED_GET_MPS(ed), TD_GET_CBP(td), TD_GET_BE(td)));
+    BX_DEBUG(("    td->t = %i  ed->c = %i  td->di = %i  td->r = %i", TD_GET_T(td), ED_GET_C(ed), TD_GET_DI(td), TD_GET_R(td)));
+
+    switch (pid) {
+      case USB_TOKEN_SETUP:
+        if (len > 0)
+          DEV_MEM_READ_PHYSICAL_DMA(TD_GET_CBP(td), len, p->packet.data);
+        // TODO: This is a hack.  dev->handle_packet() should return the amount of bytes
+        //  it received, not the amount it anticipates on receiving/sending in the next packet.
+        if ((ret = BX_OHCI_THIS broadcast_packet(&p->packet)) >= 0)
+          ret = 8;
+        break;
+      case USB_TOKEN_OUT:
+        if (len > 0)
+          DEV_MEM_READ_PHYSICAL_DMA(TD_GET_CBP(td), maxlen, p->packet.data);
+        ret = BX_OHCI_THIS broadcast_packet(&p->packet);
+        break;
+      case USB_TOKEN_IN:
+        ret = BX_OHCI_THIS broadcast_packet(&p->packet);
+        break;
+      default:
+        TD_SET_CC(td, UnexpectedPID);
+        TD_SET_EC(td, 3);
+        return 1;
+    }
+
+    if (ret == USB_RET_ASYNC) {
+      BX_DEBUG(("Async packet deferred"));
+      return 0;
+    }
+  }
+  if ((ret > 0) && (pid == USB_TOKEN_IN)) {
+    if (((TD_GET_CBP(td) & 0xfff) + ret) > 0x1000) {
+      len1 = 0x1000 - (TD_GET_CBP(td) & 0xfff);
+      len2 = ret - len1;
+      DEV_MEM_WRITE_PHYSICAL_DMA(TD_GET_CBP(td), len1, p->packet.data);
+      DEV_MEM_WRITE_PHYSICAL_DMA((TD_GET_BE(td) & ~0xfff), len2, p->packet.data+len1);
+    } else {
+      DEV_MEM_WRITE_PHYSICAL_DMA(TD_GET_CBP(td), ret, p->packet.data);
+    }
+  }
   if ((ret == (int)len) || ((pid == USB_TOKEN_IN) && (ret >= 0) &&
       TD_GET_R(td)) || ((pid == USB_TOKEN_OUT) && (ret >= 0) &&
       (ret <= (int) ED_GET_MPS(ed)))) {
@@ -1331,7 +1361,7 @@ bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
           TD_SET_CC(td, DeviceNotResponding);
           break;
         case USB_RET_NAK:    // (-2)
-          TD_SET_CC(td, Stall);
+          ret2 = 0;
           break;
         case USB_RET_STALL:  // (-3)
           TD_SET_CC(td, Stall);
@@ -1339,22 +1369,22 @@ bx_bool bx_usb_ohci_c::process_td(struct OHCI_TD *td, struct OHCI_ED *ed)
         case USB_RET_BABBLE:  // (-4)
           TD_SET_CC(td, BufferOverrun);
           break;
-        case USB_RET_ASYNC:  // (-5)
-          TD_SET_CC(td, BufferOverrun);
-          break;
         default:
           BX_ERROR(("Unknown error returned: %i", ret));
           break;
       }
     }
-    TD_SET_EC(td, 3);
-    ED_SET_H(ed, 1);
+    if (ret != USB_RET_NAK) {
+      TD_SET_EC(td, 3);
+      ED_SET_H(ed, 1);
+    }
   }
 
   BX_DEBUG((" td->cbp = 0x%08X   ret = %i  len = %i  td->cc = %i   td->ec = %i  ed->h = %i", TD_GET_CBP(td), ret, len, TD_GET_CC(td), TD_GET_EC(td), ED_GET_H(ed)));
   BX_DEBUG(("    td->t = %i  ed->c = %i", TD_GET_T(td), ED_GET_C(ed)));
+  remove_async_packet(&packets, p);
 
-  return 1;
+  return ret2;
 }
 
 int bx_usb_ohci_c::broadcast_packet(USBPacket *p)
@@ -1362,7 +1392,7 @@ int bx_usb_ohci_c::broadcast_packet(USBPacket *p)
   int i, ret;
 
   ret = USB_RET_NODEV;
-  for (i = 0; i < BX_N_USB_OHCI_PORTS && ret == USB_RET_NODEV; i++) {
+  for (i = 0; i < USB_OHCI_PORTS && ret == USB_RET_NODEV; i++) {
     if ((BX_OHCI_THIS hub.usb_port[i].device != NULL) &&
         (BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ccs)) {
       ret = BX_OHCI_THIS hub.usb_port[i].device->handle_packet(p);
@@ -1381,13 +1411,22 @@ void bx_usb_ohci_c::runtime_config(void)
 {
   int i;
   char pname[6];
+  usbdev_type type = USB_DEV_TYPE_NONE;
 
-  for (i = 0; i < BX_N_USB_OHCI_PORTS; i++) {
+  for (i = 0; i < USB_OHCI_PORTS; i++) {
     // device change support
     if ((BX_OHCI_THIS hub.device_change & (1 << i)) != 0) {
-      BX_INFO(("USB port #%d: device connect", i+1));
-      sprintf(pname, "port%d", i + 1);
-      init_device(i, (bx_list_c*)SIM->get_param(pname, SIM->get_param(BXPN_USB_OHCI)));
+      if (!BX_OHCI_THIS hub.usb_port[i].HcRhPortStatus.ccs) {
+        BX_INFO(("USB port #%d: device connect", i+1));
+        sprintf(pname, "port%d", i + 1);
+        init_device(i, (bx_list_c*)SIM->get_param(pname, SIM->get_param(BXPN_USB_OHCI)));
+      } else {
+        BX_INFO(("USB port #%d: device disconnect", i+1));
+        if (BX_OHCI_THIS hub.usb_port[i].device != NULL) {
+          type = BX_OHCI_THIS hub.usb_port[i].device->get_type();
+        }
+        usb_set_connect_status(i, type, 0);
+      }
       BX_OHCI_THIS hub.device_change &= ~(1 << i);
     }
     // forward to connected device
@@ -1395,25 +1434,6 @@ void bx_usb_ohci_c::runtime_config(void)
       BX_OHCI_THIS hub.usb_port[i].device->runtime_config();
     }
   }
-}
-
-// pci configuration space read callback handler
-Bit32u bx_usb_ohci_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_OHCI_THIS pci_conf[address+i] << (i*8));
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%08x", address, value));
-
-  return value;
 }
 
 
@@ -1493,20 +1513,24 @@ void bx_usb_ohci_c::usb_set_connect_status(Bit8u port, int type, bx_bool connect
           case USB_SPEED_HIGH:
           case USB_SPEED_SUPER:
             BX_PANIC(("HC supports 'low' or 'full' speed devices only."));
-            device->set_speed(USB_SPEED_FULL);
-            break;
+            usb_set_connect_status(port, type, 0);
+            return;
           default:
-            BX_ERROR(("device->get_speed() returned invalid speed value"));
+            BX_PANIC(("USB device returned invalid speed value"));
+            usb_set_connect_status(port, type, 0);
+            return;
         }
         BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.ccs = 1;
         if (!device->get_connected()) {
           if (!device->init()) {
             usb_set_connect_status(port, type, 0);
             BX_ERROR(("port #%d: connect failed", port+1));
+            return;
           } else {
             BX_INFO(("port #%d: connect: %s", port+1, device->get_info()));
           }
         }
+        device->set_event_handler(BX_OHCI_THIS_PTR, ohci_event_handler, port);
       } else { // not connected
         BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.ccs = 0;
         BX_OHCI_THIS hub.usb_port[port].HcRhPortStatus.pes = 0;
@@ -1526,19 +1550,14 @@ void bx_usb_ohci_c::usb_set_connect_status(Bit8u port, int type, bx_bool connect
 const char *bx_usb_ohci_c::usb_param_handler(bx_param_string_c *param, int set,
                                            const char *oldval, const char *val, int maxlen)
 {
-  usbdev_type type = USB_DEV_TYPE_NONE;
   int portnum;
 
   if (set) {
     portnum = atoi((param->get_parent())->get_name()+4) - 1;
     bx_bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
-    if ((portnum >= 0) && (portnum < BX_N_USB_OHCI_PORTS)) {
+    if ((portnum >= 0) && (portnum < USB_OHCI_PORTS)) {
       if (empty && BX_OHCI_THIS hub.usb_port[portnum].HcRhPortStatus.ccs) {
-        BX_INFO(("USB port #%d: device disconnect", portnum+1));
-        if (BX_OHCI_THIS hub.usb_port[portnum].device != NULL) {
-          type = BX_OHCI_THIS hub.usb_port[portnum].device->get_type();
-        }
-        usb_set_connect_status(portnum, type, 0);
+        BX_OHCI_THIS hub.device_change |= (1 << portnum);
       } else if (!empty && !BX_OHCI_THIS hub.usb_port[portnum].HcRhPortStatus.ccs) {
         BX_OHCI_THIS hub.device_change |= (1 << portnum);
       }

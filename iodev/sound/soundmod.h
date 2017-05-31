@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundmod.h 12681 2015-03-06 22:54:30Z vruppert $
+// $Id: soundmod.h 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2011-2015  The Bochs Project
+//  Copyright (C) 2011-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -18,31 +18,27 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-// Common code for sound lowlevel modules
-
-#define BX_MAX_SOUND_DRIVERS 4
+// Sound driver loader code
 
 class bx_sound_lowlevel_c;
 class bx_soundlow_waveout_c;
+class bx_soundlow_wavein_c;
+class bx_soundlow_midiout_c;
 
 // Pseudo device that loads the lowlevel sound module
-class bx_soundmod_ctl_c : public bx_soundmod_ctl_stub_c {
+class BOCHSAPI bx_soundmod_ctl_c : public logfunctions {
 public:
   bx_soundmod_ctl_c();
-  virtual ~bx_soundmod_ctl_c();
-  virtual void init(void);
-  virtual bx_soundlow_waveout_c* get_waveout(bx_bool using_file);
-  virtual bx_soundlow_wavein_c* get_wavein();
-  virtual bx_soundlow_midiout_c* get_midiout(bx_bool using_file);
+  ~bx_soundmod_ctl_c() {}
+  void init(void);
+  void exit(void);
+  bx_bool register_driver(bx_sound_lowlevel_c *module, int driver_id);
+  bx_soundlow_waveout_c* get_waveout(bx_bool using_file);
+  bx_soundlow_wavein_c* get_wavein();
+  bx_soundlow_midiout_c* get_midiout(bx_bool using_file);
 
 private:
   bx_sound_lowlevel_c* get_driver(int driver_id);
-
-  struct {
-    int drv_id;
-    bx_sound_lowlevel_c *module;
-  } soundmod[BX_MAX_SOUND_DRIVERS];
-  unsigned n_sound_drivers;
-
-  bx_soundlow_waveout_c *waveout;
 };
+
+BOCHSAPI extern bx_soundmod_ctl_c bx_soundmod_ctl;

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_null.cc 10975 2012-01-14 17:03:00Z vruppert $
+// $Id: eth_null.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2011  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -35,6 +35,21 @@
 #include "netmod.h"
 
 #if BX_NETWORKING
+
+// network driver plugin entry points
+
+int CDECL libnull_net_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL libnull_net_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+// network driver implementation
 
 #define LOG_THIS netdev->
 
@@ -90,16 +105,16 @@ bx_null_pktmover_c::bx_null_pktmover_c(const char *netif,
 #if BX_ETH_NULL_LOGGING
   // Start the rx poll
   this->rx_timer_index =
-    bx_pc_system.register_timer(this, this->rx_timer_handler, 1000,
-                                1, 1, "eth_null"); // continuous, active
+    DEV_register_timer(this, this->rx_timer_handler, 1000, 1, 1,
+                       "eth_null"); // continuous, active
   this->rxh    = rxh;
   this->rxstat = rxstat;
   // eventually Bryce wants txlog to dump in pcap format so that
   // tcpdump -r FILE can read it and interpret packets.
-  txlog = fopen("ne2k-tx.log", "wb");
-  if (!txlog) BX_PANIC(("open ne2k-tx.log failed"));
-  txlog_txt = fopen("ne2k-txdump.txt", "wb");
-  if (!txlog_txt) BX_PANIC(("open ne2k-txdump.txt failed"));
+  txlog = fopen("eth_null-tx.log", "wb");
+  if (!txlog) BX_PANIC(("open eth_null-tx.log failed"));
+  txlog_txt = fopen("eth_null-txdump.txt", "wb");
+  if (!txlog_txt) BX_PANIC(("open eth_null-txdump.txt failed"));
   fprintf(txlog_txt, "null packetmover readable log file\n");
   fprintf(txlog_txt, "net IF = %s\n", netif);
   fprintf(txlog_txt, "MAC address = ");

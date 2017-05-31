@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.cc 12688 2015-03-17 20:55:51Z vruppert $
+// $Id: soundwin.cc 13160 2017-03-30 18:08:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,7 @@
 
 #include "iodev.h"
 #include "soundlow.h"
+#include "soundmod.h"
 #include "soundwin.h"
 
 #if BX_HAVE_SOUND_WIN && BX_SUPPORT_SOUNDLOW
@@ -50,6 +51,19 @@
 HANDLE DataHandle;     // returned by GlobalAlloc()
 Bit8u *DataPointer;    // returned by GlobalLock()
 
+// sound driver plugin entry points
+
+int CDECL libwin_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  // Nothing here yet
+  return 0; // Success
+}
+
+void CDECL libwin_sound_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
 // helper function
 Bit8u* newbuffer(unsigned blksize)
 {
@@ -65,7 +79,7 @@ Bit8u* newbuffer(unsigned blksize)
   }
 }
 
-// bx_soundlow_waveout_win_c class implemenzation
+// bx_soundlow_waveout_win_c class implementation
 
 bx_soundlow_waveout_win_c::bx_soundlow_waveout_win_c()
     :bx_soundlow_waveout_c()
@@ -96,6 +110,7 @@ int bx_soundlow_waveout_win_c::openwaveoutput(const char *wavedev)
 
   set_pcm_params(&real_pcm_param);
   pcm_callback_id = register_wave_callback(this, pcm_callback);
+  start_resampler_thread();
   start_mixer_thread();
   return BX_SOUNDLOW_OK;
 }
@@ -205,7 +220,7 @@ int bx_soundlow_waveout_win_c::output(int length, Bit8u data[])
   return BX_SOUNDLOW_OK;
 }
 
-// bx_soundlow_wavein_win_c class implemenzation
+// bx_soundlow_wavein_win_c class implementation
 
 bx_soundlow_wavein_win_c::bx_soundlow_wavein_win_c()
     :bx_soundlow_wavein_c()
@@ -229,7 +244,7 @@ int bx_soundlow_wavein_win_c::openwaveinput(const char *wavedev, sound_record_ha
   UNUSED(wavedev);
   record_handler = rh;
   if (rh != NULL) {
-    record_timer_index = bx_pc_system.register_timer(this, record_timer_handler, 1, 1, 0, "soundwin");
+    record_timer_index = DEV_register_timer(this, record_timer_handler, 1, 1, 0, "soundwin");
     // record timer: inactive, continuous, frequency variable
   }
   recording = 0;
@@ -344,7 +359,7 @@ void bx_soundlow_wavein_win_c::record_timer(void)
   record_handler(this, record_packet_size);
 }
 
-// bx_soundlow_midiout_win_c class implemenzation
+// bx_soundlow_midiout_win_c class implementation
 
 bx_soundlow_midiout_win_c::bx_soundlow_midiout_win_c()
     :bx_soundlow_midiout_c()
@@ -459,10 +474,10 @@ void bx_soundlow_midiout_win_c::checkmidiready()
   }
 }
 
-// bx_sound_windows_c class implemenzation
+// bx_sound_windows_c class implementation
 
 bx_sound_windows_c::bx_sound_windows_c()
-  :bx_sound_lowlevel_c()
+  :bx_sound_lowlevel_c("win")
 {
   DataHandle = GlobalAlloc(GMEM_MOVEABLE | GMEM_SHARE, size);
   DataPointer = (Bit8u*) GlobalLock(DataHandle);
@@ -472,8 +487,6 @@ bx_sound_windows_c::bx_sound_windows_c()
 
 #undef size
 #undef ALIGN
-
-  BX_INFO(("Sound lowlevel module 'win' initialized"));
 }
 
 bx_sound_windows_c::~bx_sound_windows_c()

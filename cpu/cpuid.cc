@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpuid.cc 12697 2015-03-27 21:39:24Z sshwarts $
+// $Id: cpuid.cc 13157 2017-03-28 19:11:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2014-2015 Stanislav Shwartsman
+//   Copyright (c) 2014-2017 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -27,8 +27,26 @@
 #include "cpuid.h"
 
 #define LOG_THIS cpu->
-
 bx_cpuid_t::bx_cpuid_t(BX_CPU_C *_cpu): cpu(_cpu)
+{
+  init();
+}
+
+#if BX_SUPPORT_VMX
+bx_cpuid_t::bx_cpuid_t(BX_CPU_C *_cpu, Bit32u vmcs_revision): 
+	cpu(_cpu), vmcs_map(vmcs_revision)
+{
+  init();
+}
+
+bx_cpuid_t::bx_cpuid_t(BX_CPU_C *_cpu, Bit32u vmcs_revision, const char *filename): 
+	cpu(_cpu), vmcs_map(vmcs_revision, filename)
+{
+  init();
+}
+#endif
+
+void bx_cpuid_t::init()
 {
 #if BX_SUPPORT_SMP
   nthreads = SIM->get_param_num(BXPN_CPU_NTHREADS)->get();
@@ -125,6 +143,166 @@ void bx_cpuid_t::get_std_cpuid_extended_topology_leaf(Bit32u subfunction, cpuid_
 
 #endif
 
+#if BX_CPU_LEVEL >= 6
+void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *leaf) const
+{
+  leaf->eax = 0;
+  leaf->ebx = 0;
+  leaf->ecx = 0;
+  leaf->edx = 0;
+
+  if (is_cpu_extension_supported(BX_ISA_XSAVE))
+  {
+    switch(subfunction) {
+    case 0:
+      // EAX - valid bits of XCR0 (lower part)
+      // EBX - Maximum size (in bytes) required by enabled features
+      // ECX - Maximum size (in bytes) required by CPU supported features
+      // EDX - valid bits of XCR0 (upper part)
+      leaf->eax = cpu->xcr0_suppmask;
+
+      leaf->ebx = 512+64;
+#if BX_SUPPORT_AVX
+      if (cpu->xcr0.get_YMM())
+        leaf->ebx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_EVEX
+      if (cpu->xcr0.get_OPMASK())
+        leaf->ebx = XSAVE_OPMASK_STATE_OFFSET + XSAVE_OPMASK_STATE_LEN;
+      if (cpu->xcr0.get_ZMM_HI256())
+        leaf->ebx = XSAVE_ZMM_HI256_STATE_OFFSET + XSAVE_ZMM_HI256_STATE_LEN;
+      if (cpu->xcr0.get_HI_ZMM())
+        leaf->ebx = XSAVE_HI_ZMM_STATE_OFFSET + XSAVE_HI_ZMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_PKEYS
+      if (cpu->xcr0.get_PKRU())
+        leaf->ebx = XSAVE_PKRU_STATE_OFFSET + XSAVE_PKRU_STATE_LEN;
+#endif
+
+      leaf->ecx = 512+64;
+#if BX_SUPPORT_AVX
+      if (cpu->xcr0_suppmask & BX_XCR0_YMM_MASK)
+        leaf->ecx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_EVEX
+      if (cpu->xcr0_suppmask & BX_XCR0_OPMASK_MASK)
+        leaf->ecx = XSAVE_OPMASK_STATE_OFFSET + XSAVE_OPMASK_STATE_LEN;
+      if (cpu->xcr0_suppmask & BX_XCR0_ZMM_HI256_MASK)
+        leaf->ecx = XSAVE_ZMM_HI256_STATE_OFFSET + XSAVE_ZMM_HI256_STATE_LEN;
+      if (cpu->xcr0_suppmask & BX_XCR0_HI_ZMM_MASK)
+        leaf->ecx = XSAVE_HI_ZMM_STATE_OFFSET + XSAVE_HI_ZMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_PKEYS
+      if (cpu->xcr0_suppmask & BX_XCR0_PKRU_MASK)
+        leaf->ecx = XSAVE_PKRU_STATE_OFFSET + XSAVE_PKRU_STATE_LEN;
+#endif
+      leaf->edx = 0;
+      break;
+
+    case 1:
+      // EAX[0] - support for the XSAVEOPT instruction
+      // EAX[1] - support for compaction extensions to the XSAVE feature set
+      // EAX[2] - support for execution of XGETBV with ECX = 1
+      // EAX[3] - support for XSAVES, XRSTORS, and the IA32_XSS MSR
+      leaf->eax = 0;
+      if (is_cpu_extension_supported(BX_ISA_XSAVEOPT))
+        leaf->eax |= 0x1;
+      if (is_cpu_extension_supported(BX_ISA_XSAVEC))
+        leaf->eax |= (1<<1) | (1<<2);
+      if (is_cpu_extension_supported(BX_ISA_XSAVES))
+        leaf->eax |= (1<<3);
+
+      // EBX[31:00] - The size (in bytes) of the XSAVE area containing all states enabled by (XCRO | IA32_XSS)
+      leaf->ebx = 0;
+      if (is_cpu_extension_supported(BX_ISA_XSAVES)) {
+        xcr0_t xcr0_xss = cpu->xcr0;
+        xcr0_xss.val32 |= cpu->msr.msr_xss;
+#if BX_SUPPORT_AVX
+        if (xcr0_xss.get_YMM())
+          leaf->ebx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_EVEX
+        if (xcr0_xss.get_OPMASK())
+          leaf->ebx = XSAVE_OPMASK_STATE_OFFSET + XSAVE_OPMASK_STATE_LEN;
+        if (xcr0_xss.get_ZMM_HI256())
+          leaf->ebx = XSAVE_ZMM_HI256_STATE_OFFSET + XSAVE_ZMM_HI256_STATE_LEN;
+        if (xcr0_xss.get_HI_ZMM())
+          leaf->ebx = XSAVE_HI_ZMM_STATE_OFFSET + XSAVE_HI_ZMM_STATE_LEN;
+#endif
+#if BX_SUPPORT_PKEYS
+        if (xcr0_xss.get_PKRU())
+          leaf->ebx = XSAVE_PKRU_STATE_OFFSET + XSAVE_PKRU_STATE_LEN;
+#endif
+      }
+
+      // ECX[31:0] - Reports the supported bits of the lower 32 bits of the IA32_XSS MSR.
+      //             IA32_XSS[n]    can be set to 1 only if ECX[n] is 1
+      // EDX[31:0] - Reports the supported bits of the upper 32 bits of the IA32_XSS MSR.
+      //             IA32_XSS[n+32] can be set to 1 only if EDX[n] is 1
+      leaf->ecx = 0; // no supported bits in MSR_XSS for now
+      leaf->edx = 0;
+      break;
+
+#if BX_SUPPORT_AVX
+    case 2: // YMM leaf
+      if (cpu->xcr0_suppmask & BX_XCR0_YMM_MASK) {
+        leaf->eax = XSAVE_YMM_STATE_LEN;
+        leaf->ebx = XSAVE_YMM_STATE_OFFSET;
+        leaf->ecx = 0;
+        leaf->edx = 0;
+      }
+      break;
+#endif
+
+    case 3: // MPX leafs (BNDREGS, BNDCFG)
+    case 4:
+      break;
+
+#if BX_SUPPORT_EVEX
+    case 5: // OPMASK leaf
+      if (cpu->xcr0_suppmask & BX_XCR0_OPMASK_MASK) {
+        leaf->eax = XSAVE_OPMASK_STATE_LEN;
+        leaf->ebx = XSAVE_OPMASK_STATE_OFFSET;
+        leaf->ecx = 0;
+        leaf->edx = 0;
+      }
+      break;
+    case 6: // ZMM Hi256 leaf
+      if (cpu->xcr0_suppmask & BX_XCR0_ZMM_HI256_MASK) {
+        leaf->eax = XSAVE_ZMM_HI256_STATE_LEN;
+        leaf->ebx = XSAVE_ZMM_HI256_STATE_OFFSET;
+        leaf->ecx = 0;
+        leaf->edx = 0;
+      }
+      break;
+    case 7: // HI_ZMM leaf
+      if (cpu->xcr0_suppmask & BX_XCR0_HI_ZMM_MASK) {
+        leaf->eax = XSAVE_HI_ZMM_STATE_LEN;
+        leaf->ebx = XSAVE_HI_ZMM_STATE_OFFSET;
+        leaf->ecx = 0;
+        leaf->edx = 0;
+      }
+      break;
+#endif
+
+    case 8: // Processor trace leaf
+      break;
+
+#if BX_SUPPPORT_PKEYS
+    case 9: // Ptotection keys
+      if (cpu->xcr0_suppmask & BX_XCR0_PKRU_MASK) {
+        leaf->eax = XSAVE_PKRU_STATE_LEN;
+        leaf->ebx = XSAVE_PKRU_STATE_OFFSET;
+        leaf->ecx = 0;
+        leaf->edx = 0;
+      }
+      break;
+#endif
+    }
+  }
+}
+#endif
+
 void bx_cpuid_t::get_leaf_0(unsigned max_leaf, const char *vendor_string, cpuid_function_t *leaf) const
 {
   // EAX: highest function understood by CPUID
@@ -184,6 +362,27 @@ void bx_cpuid_t::get_ext_cpuid_brand_string_leaf(const char *brand_string, Bit32
 #endif
 }
 
+// leaf 0x80000008 - return Intel defaults //
+void bx_cpuid_t::get_ext_cpuid_leaf_8(cpuid_function_t *leaf) const
+{
+  // virtual & phys address size in low 2 bytes of EAX.
+  // TODO: physical address width should be 32-bit when no PSE-36 is supported
+  Bit32u phy_addr_width = BX_PHY_ADDRESS_WIDTH;
+  Bit32u lin_addr_width = is_cpu_extension_supported(BX_ISA_LONG_MODE) ? BX_LIN_ADDRESS_WIDTH : 32;
+
+  leaf->eax = phy_addr_width | (lin_addr_width << 8);
+
+  // [0:0] CLZERO support
+  // [1:1] Instruction Retired Counter support (???)
+  // [2:2] Error Pointer Zero/Restore (???)
+  leaf->ebx = 0;
+  if (is_cpu_extension_supported(BX_ISA_CLZERO))
+    leaf->ebx |= 0x1;
+
+  leaf->ecx = 0; // Reserved, undefined for Intel
+  leaf->edx = 0;
+}
+
 void bx_cpuid_t::get_cpuid_hidden_level(cpuid_function_t *leaf, const char *magic_string) const
 {
   memcpy(&(leaf->eax), magic_string     , 4);
@@ -214,8 +413,24 @@ void bx_cpuid_t::dump_cpuid(unsigned max_std_leaf, unsigned max_ext_leaf) const
 
   if (max_ext_leaf == 0) return;
 
-  for (unsigned ext_leaf=0x80000000; ext_leaf<=(0x8000000 + max_ext_leaf); ext_leaf++) {
+  for (unsigned ext_leaf=0x80000000; ext_leaf<=(0x80000000 + max_ext_leaf); ext_leaf++) {
     dump_cpuid_leaf(ext_leaf);
   }
 }
 
+void bx_cpuid_t::warning_messages(unsigned extension) const
+{
+  switch(extension) {
+  case BX_ISA_3DNOW:
+    BX_INFO(("WARNING: 3DNow! is not implemented yet !"));
+    break;
+  case BX_ISA_RDRAND:
+    BX_INFO(("WARNING: RDRAND would not produce true random numbers !"));
+    break;
+  case BX_ISA_RDSEED:
+    BX_INFO(("WARNING: RDSEED would not produce true random numbers !"));
+    break;
+  default:
+    break;
+  }
+}

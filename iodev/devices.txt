@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.txt 12737 2015-05-03 06:36:30Z vruppert $
+// $Id: devices.txt 13132 2017-03-18 09:40:20Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 MOTHER BOARD (i440FX support)                                   devices.cc
@@ -40,7 +40,7 @@ Attached devices
   |
   +---- PS/2 Keyboard and Mouse                                 keyboard.cc, scancodes.cc
   |
-  +---- Bus Mouse (MS InPort)                                   busmouse.cc
+  +---- Bus Mouse (Standard / MS InPort)                        busmouse.cc
   |
   +---- Hard Drive + ATA controller                             harddrv.cc
   |        |
@@ -49,11 +49,12 @@ Attached devices
   |        |             +---- Core and basic modules           hdimage.cc
   |        |             |
   |        |             +---- Additional modules
-  |        |                          |
-  |        |                          +---- VMware version 3    vmware3.cc
-  |        |                          +---- VMware 4 (VMDK)     vmware4.cc
-  |        |                          +---- VirtualPC           vpc-img.cc
-  |        |                          +---- Virtual VFAT        vvfat.cc
+  |        |                         |
+  |        |                         +---- VirtualBox (VDI 1.1) vbox.cc
+  |        |                         +---- VMware version 3     vmware3.cc
+  |        |                         +---- VMware 4 (VMDK)      vmware4.cc
+  |        |                         +---- VirtualPC            vpc-img.cc
+  |        |                         +---- Virtual VFAT         vvfat.cc
   |        |
   |        +---- CD/DVD-ROM image / device access (*)           hdimage/cdrom.cc
   |                      |
@@ -89,7 +90,8 @@ Attached devices
   |                      +---- TAP Interface                    eth_tap.cc
   |                      +---- TUN/TAP Interface                eth_tuntap.cc
   |                      +---- VDE Interface                    eth_vde.cc
-  |                      +---- virtual Ethernet locator         eth_vnet.cc
+  |                      +---- Virtual network module           eth_vnet.cc
+  |                      +---- Socket network module            eth_socket.cc
   |                      +---- builtin Slirp support            eth_slirp.cc, slirp/*
   |
   +---- Sound support                                           sound/
@@ -102,11 +104,12 @@ Attached devices
   |        +---- Sound modules                                  soundlow.cc
   |                      |
   |                      +---- Control Module                   soundmod.cc
+  |                      +---- Dummy Module                     sounddummy.cc
   |                      +---- File Output Module               soundfile.cc
   |                      +---- Library specific Module          soundsdl.cc
   |                      +---- Host specific Modules
   |                                   |
-  |                                   +---- FreeBSD / Linux     soundlnx.cc
+  |                                   +---- FreeBSD / Linux     soundoss.cc
   |                                   +---- Linux               soundalsa.cc
   |                                   +---- Mac OSX             soundosx.cc
   |                                   +---- Windows             soundwin.cc
@@ -115,6 +118,7 @@ Attached devices
            |
            +---- Host Controllers
            |             |
+           |             +---- USB EHCI adapter                 usb_ehci.cc
            |             +---- USB OHCI adapter                 usb_ohci.cc
            |             +---- USB UHCI adapter (PIIX3)         usb_uhci.cc
            |             +---- USB xHCI adapter                 usb_xhci.cc
@@ -123,6 +127,7 @@ Attached devices
                          | |
                          | +-- Control Module                   usb_common.cc
                          |
+                         +---- USB floppy emulation (*)         usb_cbi.cc
                          +---- USB HID emulation                usb_hid.cc
                          +---- USB external HUB                 usb_hub.cc
                          +---- USB mass storage device (*)      usb_msd.cc, scsi_device.cc

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dbg_main.cc 12667 2015-02-22 21:26:26Z sshwarts $
+// $Id: dbg_main.cc 12984 2016-12-06 18:07:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2016  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -165,14 +165,7 @@ int bx_dbg_set_rcfile(const char *rcfile)
 
 bx_bool bx_dbg_register_debug_info(const char *devname, void *dev)
 {
-  debug_info_t *debug_info;
-
-  debug_info = (debug_info_t *)malloc(sizeof(debug_info_t));
-  if (debug_info == NULL) {
-    BX_PANIC(("can't allocate debug_info_t"));
-    return 0;
-  }
-
+  debug_info_t *debug_info = new debug_info_t;
   debug_info->name = devname;
   debug_info->device = (bx_devmodel_c*)dev;
   debug_info->next = NULL;
@@ -184,7 +177,7 @@ bx_bool bx_dbg_register_debug_info(const char *devname, void *dev)
 
     while (temp->next) {
       if (!strcmp(temp->name, devname)) {
-        free(debug_info);
+        delete debug_info;
         return 0;
       }
       temp = temp->next;
@@ -199,7 +192,7 @@ void bx_dbg_info_cleanup(void)
   debug_info_t *temp = bx_debug_info_list, *next;
   while (temp != NULL) {
     next = temp->next;
-    free(temp);
+    delete temp;
     temp = next;
   }
   bx_debug_info_list = NULL;
@@ -592,7 +585,7 @@ void bx_dbg_interrupt(unsigned cpu, Bit8u vector, Bit16u error_code)
 
 void bx_dbg_halt(unsigned cpu)
 {
-  if (BX_CPU(dbg_cpu)->trace)
+  if (BX_CPU(cpu)->trace)
   {
     dbg_printf("CPU %d: HALTED\n", cpu);
   }
@@ -729,6 +722,7 @@ void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, un
     "VMX LDMSR",
     "VMX STMSR",
     "VAPIC",
+    "PML",
     "SMRAM"
   };
 
@@ -1023,7 +1017,8 @@ void bx_dbg_info_control_regs_command(void)
   dbg_printf("    PWT=page-level write-through=%d\n", (cr3>>3) & 1);
 #if BX_CPU_LEVEL >= 5
   Bit32u cr4 = SIM->get_param_num("CR4", dbg_cpu_list)->get();
-  dbg_printf("CR4=0x%08x: %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", cr4,
+  dbg_printf("CR4=0x%08x: %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", cr4,
+    (cr4 & (1<<22)) ? "PKE" : "pke",
     (cr4 & (1<<21)) ? "SMAP" : "smap",
     (cr4 & (1<<20)) ? "SMEP" : "smep",
     (cr4 & (1<<18)) ? "OSXSAVE" : "osxsave",
@@ -1032,6 +1027,7 @@ void bx_dbg_info_control_regs_command(void)
     (cr4 & (1<<14)) ? "SMX" : "smx",
     (cr4 & (1<<13)) ? "VMX" : "vmx",
     (cr4 & (1<<10)) ? "OSXMMEXCPT" : "osxmmexcpt",
+    (cr4 & (1<<11)) ? "UMIP" : "umip",
     (cr4 & (1<<9))  ? "OSFXSR" : "osfxsr",
     (cr4 & (1<<8))  ? "PCE" : "pce",
     (cr4 & (1<<7))  ? "PGE" : "pge",
@@ -1058,7 +1054,8 @@ void bx_dbg_info_control_regs_command(void)
 #if BX_CPU_LEVEL >= 6
   if (BX_CPU(dbg_cpu)->is_cpu_extension_supported(BX_ISA_XSAVE)) {
     Bit32u xcr0 = SIM->get_param_num("XCR0", dbg_cpu_list)->get();
-    dbg_printf("XCR0=0x%08x: %s %s %s %s %s %s %s %s\n", xcr0,
+    dbg_printf("XCR0=0x%08x: %s %s %s %s %s %s %s %s %s\n", xcr0,
+      (xcr0 & (1<<9)) ? "PKRU" : "pkru",
       (xcr0 & (1<<7)) ? "HI_ZMM" : "hi_zmm",
       (xcr0 & (1<<6)) ? "ZMM_HI256" : "zmm_hi256",
       (xcr0 & (1<<5)) ? "OPMASK" : "opmask",
@@ -1974,10 +1971,10 @@ void bx_dbg_disassemble_current(int which_cpu, int print_time)
       BX_CPU(which_cpu)->get_segment_base(BX_SEG_REG_CS),
       BX_CPU(which_cpu)->guard_found.eip, bx_disasm_ibuf, bx_disasm_tbuf);
 #else
-//  extern char* disasm(const Bit8u *opcode, bool is_32, bool is_64, char *disbufptr, bxInstruction_c *i, bx_address cs_base, bx_address rip);
+    extern char* disasm(const Bit8u *opcode, bool is_32, bool is_64, char *disbufptr, bxInstruction_c *i, bx_address cs_base = 0, bx_address rip = 0);
 
     bxInstruction_c i;
-    BX_CPU(which_cpu)->disasm(bx_disasm_ibuf, IS_CODE_32(BX_CPU(which_cpu)->guard_found.code_32_64),
+    disasm(bx_disasm_ibuf, IS_CODE_32(BX_CPU(which_cpu)->guard_found.code_32_64),
         IS_CODE_64(BX_CPU(which_cpu)->guard_found.code_32_64), 
         bx_disasm_tbuf, &i,
         BX_CPU(which_cpu)->get_segment_base(BX_SEG_REG_CS), BX_CPU(which_cpu)->guard_found.eip);
@@ -2928,7 +2925,7 @@ void bx_dbg_restore_command(const char *param_name, const char *restore_path)
 
 void bx_dbg_disassemble_current(const char *format)
 {
-  Bit64u addr = bx_dbg_get_laddr(bx_dbg_get_selector_value(BX_DBG_SREG_CS), 
+  Bit64u addr = bx_dbg_get_laddr(bx_dbg_get_selector_value(BX_SEG_REG_CS), 
      BX_CPU(dbg_cpu)->get_instruction_pointer());
   bx_dbg_disassemble_command(format, addr, addr);
 }

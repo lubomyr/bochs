@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vvfat.cc 12590 2015-01-03 13:53:52Z sshwarts $
+// $Id: vvfat.cc 13017 2016-12-30 10:04:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // Virtual VFAT image support (shadows a local directory)
 // ported from QEMU block driver with some additions (see below)
 //
 // Copyright (c) 2004,2005  Johannes E. Schindelin
-// Copyright (C) 2010-2014  The Bochs Project
+// Copyright (C) 2010-2016  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -58,6 +58,8 @@
 #define VVFAT_MBR  "vvfat_mbr.bin"
 #define VVFAT_BOOT "vvfat_boot.bin"
 #define VVFAT_ATTR "vvfat_attr.cfg"
+
+static int vvfat_count = 0;
 
 // portable mkdir / rmdir
 static int bx_mkdir(const char *path)
@@ -340,7 +342,7 @@ infosector_t;
 vvfat_image_t::vvfat_image_t(Bit64u size, const char* _redolog_name)
 {
   if (sizeof(bootsector_t) != 512) {
-    BX_PANIC(("system error: invalid bootsector structure size"));
+    BX_FATAL(("system error: invalid bootsector structure size"));
   }
 
   first_sectors = new Bit8u[0xc000];
@@ -1047,7 +1049,7 @@ int vvfat_image_t::init_directories(const char* dirname)
     if (fat_type != 32) {
       bootsector->u.fat16.drive_number = (fat_type == 12) ? 0:0x80; // assume this is hda (TODO)
       bootsector->u.fat16.signature = 0x29;
-      bootsector->u.fat16.id = htod32(0xfabe1afd);
+      bootsector->u.fat16.id = htod32(0xfabe1afd + vvfat_count);
       memcpy(bootsector->u.fat16.volume_label, "BOCHS VVFAT", 11);
       memcpy(bootsector->u.fat16.fat_type, (fat_type==12) ? "FAT12   ":"FAT16   ", 8);
     } else {
@@ -1057,7 +1059,7 @@ int vvfat_image_t::init_directories(const char* dirname)
       bootsector->u.fat32.backup_boot_sector = htod16(6);
       bootsector->u.fat32.drive_number = 0x80; // assume this is hda (TODO)
       bootsector->u.fat32.signature = 0x29;
-      bootsector->u.fat32.id = htod32(0xfabe1afd);
+      bootsector->u.fat32.id = htod32(0xfabe1afd + vvfat_count);
       memcpy(bootsector->u.fat32.volume_label, "BOCHS VVFAT", 11);
       memcpy(bootsector->u.fat32.fat_type, "FAT32   ", 8);
     }
@@ -1364,6 +1366,7 @@ int vvfat_image_t::open(const char* dirname, int flags)
 #endif
 
   vvfat_modified = 0;
+  vvfat_count++;
 
   BX_INFO(("'vvfat' disk opened: directory is '%s', redolog is '%s'", dirname, redolog_temp));
 

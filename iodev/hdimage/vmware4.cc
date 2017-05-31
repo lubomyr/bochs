@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmware4.cc 12690 2015-03-20 18:01:52Z vruppert $
+// $Id: vmware4.cc 13055 2017-01-30 19:08:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -10,7 +10,7 @@
  * Contact: snrrrub@gmail.com
  *
  * Copyright (C) 2006       Sharvil Nanavati.
- * Copyright (C) 2006-2015  The Bochs Project
+ * Copyright (C) 2006-2017  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -56,7 +56,7 @@ vmware4_image_t::vmware4_image_t()
   is_dirty(0)
 {
   if (sizeof(_VM4_Header) != 77) {
-    BX_PANIC(("system error: invalid header structure size"));
+    BX_FATAL(("system error: invalid header structure size"));
   }
 }
 
@@ -112,7 +112,7 @@ void vmware4_image_t::close()
   flush();
   delete [] tlb; tlb = 0;
 
-  ::close(file_descriptor);
+  bx_close_image(file_descriptor, pathname);
   file_descriptor = -1;
 }
 
@@ -136,6 +136,7 @@ Bit64s vmware4_image_t::lseek(Bit64s offset, int whence)
 
 ssize_t vmware4_image_t::read(void * buf, size_t count)
 {
+  char *cbuf = (char*)buf;
   ssize_t total = 0;
   while (count > 0) {
     off_t readable = perform_seek();
@@ -145,10 +146,11 @@ ssize_t vmware4_image_t::read(void * buf, size_t count)
     }
 
     off_t copysize = ((off_t)count > readable) ? readable : count;
-    memcpy(buf, tlb + current_offset - tlb_offset, (size_t)copysize);
+    memcpy(cbuf, tlb + current_offset - tlb_offset, (size_t)copysize);
 
     current_offset += copysize;
     total += (long)copysize;
+    cbuf += copysize;
     count -= (size_t)copysize;
   }
   return total;
@@ -156,6 +158,7 @@ ssize_t vmware4_image_t::read(void * buf, size_t count)
 
 ssize_t vmware4_image_t::write(const void * buf, size_t count)
 {
+  char *cbuf = (char*)buf;
   ssize_t total = 0;
   while (count > 0) {
     off_t writable = perform_seek();
@@ -165,10 +168,11 @@ ssize_t vmware4_image_t::write(const void * buf, size_t count)
     }
 
     off_t writesize = ((off_t)count > writable) ? writable : count;
-    memcpy(tlb + current_offset - tlb_offset, buf, (size_t)writesize);
+    memcpy(tlb + current_offset - tlb_offset, cbuf, (size_t)writesize);
 
     current_offset += writesize;
     total += (long)writesize;
+    cbuf += writesize;
     count -= (size_t)writesize;
     is_dirty = 1;
   }

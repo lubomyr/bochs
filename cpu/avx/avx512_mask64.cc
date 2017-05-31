@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: avx512_mask64.cc 12519 2014-10-22 18:24:33Z sshwarts $
+// $Id: avx512_mask64.cc 12769 2015-05-16 21:06:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2014 Stanislav Shwartsman
+//   Copyright (c) 2014-2015 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -61,7 +61,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::KANDNQ_KGqKHqKEqR(bxInstruction_c 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::KMOVQ_KGqKEqM(bxInstruction_c *i)
 {
 #if BX_SUPPORT_EVEX
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   Bit64u opmask = read_virtual_qword(i->seg(), eaddr);
   BX_WRITE_OPMASK(i->dst(), opmask);
 #endif
@@ -81,7 +81,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::KMOVQ_KGqKEqR(bxInstruction_c *i)
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::KMOVQ_KEqKGqM(bxInstruction_c *i)
 {
 #if BX_SUPPORT_EVEX
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   write_virtual_qword(i->seg(), eaddr, BX_READ_OPMASK(i->src()));
 #endif
 

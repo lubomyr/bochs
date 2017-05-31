@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32dialog.cc 12381 2014-06-20 09:31:56Z vruppert $
+// $Id: win32dialog.cc 13030 2017-01-10 21:40:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003-2014  The Bochs Project
+//  Copyright (C) 2003-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -26,8 +26,9 @@
 #include "param_names.h"
 #include "win32res.h"
 #include "win32paramdlg.h"
+#include "textconfig.h"
 
-const char log_choices[5][16] = {"ignore", "log", "ask user", "end simulation", "no change"};
+const char log_choices[N_ACT+1][16] = {"ignore", "log", "warn user", "ask user", "end simulation", "no change"};
 
 HWND GetBochsWindow()
 {
@@ -97,12 +98,16 @@ static BOOL CALLBACK LogAskProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPara
       SetWindowText(GetDlgItem(hDlg, IDASKMSG), event->u.logmsg.msg);
       SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Continue");
       SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Continue and don't ask again");
-      SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Kill simulation");
-      SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Abort (dump core)");
+      if (event->u.logmsg.mode == BX_LOG_DLG_ASK) {
+        SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Kill simulation");
+        SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Abort (dump core)");
 #if BX_DEBUGGER
-      SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Continue and return to debugger");
+        SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_ADDSTRING, 0, (LPARAM)"Continue and return to debugger");
 #endif
-      SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_SETCURSEL, 2, 0);
+        SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_SETCURSEL, 2, 0);
+      } else {
+        SendMessage(GetDlgItem(hDlg, IDASKLIST), LB_SETCURSEL, 0, 0);
+      }
       SetFocus(GetDlgItem(hDlg, IDASKLIST));
       return FALSE;
     case WM_CLOSE:
@@ -613,7 +618,7 @@ BxEvent* win32_notify_callback(void *unused, BxEvent *event)
   event->retcode = -1;
   switch (event->type)
   {
-    case BX_SYNC_EVT_LOG_ASK:
+    case BX_SYNC_EVT_LOG_DLG:
       LogAskDialog(event);
       return event;
     case BX_SYNC_EVT_ASK_PARAM:
@@ -675,15 +680,19 @@ static int win32_ci_callback(void *userdata, ci_command_t command)
       }
       break;
     case CI_RUNTIME_CONFIG:
-      if (MainMenuDialog(GetBochsWindow(), 1) < 0) {
-        bx_user_quit = 1;
+      if (!bx_gui->has_gui_console()) {
+        if (MainMenuDialog(GetBochsWindow(), 1) < 0) {
+          bx_user_quit = 1;
 #if !BX_DEBUGGER
-        bx_atexit();
-        SIM->quit_sim(1);
+          bx_atexit();
+          SIM->quit_sim(1);
 #else
-        bx_dbg_exit(1);
+          bx_dbg_exit(1);
 #endif
-        return -1;
+          return -1;
+        }
+      } else {
+        bx_text_config_interface(BX_CI_RUNTIME);
       }
       break;
     case CI_SHUTDOWN:

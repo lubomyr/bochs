@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: nogui.cc 12081 2013-12-29 12:56:52Z vruppert $
+// $Id: nogui.cc 13043 2017-01-15 12:57:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -84,7 +84,7 @@ void bx_nogui_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 
 // ::HANDLE_EVENTS()
 //
-// Called periodically (vga_update_interval in .bochsrc) so the
+// Called periodically (every 1 virtual millisecond) so the
 // the gui code can poll for keyboard, mouse, and other
 // relevant events.
 
@@ -318,7 +318,10 @@ void bx_nogui_gui_c::exit(void)
 
 // ::MOUSE_ENABLED_CHANGED_SPECIFIC()
 //
-// Called whenever the mouse capture mode should be changed.
+// Called whenever the mouse capture mode should be changed. It can change
+// because of a gui event such as clicking on the mouse bitmap / button of
+// the header / tool bar, toggle the mouse capture using the configured
+// method with keyboard or mouse, or from the configuration interface.
 
 void bx_nogui_gui_c::mouse_enabled_changed_specific(bx_bool val)
 {

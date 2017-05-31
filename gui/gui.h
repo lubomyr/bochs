@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gui.h 12404 2014-07-08 14:30:27Z vruppert $
+// $Id: gui.h 13097 2017-03-03 12:43:20Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,19 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
+// header bar and status bar stuff
+#define BX_HEADER_BAR_Y 32
+
+#define BX_MAX_PIXMAPS 17
+#define BX_MAX_HEADERBAR_ENTRIES 12
+
+// align pixmaps towards left or right side of header bar
+#define BX_GRAVITY_LEFT 10
+#define BX_GRAVITY_RIGHT 11
+
 #define BX_MAX_STATUSITEMS 10
 
+// gui dialog capabilities
 #define BX_GUI_DLG_FLOPPY       0x01
 #define BX_GUI_DLG_CDROM        0x02
 #define BX_GUI_DLG_SNAPSHOT     0x04
@@ -71,6 +82,8 @@ typedef struct {
 } bx_svga_tileinfo_t;
 
 
+BOCHSAPI_MSVCONLY Bit8u reverse_bitorder(Bit8u);
+
 BOCHSAPI extern class bx_gui_c *bx_gui;
 
 #if BX_SUPPORT_X86_64
@@ -92,9 +105,6 @@ public:
                           unsigned long cursor_x, unsigned long cursor_y,
                           bx_vga_tminfo_t *tm_info) = 0;
   virtual void graphics_tile_update(Bit8u *tile, unsigned x, unsigned y) = 0;
-  virtual bx_svga_tileinfo_t *graphics_tile_info(bx_svga_tileinfo_t *info);
-  virtual Bit8u *graphics_tile_get(unsigned x, unsigned y, unsigned *w, unsigned *h);
-  virtual void graphics_tile_update_in_place(unsigned x, unsigned y, unsigned w, unsigned h);
   virtual void handle_events(void) = 0;
   virtual void flush(void) = 0;
   virtual void clear_screen(void) = 0;
@@ -107,9 +117,14 @@ public:
   virtual int get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)  = 0;
   virtual int set_clipboard_text(char *snapshot, Bit32u len) = 0;
   virtual void mouse_enabled_changed_specific (bx_bool val) = 0;
+  virtual void exit(void) = 0;
+  // new graphics API methods (compatibility mode in gui.cc)
+  virtual bx_svga_tileinfo_t *graphics_tile_info(bx_svga_tileinfo_t *info);
+  virtual Bit8u *graphics_tile_get(unsigned x, unsigned y, unsigned *w, unsigned *h);
+  virtual void graphics_tile_update_in_place(unsigned x, unsigned y, unsigned w, unsigned h);
+  // optional gui methods (stubs or default code in gui.cc)
   virtual void statusbar_setitem_specific(int element, bx_bool active, bx_bool w) {}
   virtual void set_tooltip(unsigned hbar_id, const char *tip) {}
-  virtual void exit(void) = 0;
   // set_display_mode() changes the mode between the configuration interface
   // and the simulation.  This is primarily intended for display libraries
   // which have a full-screen mode such as SDL, term, and svgalib.  The display
@@ -133,6 +148,9 @@ public:
   virtual void beep_off();
   virtual void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
   virtual void set_mouse_mode_absxy(bx_bool mode) {}
+#if BX_USE_GUI_CONSOLE
+  virtual void set_console_edit_mode(bx_bool mode) {}
+#endif
 
   // The following function(s) are defined already, and your
   // GUI code calls them
@@ -151,6 +169,7 @@ public:
   void update_drive_status_buttons(void);
   static void     mouse_enabled_changed(bx_bool val);
   int register_statusitem(const char *text, bx_bool auto_off=0);
+  void unregister_statusitem(int id);
   void statusbar_setitem(int element, bx_bool active, bx_bool w=0);
   static void init_signal_handlers();
   static void toggle_mouse_enable(void);
@@ -161,10 +180,23 @@ public:
   void init_debug_dialog(void);
   void close_debug_dialog(void);
 #endif
+#if BX_USE_GUI_CONSOLE
+  bx_bool has_gui_console(void) {return console.present;}
+  bx_bool console_running(void) {return console.running;}
+  void console_refresh(bx_bool force);
+  void console_key_enq(Bit8u key);
+  int bx_printf(const char *s);
+  char* bx_gets(char *s, int size);
+#else
+  bx_bool has_gui_console(void) {return 0;}
+  bx_bool console_running(void) {return 0;}
+  void console_refresh(bx_bool force) {}
+  void console_key_enq(Bit8u key) {}
+#endif
 
 protected:
   // And these are defined and used privately in gui.cc
-  // header bar button handers
+  // header bar button handlers
   static void floppyA_handler(void);
   static void floppyB_handler(void);
   static void cdrom1_handler(void);
@@ -176,12 +208,20 @@ protected:
   static void config_handler(void);
   static void userbutton_handler(void);
   static void save_restore_handler(void);
+  // process clicks on the "classic" Bochs headerbar
+  void headerbar_click(int x);
   // snapshot helper functions
   static void make_text_snapshot(char **snapshot, Bit32u *length);
   static Bit32u set_snapshot_mode(bx_bool mode);
   // status bar LED timer
   static void led_timer_handler(void *);
   void led_timer(void);
+#if BX_USE_GUI_CONSOLE
+  void console_init(void);
+  void console_cleanup(void);
+#else
+  void console_cleanup(void) {}
+#endif
 
   // header bar buttons
   bx_bool floppyA_status;
@@ -199,6 +239,16 @@ protected:
   unsigned mouse_bmap_id, nomouse_bmap_id, mouse_hbar_id;
   unsigned user_bmap_id, user_hbar_id;
   unsigned save_restore_bmap_id, save_restore_hbar_id;
+  // the "classic" Bochs headerbar
+  unsigned bx_headerbar_entries;
+  struct {
+    unsigned bmap_id;
+    unsigned xdim;
+    unsigned ydim;
+    unsigned xorigin;
+    unsigned alignment;
+    void (*f)(void);
+  } bx_headerbar_entry[BX_MAX_HEADERBAR_ENTRIES];
   // text charmap
   unsigned char vga_charmap[0x2000];
   bx_bool charmap_updated;
@@ -207,6 +257,7 @@ protected:
   unsigned statusitem_count;
   int led_timer_index;
   struct {
+    bx_bool in_use;
     char text[8];
     bx_bool active;
     bx_bool mode; // read/write
@@ -229,6 +280,7 @@ protected:
   unsigned y_tilesize;
   // current guest display settings
   bx_bool guest_textmode;
+  unsigned guest_fsize;
   unsigned guest_xres;
   unsigned guest_yres;
   unsigned guest_bpp;
@@ -250,6 +302,24 @@ protected:
   int user_shortcut_len;
   // gui dialog capabilities
   Bit32u dialog_caps;
+#if BX_USE_GUI_CONSOLE
+  struct {
+    bx_bool present;
+    bx_bool running;
+    Bit8u *screen;
+    Bit8u *oldscreen;
+    unsigned saved_fsize;
+    unsigned saved_xres;
+    unsigned saved_yres;
+    unsigned saved_bpp;
+    Bit8u saved_palette[32];
+    unsigned cursor_x;
+    unsigned cursor_y;
+    bx_vga_tminfo_t tminfo;
+    Bit8u keys[16];
+    Bit8u n_keys;
+  } console;
+#endif
 };
 
 
@@ -295,15 +365,6 @@ virtual Bit8u *graphics_tile_get(unsigned x, unsigned y,                    \
 virtual void graphics_tile_update_in_place(unsigned x, unsigned y,          \
                                        unsigned w, unsigned h);
 /* end of DECLARE_GUI_NEW_VIRTUAL_METHODS */
-
-#define BX_HEADER_BAR_Y 32
-
-#define BX_MAX_PIXMAPS 17
-#define BX_MAX_HEADERBAR_ENTRIES 12
-
-// align pixmaps towards left or right side of header bar
-#define BX_GRAVITY_LEFT 10
-#define BX_GRAVITY_RIGHT 11
 
 #define BX_KEY_PRESSED  0x00000000
 #define BX_KEY_RELEASED 0x80000000
@@ -468,11 +529,11 @@ virtual void graphics_tile_update_in_place(unsigned x, unsigned y,          \
 //   static bx_sdl_gui_c *theGui;
 
 #define IMPLEMENT_GUI_PLUGIN_CODE(gui_name)                           \
-  int CDECL lib##gui_name##_LTX_plugin_init(plugin_t *plugin,         \
-          plugintype_t type, int argc, char *argv[]) {                \
+  int CDECL lib##gui_name##_gui_plugin_init(plugin_t *plugin,         \
+          plugintype_t type) {                                        \
     genlog->info("installing %s module as the Bochs GUI", #gui_name); \
     theGui = new bx_##gui_name##_gui_c ();                            \
     bx_gui = theGui;                                                  \
     return(0); /* Success */                                          \
   }                                                                   \
-  void CDECL lib##gui_name##_LTX_plugin_fini(void) { }
+  void CDECL lib##gui_name##_gui_plugin_fini(void) { }

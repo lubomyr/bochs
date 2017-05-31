@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmcs.cc 12481 2014-08-31 20:05:25Z sshwarts $
+// $Id: vmcs.cc 13118 2017-03-15 21:44:15Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2014 Stanislav Shwartsman
+//   Copyright (c) 2009-2017 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -24,61 +24,91 @@
 #define NEED_CPU_REG_SHORTCUTS 1
 #include "bochs.h"
 #include "cpu.h"
-#define LOG_THIS BX_CPU_THIS_PTR
+
+#define LOG_THIS BX_CPU(0)->
 
 #if BX_SUPPORT_VMX
 
-static unsigned vmcs_map[16][1+VMX_HIGHEST_VMCS_ENCODING];
-
-void BX_CPU_C::init_VMCS(void)
+VMCS_Mapping::VMCS_Mapping(Bit32u revision): revision_id(revision)
 {
-  static bx_bool vmcs_map_ready = 0;
-  unsigned type, field;
+  clear();
+  init_generic_mapping();
+}
 
-  init_vmx_capabilities();
+VMCS_Mapping::VMCS_Mapping(Bit32u revision, const char *filename): revision_id(revision)
+{
+  clear();
 
-  if (vmcs_map_ready) return;
-  vmcs_map_ready = 1;
+  // read mapping from file
+  BX_PANIC(("Reading VMCS mapping from file not implemented yet"));
 
-  for (type=0; type<16; type++) {
-    for (field=0; field <= VMX_HIGHEST_VMCS_ENCODING; field++) {
-       vmcs_map[type][field] = 0xffffffff;
-    }
-  }
+  init_generic_mapping(); // for now
+}
 
-#if 1
+BX_CPP_INLINE Bit32u vmcs_encoding(Bit32u type, Bit32u field)
+{
+  Bit32u encoding = ((type & 0xc) << 11) + ((type & 0x3) << 10) + field;
+  return encoding;
+}
+
+void VMCS_Mapping::init_generic_mapping()
+{
   // try to build generic VMCS map
-  for (type=0; type<16; type++) {
-    for (field=0; field <= VMX_HIGHEST_VMCS_ENCODING; field++) {
-       unsigned encoding = ((type & 0xc) << 11) + ((type & 3) << 10) + field;
+  // 16 types, 48 encodings (0x30), 4 bytes each field => 3072 bytes
+  // reserve VMCS_DATA_OFFSET bytes in the beginning for special (hidden) VMCS fields
+  for (unsigned type=0; type<16; type++) {
+    for (unsigned field=0; field < VMX_HIGHEST_VMCS_ENCODING; field++) {
+       Bit32u encoding = vmcs_encoding(type, field);
        if (vmcs_map[type][field] != 0xffffffff) {
           BX_PANIC(("VMCS type %d field %d (encoding = 0x%08x) is already initialized", type, field, encoding));
        }
-       if (vmcs_field_supported(encoding)) {
-         // allocate 64 fields (4 byte each) per type
-         vmcs_map[type][field] = VMCS_DATA_OFFSET + (type*64 + field) * 4;
-         if(vmcs_map[type][field] >= VMX_VMCS_AREA_SIZE) {
-            BX_PANIC(("VMCS type %d field %d (encoding = 0x%08x) is out of VMCS boundaries", type, field, encoding));
-         }
-         BX_DEBUG(("VMCS field 0x%08x located at 0x%08x", encoding, vmcs_map[type][field]));
+       // allocate 64 fields (4 byte each) per type (even more than 48 which is required now)
+       vmcs_map[type][field] = VMCS_DATA_OFFSET + (type*64 + field) * 4;
+       if(vmcs_map[type][field] >= VMX_VMCS_AREA_SIZE) {
+          BX_PANIC(("VMCS type %d field %d (encoding = 0x%08x) is out of VMCS boundaries", type, field, encoding));
        }
-       else {
-         BX_DEBUG(("VMCS field 0x%08x is not supported", encoding));
-       }
+       BX_DEBUG(("VMCS field 0x%08x located at 0x%08x", encoding, vmcs_map[type][field]));
     }
   }
-#else
-  // define your own VMCS format
-#include "vmcs.h"
-#endif
 }
 
-#define VMCS_ENCODING_RESERVED_BITS (0xffff9000)
-
-unsigned vmcs_field_offset(Bit32u encoding)
+void VMCS_Mapping::clear()
 {
-  if (encoding & VMCS_ENCODING_RESERVED_BITS)
+  for (unsigned type=0; type<16; type++) {
+    for (unsigned field=0; field < VMX_HIGHEST_VMCS_ENCODING; field++) {
+       vmcs_map[type][field] = 0xffffffff;
+    }
+  }
+}
+
+bx_bool VMCS_Mapping::clear_mapping(Bit32u encoding)
+{
+  return set_mapping(encoding, 0xffffffff);
+}
+
+bx_bool VMCS_Mapping::set_mapping(Bit32u encoding, Bit32u offset)
+{
+  if (is_reserved(encoding))
+    return BX_FALSE;
+
+  unsigned field = VMCS_FIELD(encoding);
+  if (field >= VMX_HIGHEST_VMCS_ENCODING)
+    return BX_FALSE;
+
+  vmcs_map[VMCS_FIELD_INDEX(encoding)][field] = offset;
+  return BX_TRUE;
+}
+
+unsigned VMCS_Mapping::vmcs_field_offset(Bit32u encoding) const
+{
+  if (is_reserved(encoding)) {
+    switch(encoding) {
+      case VMCS_REVISION_ID_FIELD_ENCODING:  return VMCS_REVISION_ID_FIELD_ADDR;
+      case VMCS_VMX_ABORT_FIELD_ENCODING:    return VMCS_VMX_ABORT_FIELD_ADDR;
+      case VMCS_LAUNCH_STATE_FIELD_ENCODING: return VMCS_LAUNCH_STATE_FIELD_ADDR;
+    }
     return 0xffffffff;
+  }
 
   unsigned field = VMCS_FIELD(encoding);
   if (field >= VMX_HIGHEST_VMCS_ENCODING)
@@ -86,6 +116,31 @@ unsigned vmcs_field_offset(Bit32u encoding)
 
   return vmcs_map[VMCS_FIELD_INDEX(encoding)][field];
 }
+
+void BX_CPU_C::init_VMCS(void)
+{
+  BX_CPU_THIS_PTR vmcs_map = BX_CPU_THIS_PTR cpuid->get_vmcs();
+
+  init_vmx_capabilities();
+
+  static bx_bool vmcs_map_ready = 0;
+  if (vmcs_map_ready) return;
+  vmcs_map_ready = 1;
+
+  // disable not supported encodings
+  for (unsigned type=0; type<16; type++) {
+    for (unsigned field=0; field <= VMX_HIGHEST_VMCS_ENCODING; field++) {
+      Bit32u encoding = vmcs_encoding(type, field);
+      if (! vmcs_field_supported(encoding)) {
+        BX_CPU_THIS_PTR vmcs_map->clear_mapping(encoding);
+        BX_DEBUG(("VMCS field 0x%08x is not supported", encoding));
+      }
+    }
+  }
+}
+
+#undef LOG_THIS
+#define LOG_THIS BX_CPU_THIS_PTR
 
 bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
 {
@@ -116,6 +171,9 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
 #if BX_SUPPORT_VMX >= 2
     case VMCS_16BIT_GUEST_INTERRUPT_STATUS:
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_VINTR_DELIVERY);
+
+    case VMCS_16BIT_GUEST_PML_INDEX:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_PML);
 #endif
 
     /* VMCS 16-bit host-state fields */
@@ -228,6 +286,14 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_64BIT_CONTROL_VMENTRY_MSR_LOAD_ADDR_HI:
     case VMCS_64BIT_CONTROL_EXECUTIVE_VMCS_PTR:
     case VMCS_64BIT_CONTROL_EXECUTIVE_VMCS_PTR_HI:
+      return 1;
+
+#if BX_SUPPORT_VMX >= 2
+    case VMCS_64BIT_CONTROL_PML_ADDRESS:
+    case VMCS_64BIT_CONTROL_PML_ADDRESS_HI:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_PML);
+#endif
+
     case VMCS_64BIT_CONTROL_TSC_OFFSET:
     case VMCS_64BIT_CONTROL_TSC_OFFSET_HI:
       return 1;
@@ -320,6 +386,10 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_64BIT_GUEST_IA32_PDPTE3_HI:
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT);
 #endif
+
+    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER:
+    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER_HI:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_TSC_SCALING);
 
 #if BX_SUPPORT_VMX >= 2
     /* VMCS 64-bit host state fields */
@@ -518,8 +588,15 @@ void BX_CPU_C::init_vmx_capabilities(void)
   //   [14] Enable VMCS Shadowing
   //   [15] Reserved (must be '0)
   //   [16] RDSEED Exiting (require RDSEED instruction support)
-  //   [17] Reserved (must be '0)
+  //   [17] Page Modification Logging Enable
   //   [18] Support for EPT Violation (#VE) exception
+  //   [19] Reserved (must be '0)
+  //   [20] XSAVES Exiting
+  //   [21] Reserved (must be '0)
+  //   [22] Reserved (must be '0)
+  //   [23] Reserved (must be '0)
+  //   [24] Reserved (must be '0)
+  //   [25] Enable TSC Scaling
 
   cap->vmx_vmexec_ctrl2_supported_bits = 0;
 
@@ -562,12 +639,25 @@ void BX_CPU_C::init_vmx_capabilities(void)
   if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_RDSEED))
     cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_RDSEED_VMEXIT;
 #if BX_SUPPORT_VMX >= 2
+  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_PML)) {
+    if (! BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT))
+      BX_PANIC(("VMX PML feature requires EPT support !"));
+    cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_PML_ENABLE;
+  }
   if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT_EXCEPTION)) {
     if (! BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPTP_SWITCHING))
       BX_PANIC(("#VE exception feature requires EPTP switching support !"));
     cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_EPT_VIOLATION_EXCEPTION;
   }
 #endif
+#if BX_SUPPORT_VMX >= 2
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVES)) {
+    cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_XSAVES_XRSTORS;
+  }
+#endif
+  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_TSC_SCALING)) {
+    cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_TSC_SCALING;
+  }
 
   // enable secondary vm exec controls if needed
   if (cap->vmx_vmexec_ctrl2_supported_bits != 0)

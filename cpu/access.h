@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: access.h 12619 2015-01-26 20:01:25Z sshwarts $
+// $Id: access.h 13155 2017-03-28 18:52:53Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2015 Stanislav Shwartsman
@@ -105,6 +105,13 @@ BX_CPU_C::write_virtual_zmmword_aligned_32(unsigned s, Bit32u offset, const BxPa
 #endif // BX_SUPPORT_EVEX
 
 #endif // BX_CPU_LEVEL >= 6
+
+  BX_CPP_INLINE void BX_CPP_AttrRegparmN(2)
+BX_CPU_C::tickle_read_virtual_32(unsigned s, Bit32u offset)
+{
+  Bit32u laddr = agen_read32(s, offset, 1);
+  tickle_read_linear(s, laddr);
+}
 
   BX_CPP_INLINE Bit8u BX_CPP_AttrRegparmN(2)
 BX_CPU_C::read_virtual_byte_32(unsigned s, Bit32u offset)
@@ -269,6 +276,13 @@ BX_CPU_C::write_virtual_zmmword_aligned(unsigned s, bx_address offset, const BxP
 #endif // BX_SUPPORT_EVEX
 
 #endif // BX_CPU_LEVEL >= 6
+
+  BX_CPP_INLINE void BX_CPP_AttrRegparmN(2)
+BX_CPU_C::tickle_read_virtual(unsigned s, bx_address offset)
+{
+  bx_address laddr = agen_read(s, offset, 1);
+  tickle_read_linear(s, laddr);
+}
 
   BX_CPP_INLINE Bit8u BX_CPP_AttrRegparmN(2)
 BX_CPU_C::read_virtual_byte(unsigned s, bx_address offset)

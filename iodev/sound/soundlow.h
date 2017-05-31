@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlow.h 12683 2015-03-10 20:56:44Z vruppert $
+// $Id: soundlow.h 13116 2017-03-14 18:21:05Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2011-2015  The Bochs Project
+//  Copyright (C) 2011-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,16 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 // Common code for sound lowlevel modules
+
+#ifndef WIN32
+#include <pthread.h>
+#endif
+
+#if BX_HAVE_LIBSAMPLERATE
+#include <samplerate.h>
+#elif BX_HAVE_SOXR_LSR
+#include <soxr-lsr.h>
+#endif
 
 // This is the maximum size of a wave data packet.
 // It should be large enough for 0.1 seconds of playback or recording.
@@ -38,33 +48,54 @@ typedef struct {
   Bit16u volume;
 } bx_pcm_param_t;
 
-const bx_pcm_param_t default_pcm_param = {44100, 16, 2, 1};
+const bx_pcm_param_t default_pcm_param = { 44100, 16, 2, 1, 0xffff };
 
 typedef Bit32u (*sound_record_handler_t)(void *arg, Bit32u len);
 typedef Bit32u (*get_wave_cb_t)(void *arg, Bit16u rate, Bit8u *buffer, Bit32u len);
 
 // audio buffer support
 
+#define BUFTYPE_FLOAT 0
+#define BUFTYPE_UCHAR 1
+
 typedef struct _audio_buffer_t
 {
   Bit32u size, pos;
-  Bit8u *data;
+  union {
+    Bit8u *data;
+    float *fdata;
+  };
+  bx_pcm_param_t param;
   struct _audio_buffer_t *next;
 } audio_buffer_t;
 
-audio_buffer_t* new_audio_buffer(Bit32u size);
-audio_buffer_t* get_current_buffer();
-void delete_audio_buffer();
+class bx_audio_buffer_c {
+public:
+  bx_audio_buffer_c(Bit8u format);
+  ~bx_audio_buffer_c();
 
-Bit32u pcm_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len);
+  audio_buffer_t *new_buffer(Bit32u size);
+  audio_buffer_t *get_buffer();
+  void delete_buffer();
+private:
+  Bit8u format;
+  audio_buffer_t *root;
+};
 
-extern int mixer_control;
+extern bx_audio_buffer_c *audio_buffers[2];
+void convert_float_to_s16le(float *src, unsigned srcsize, Bit8u *dst);
+BOCHSAPI_MSVCONLY Bit32u pcm_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len);
+
+BOCHSAPI_MSVCONLY extern int resampler_control;
+BOCHSAPI_MSVCONLY extern int mixer_control;
+extern BX_MUTEX(resampler_mutex);
 #ifndef ANDROID
 extern BX_MUTEX(mixer_mutex);
 #endif
+
 // the waveout class
 
-class bx_soundlow_waveout_c : public logfunctions {
+class BOCHSAPI_MSVCONLY bx_soundlow_waveout_c : public logfunctions {
 public:
   bx_soundlow_waveout_c();
   virtual ~bx_soundlow_waveout_c();
@@ -79,13 +110,19 @@ public:
   virtual int register_wave_callback(void *, get_wave_cb_t wd_cb);
   virtual void unregister_wave_callback(int callback_id);
 
-  virtual bx_bool mixer_common(Bit8u *buffer, int len);
-protected:
-  void convert_pcm_data(Bit8u *src, int srcsize, Bit8u *dst, int dstsize, bx_pcm_param_t *param);
-  void start_mixer_thread(void);
+  virtual void resampler(audio_buffer_t *inbuffer, audio_buffer_t *outbuffer);
 
-  bx_pcm_param_t emu_pcm_param, real_pcm_param;
-  int cvt_mult;
+  virtual bx_bool mixer_common(Bit8u *buffer, int len);
+
+protected:
+  void start_resampler_thread(void);
+  void start_mixer_thread(void);
+  Bit32u resampler_common(audio_buffer_t *inbuffer, float **fbuffer);
+
+  bx_pcm_param_t real_pcm_param;
+#if BX_HAVE_LIBSAMPLERATE || BX_HAVE_SOXR_LSR
+  SRC_STATE *src_state;
+#endif
 
   int cb_count;
   struct {
@@ -97,7 +134,7 @@ protected:
 
 // the wavein class
 
-class bx_soundlow_wavein_c : public logfunctions {
+class BOCHSAPI_MSVCONLY bx_soundlow_wavein_c : public logfunctions {
 public:
   bx_soundlow_wavein_c();
   virtual ~bx_soundlow_wavein_c();
@@ -117,7 +154,7 @@ protected:
 
 // the midiout class
 
-class bx_soundlow_midiout_c : public logfunctions {
+class BOCHSAPI_MSVCONLY bx_soundlow_midiout_c : public logfunctions {
 public:
   bx_soundlow_midiout_c();
   virtual ~bx_soundlow_midiout_c();
@@ -131,29 +168,25 @@ public:
 // This is the base class of the sound lowlevel support.
 // the lowlevel sound driver class returns pointers to the child objects
 
-class bx_sound_lowlevel_c : public logfunctions {
+class BOCHSAPI_MSVCONLY bx_sound_lowlevel_c : public logfunctions {
 public:
-  bx_sound_lowlevel_c();
-  virtual ~bx_sound_lowlevel_c();
+  static bx_bool module_present(const char *type);
+  static bx_sound_lowlevel_c* get_module(const char *type);
+  static void cleanup();
 
   virtual bx_soundlow_waveout_c* get_waveout() {return NULL;}
   virtual bx_soundlow_wavein_c* get_wavein() {return NULL;}
   virtual bx_soundlow_midiout_c* get_midiout() {return NULL;}
 
 protected:
+  bx_sound_lowlevel_c(const char *type);
+  virtual ~bx_sound_lowlevel_c();
+
   bx_soundlow_waveout_c *waveout;
   bx_soundlow_wavein_c *wavein;
   bx_soundlow_midiout_c *midiout;
-};
-
-// the dummy sound driver contains stubs for all features
-
-class bx_sound_dummy_c : public bx_sound_lowlevel_c {
-public:
-  bx_sound_dummy_c() {}
-  virtual ~bx_sound_dummy_c() {}
-
-  virtual bx_soundlow_waveout_c* get_waveout();
-  virtual bx_soundlow_wavein_c* get_wavein();
-  virtual bx_soundlow_midiout_c* get_midiout();
+private:
+  static bx_sound_lowlevel_c *all;
+  bx_sound_lowlevel_c *next;
+  const char *type;
 };

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: simd_int.h 12461 2014-08-05 20:18:42Z sshwarts $
+// $Id: simd_int.h 13165 2017-03-31 07:34:08Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2017 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -1009,13 +1009,8 @@ BX_CPP_INLINE void xmm_pmaddwd(BxPackedXmmRegister *op1, const BxPackedXmmRegist
 {
   for(unsigned n=0; n<4; n++)
   {
-    if((op1->xmm32u(n) & op2->xmm32u(n)) == 0x80008000) {
-      op1->xmm32u(n) = 0x80000000;
-    }
-    else {
-      op1->xmm32u(n) = Bit32s(op1->xmm16s(n*2))   * Bit32s(op2->xmm16s(n*2)) + 
-                       Bit32s(op1->xmm16s(n*2+1)) * Bit32s(op2->xmm16s(n*2+1));
-    }
+    op1->xmm32u(n) = Bit32s(op1->xmm16s(n*2))   * Bit32s(op2->xmm16s(n*2)) + 
+                     Bit32s(op1->xmm16s(n*2+1)) * Bit32s(op2->xmm16s(n*2+1));
   }
 }
 

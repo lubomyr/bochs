@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dma.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: dma.cc 13051 2017-01-28 09:52:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,7 @@
 
 bx_dma_c *theDmaDevice = NULL;
 
-int CDECL libdma_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libdma_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   if (type == PLUGTYPE_CORE) {
     theDmaDevice = new bx_dma_c ();
@@ -123,7 +123,7 @@ unsigned bx_dma_c::get_TC(void)
 void bx_dma_c::init(void)
 {
   unsigned c, i, j;
-  BX_DEBUG(("Init $Id: dma.cc 12615 2015-01-25 21:24:13Z sshwarts $"));
+  BX_DEBUG(("Init $Id: dma.cc 13051 2017-01-28 09:52:09Z vruppert $"));
 
   /* 8237 DMA controller */
 
@@ -224,11 +224,7 @@ void bx_dma_c::register_state(void)
       BXRS_HEX_PARAM_FIELD(chan, page_reg, BX_DMA_THIS s[i].chan[c].page_reg);
     }
   }
-  bx_list_c *extpg = new bx_list_c(list, "ext_page");
-  for (i=0; i<16; i++) {
-    sprintf(name, "0x%02x", 0x80+i);
-    new bx_shadow_num_c(extpg, name, &BX_DMA_THIS ext_page_reg[i], BASE_HEX);
-  }
+  new bx_shadow_data_c(list, "ext_page", BX_DMA_THIS ext_page_reg, 16, 1);
 }
 
 // index to find channel from register number (only [0],[1],[2],[6] used)

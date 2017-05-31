@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcipnic.cc 12366 2014-06-08 08:40:08Z vruppert $
+// $Id: pcipnic.cc 13147 2017-03-24 19:57:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  Fen Systems Ltd. (http://www.fensystems.co.uk/)
-//  Copyright (C) 2003-2014  The Bochs Project
+//  Copyright (C) 2003-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -97,7 +97,7 @@ Bit32s pnic_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libpcipnic_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libpcipnic_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   thePNICDevice = new bx_pcipnic_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, thePNICDevice, BX_PLUGIN_PCIPNIC);
@@ -398,26 +398,6 @@ void bx_pcipnic_c::pnic_timer_handler(void *this_ptr)
 void bx_pcipnic_c::pnic_timer(void)
 {
   // Do nothing atm
-
-}
-
-// pci configuration space read callback handler
-Bit32u bx_pcipnic_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_PNIC_THIS pci_conf[address+i] << (i*8));
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%08x", address, value));
-
-  return value;
 }
 
 

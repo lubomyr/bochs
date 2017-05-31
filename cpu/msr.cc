@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: msr.cc 12671 2015-02-23 21:17:33Z sshwarts $
+// $Id: msr.cc 13118 2017-03-15 21:44:15Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2008-2015 Stanislav Shwartsman
+//   Copyright (c) 2008-2017 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -162,6 +162,12 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
 #endif
 
 #if BX_CPU_LEVEL >= 6
+    case BX_MSR_XSS:
+      val64 = BX_CPU_THIS_PTR msr.msr_xss;
+      break;
+#endif
+
+#if BX_CPU_LEVEL >= 6
     case BX_MSR_TSC_DEADLINE:
       if (! is_cpu_extension_supported(BX_ISA_TSC_DEADLINE)) {
         BX_ERROR(("RDMSR BX_MSR_TSC_DEADLINE: TSC-Deadline not enabled in the cpu model"));
@@ -270,7 +276,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
         BX_ERROR(("RDMSR MSR_STAR: SYSCALL/SYSRET support not enabled in the cpu model"));
         return handle_unknown_rdmsr(index, msr);
       }
-      val64 = MSR_STAR;
+      val64 = BX_CPU_THIS_PTR msr.star;
       break;
 
 #if BX_SUPPORT_X86_64
@@ -319,7 +325,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
         BX_ERROR(("RDMSR MSR_KERNELGSBASE: long mode support not enabled in the cpu model"));
         return handle_unknown_rdmsr(index, msr);
       }
-      val64 = MSR_KERNELGSBASE;
+      val64 = BX_CPU_THIS_PTR msr.kernelgsbase;
       break;
 
     case BX_MSR_TSC_AUX:
@@ -678,6 +684,16 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
 #endif
 
 #if BX_CPU_LEVEL >= 6
+    case BX_MSR_XSS:
+      if (! is_cpu_extension_supported(BX_ISA_XSAVES)) {
+        BX_ERROR(("WRMSR BX_MSR_XSS: XSAVES not enabled in the cpu model"));
+        return handle_unknown_wrmsr(index, val_64);
+      }
+      BX_ERROR(("WRMSR: attempt to set reserved bit in BX_MSR_XSS"));
+      return 0;
+#endif
+
+#if BX_CPU_LEVEL >= 6
     case BX_MSR_TSC_DEADLINE:
       if (! is_cpu_extension_supported(BX_ISA_TSC_DEADLINE)) {
         BX_ERROR(("WRMSR BX_MSR_TSC_DEADLINE: TSC-Deadline not enabled in the cpu model"));
@@ -747,7 +763,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
         BX_ERROR(("WRMSR MSR_STAR: SYSCALL/SYSRET support not enabled in the cpu model"));
         return handle_unknown_wrmsr(index, val_64);
       }
-      MSR_STAR = val_64;
+      BX_CPU_THIS_PTR msr.star = val_64;
       break;
 
 #if BX_SUPPORT_X86_64
@@ -816,7 +832,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
         BX_ERROR(("WRMSR: attempt to write non-canonical value to MSR_KERNELGSBASE !"));
         return 0;
       }
-      MSR_KERNELGSBASE = val_64;
+      BX_CPU_THIS_PTR msr.kernelgsbase = val_64;
       break;
 
     case BX_MSR_TSC_AUX:

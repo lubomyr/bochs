@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: harddrv.h 12237 2014-03-11 18:29:32Z vruppert $
+// $Id: harddrv.h 12810 2015-08-23 07:04:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2015  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -263,6 +263,7 @@ private:
 
   } channels[BX_MAX_ATA_CHANNEL];
 
+  int rt_conf_id;
   Bit8u cdrom_count;
   bx_bool pci_enabled;
 };

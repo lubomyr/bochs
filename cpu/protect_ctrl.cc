@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: protect_ctrl.cc 12613 2015-01-25 20:55:10Z sshwarts $
+// $Id: protect_ctrl.cc 12906 2016-04-21 15:39:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -38,7 +38,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::ARPL_EwGw(bxInstruction_c *i)
     op1_16 = BX_READ_16BIT_REG(i->dst());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     op1_16 = read_RMW_virtual_word(i->seg(), eaddr);
   }
@@ -83,7 +83,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LAR_GvEw(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -196,7 +196,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LSL_GvEw(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -286,6 +286,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SLDT_Ew(bxInstruction_c *i)
     exception(BX_UD_EXCEPTION, 0);
   }
 
+#if BX_CPU_LEVEL >= 5
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("SLDT: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+#endif
+
 #if BX_SUPPORT_VMX >= 2
   if (BX_CPU_THIS_PTR in_vmx_guest)
     if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_DESCRIPTOR_TABLE_VMEXIT))
@@ -308,7 +315,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SLDT_Ew(bxInstruction_c *i)
     }
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     write_virtual_word(i->seg(), eaddr, val16);
   }
@@ -322,6 +329,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STR_Ew(bxInstruction_c *i)
     BX_ERROR(("STR: not recognized in real or virtual-8086 mode"));
     exception(BX_UD_EXCEPTION, 0);
   }
+
+#if BX_CPU_LEVEL >= 5
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("STR: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+#endif
 
 #if BX_SUPPORT_VMX >= 2
   if (BX_CPU_THIS_PTR in_vmx_guest)
@@ -345,7 +359,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STR_Ew(bxInstruction_c *i)
     }
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     write_virtual_word(i->seg(), eaddr, val16);
   }
@@ -390,7 +404,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LLDT_Ew(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -493,7 +507,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LTR_Ew(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -593,7 +607,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VERR_Ew(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -685,7 +699,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VERW_Ew(bxInstruction_c *i)
     raw_selector = BX_READ_16BIT_REG(i->src());
   }
   else {
-    bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
     /* pointer, segment address pair */
     raw_selector = read_virtual_word(i->seg(), eaddr);
   }
@@ -746,6 +760,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT_Ms(bxInstruction_c *i)
 {
   BX_ASSERT(BX_CPU_THIS_PTR cpu_mode != BX_MODE_LONG_64);
 
+#if BX_CPU_LEVEL >= 5
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("SGDT: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+#endif
+
 #if BX_SUPPORT_VMX >= 2
   if (BX_CPU_THIS_PTR in_vmx_guest)
     if (SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_DESCRIPTOR_TABLE_VMEXIT))
@@ -761,7 +782,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT_Ms(bxInstruction_c *i)
   Bit16u limit_16 = BX_CPU_THIS_PTR gdtr.limit;
   Bit32u base_32  = (Bit32u) BX_CPU_THIS_PTR gdtr.base;
 
-  Bit32u eaddr = (Bit32u) BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  Bit32u eaddr = (Bit32u) BX_CPU_RESOLVE_ADDR_32(i);
 
   write_virtual_word_32(i->seg(), eaddr, limit_16);
   write_virtual_dword_32(i->seg(), (eaddr+2) & i->asize_mask(), base_32);
@@ -771,6 +792,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT_Ms(bxInstruction_c *i)
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SIDT_Ms(bxInstruction_c *i)
 {
+#if BX_CPU_LEVEL >= 5
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("SIDT: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+#endif
+
   BX_ASSERT(BX_CPU_THIS_PTR cpu_mode != BX_MODE_LONG_64);
 
 #if BX_SUPPORT_VMX >= 2
@@ -788,7 +816,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SIDT_Ms(bxInstruction_c *i)
   Bit16u limit_16 = BX_CPU_THIS_PTR idtr.limit;
   Bit32u base_32  = (Bit32u) BX_CPU_THIS_PTR idtr.base;
 
-  Bit32u eaddr = (Bit32u) BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  Bit32u eaddr = (Bit32u) BX_CPU_RESOLVE_ADDR_32(i);
 
   write_virtual_word_32(i->seg(), eaddr, limit_16);
   write_virtual_dword_32(i->seg(), (eaddr+2) & i->asize_mask(), base_32);
@@ -818,7 +846,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LGDT_Ms(bxInstruction_c *i)
   }
 #endif
 
-  Bit32u eaddr = (Bit32u) BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  Bit32u eaddr = (Bit32u) BX_CPU_RESOLVE_ADDR_32(i);
 
   Bit16u limit_16 = read_virtual_word_32(i->seg(), eaddr);
   Bit32u base_32 = read_virtual_dword_32(i->seg(), (eaddr + 2) & i->asize_mask());
@@ -853,7 +881,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LIDT_Ms(bxInstruction_c *i)
   }
 #endif
 
-  Bit32u eaddr = (Bit32u) BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  Bit32u eaddr = (Bit32u) BX_CPU_RESOLVE_ADDR_32(i);
 
   Bit16u limit_16 = read_virtual_word_32(i->seg(), eaddr);
   Bit32u base_32 = read_virtual_dword_32(i->seg(), (eaddr + 2) & i->asize_mask());
@@ -870,6 +898,11 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LIDT_Ms(bxInstruction_c *i)
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT64_Ms(bxInstruction_c *i)
 {
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("SGDT: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+
   BX_ASSERT(BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64);
 
 #if BX_SUPPORT_VMX >= 2
@@ -887,7 +920,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT64_Ms(bxInstruction_c *i)
   Bit16u limit_16 = BX_CPU_THIS_PTR gdtr.limit;
   Bit64u base_64  = BX_CPU_THIS_PTR gdtr.base;
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   write_linear_word(i->seg(), get_laddr64(i->seg(), eaddr), limit_16);
   write_linear_qword(i->seg(), get_laddr64(i->seg(), (eaddr+2) & i->asize_mask()), base_64);
@@ -897,6 +930,11 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SGDT64_Ms(bxInstruction_c *i)
 
 BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SIDT64_Ms(bxInstruction_c *i)
 {
+  if (CPL!=0 && BX_CPU_THIS_PTR cr4.get_UMIP()) {
+    BX_ERROR(("SIDT: CPL != 0 causes #GP when CR4.UMIP set"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+
   BX_ASSERT(BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64);
 
 #if BX_SUPPORT_VMX >= 2
@@ -914,7 +952,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SIDT64_Ms(bxInstruction_c *i)
   Bit16u limit_16 = BX_CPU_THIS_PTR idtr.limit;
   Bit64u base_64  = BX_CPU_THIS_PTR idtr.base;
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   write_linear_word(i->seg(), get_laddr64(i->seg(), eaddr), limit_16);
   write_linear_qword(i->seg(), get_laddr64(i->seg(), (eaddr+2) & i->asize_mask()), base_64);
@@ -943,7 +981,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LGDT64_Ms(bxInstruction_c *i)
   }
 #endif
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   Bit64u base_64 = read_linear_qword(i->seg(), get_laddr64(i->seg(), (eaddr + 2) & i->asize_mask()));
   if (! IsCanonical(base_64)) {
@@ -979,7 +1017,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LIDT64_Ms(bxInstruction_c *i)
   }
 #endif
 
-  bx_address eaddr = BX_CPU_CALL_METHODR(i->ResolveModrm, (i));
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR_64(i);
 
   Bit64u base_64 = read_linear_qword(i->seg(), get_laddr64(i->seg(), (eaddr + 2) & i->asize_mask()));
   if (! IsCanonical(base_64)) {

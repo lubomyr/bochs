@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.h 12697 2015-03-27 21:39:24Z sshwarts $
+// $Id: vmx.h 13126 2017-03-17 17:35:15Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2015 Stanislav Shwartsman
+//   Copyright (c) 2009-2017 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@
 #define VMX_VMCS_AREA_SIZE   4096
 
 // VMCS pointer is always 64-bit variable
-#define BX_INVALID_VMCSPTR BX_CONST64(0xFFFFFFFFFFFFFFFF)
+const Bit64u BX_INVALID_VMCSPTR = BX_CONST64(0xFFFFFFFFFFFFFFFF);
 
 // bits supported in IA32_FEATURE_CONTROL MSR
 #define BX_IA32_FEATURE_CONTROL_LOCK_BIT       0x1
@@ -130,12 +130,11 @@ enum VMX_vmexit_reason {
    VMX_VMEXIT_RDRAND = 57,
    VMX_VMEXIT_INVPCID = 58,
    VMX_VMEXIT_VMFUNC = 59,
-   VMX_VMEXIT_RESERVED60 = 60,
+   VMX_VMEXIT_ENCLS = 60,
    VMX_VMEXIT_RDSEED = 61,
-   VMX_VMEXIT_RESERVED62 = 62,
+   VMX_VMEXIT_PML_LOGFULL = 62,
    VMX_VMEXIT_XSAVES = 63,
    VMX_VMEXIT_XRSTORS = 64,
-   VMX_VMEXIT_PCOMMIT = 65,
    VMX_VMEXIT_LAST_REASON
 };
 
@@ -203,6 +202,7 @@ enum VMFunctions {
 #define VMCS_16BIT_GUEST_LDTR_SELECTOR                     0x0000080C
 #define VMCS_16BIT_GUEST_TR_SELECTOR                       0x0000080E
 #define VMCS_16BIT_GUEST_INTERRUPT_STATUS                  0x00000810 /* Virtual Interrupt Delivery */
+#define VMCS_16BIT_GUEST_PML_INDEX                         0x00000812 /* Page Modification Logging */
 
 /* VMCS 16-bit host-state fields */
 /* binary 0000_11xx_xxxx_xxx0 */
@@ -230,6 +230,8 @@ enum VMFunctions {
 #define VMCS_64BIT_CONTROL_VMENTRY_MSR_LOAD_ADDR_HI        0x0000200B
 #define VMCS_64BIT_CONTROL_EXECUTIVE_VMCS_PTR              0x0000200C
 #define VMCS_64BIT_CONTROL_EXECUTIVE_VMCS_PTR_HI           0x0000200D
+#define VMCS_64BIT_CONTROL_PML_ADDRESS                     0x0000200E /* Page Modification Logging */
+#define VMCS_64BIT_CONTROL_PML_ADDRESS_HI                  0x0000200F
 #define VMCS_64BIT_CONTROL_TSC_OFFSET                      0x00002010
 #define VMCS_64BIT_CONTROL_TSC_OFFSET_HI                   0x00002011
 #define VMCS_64BIT_CONTROL_VIRTUAL_APIC_PAGE_ADDR          0x00002012 /* TPR shadow */
@@ -260,6 +262,10 @@ enum VMFunctions {
 #define VMCS_64BIT_CONTROL_VE_EXCEPTION_INFO_ADDR_HI       0x0000202B
 #define VMCS_64BIT_CONTROL_XSS_EXITING_BITMAP              0x0000202C /* XSAVES */
 #define VMCS_64BIT_CONTROL_XSS_EXITING_BITMAP_HI           0x0000202D
+#define VMCS_64BIT_CONTROL_ENCLS_EXITING_BITMAP            0x0000202E /* ENCLS/SGX */
+#define VMCS_64BIT_CONTROL_ENCLS_EXITING_BITMAP_HI         0x0000202F
+#define VMCS_64BIT_CONTROL_TSC_MULTIPLIER                  0x00002032 /* TSC Scaling */
+#define VMCS_64BIT_CONTROL_TSC_MULTIPLIER_HI               0x00002033
 
 /* VMCS 64-bit read only data fields */
 /* binary 0010_01xx_xxxx_xxx0 */
@@ -286,6 +292,8 @@ enum VMFunctions {
 #define VMCS_64BIT_GUEST_IA32_PDPTE2_HI                    0x0000280F
 #define VMCS_64BIT_GUEST_IA32_PDPTE3                       0x00002810
 #define VMCS_64BIT_GUEST_IA32_PDPTE3_HI                    0x00002811
+#define VMCS_64BIT_GUEST_IA32_BNDCFGS                      0x00002812 /* MPX */
+#define VMCS_64BIT_GUEST_IA32_BNDCFGS_HI                   0x00002813
 
 /* VMCS 64-bit host state fields */
 /* binary 0010_11xx_xxxx_xxx0 */
@@ -416,7 +424,7 @@ enum VMFunctions {
 #define VMCS_HOST_RSP                                      0x00006C14
 #define VMCS_HOST_RIP                                      0x00006C16
 
-#define VMX_HIGHEST_VMCS_ENCODING   (0x30)
+#define VMX_HIGHEST_VMCS_ENCODING   (0x34)
 
 // ===============================
 //  VMCS fields encoding/decoding
@@ -447,15 +455,54 @@ enum VMFunctions {
 #define VMCS_FIELD_INDEX(encoding) \
     ((VMCS_FIELD_WIDTH(encoding) << 2) + VMCS_FIELD_TYPE(encoding))
 
+#define VMCS_ENCODING_RESERVED_BITS (0xffff9000)
+
 // =============
 //  VMCS layout
 // =============
+
+#define BX_VMX_VMCS_REVISION_ID 0x2B /* better to be unique bochs VMCS revision id */
+
+class VMCS_Mapping {
+private:
+   Bit32u revision_id;
+
+   // assume 16 VMCS field types (encoded with 4 bits: 2 bits for VMCS_FIELD_TYPE and 2 bits for VMCS_FIELD_WIDTH)
+   unsigned vmcs_map[16][VMX_HIGHEST_VMCS_ENCODING];
+
+   void init_generic_mapping();
+
+public:
+   VMCS_Mapping(Bit32u revision_id = BX_VMX_VMCS_REVISION_ID); // default VMCS mapping
+   VMCS_Mapping(Bit32u revision_id, const char *filename);
+
+   void clear();
+
+   bx_bool clear_mapping(Bit32u encoding);
+   bx_bool set_mapping(Bit32u encoding, Bit32u offset);
+
+   void set_vmcs_revision_id(Bit32u revision) { revision_id = revision; }
+   Bit32u get_vmcs_revision_id() const { return revision_id; }
+   
+   unsigned vmcs_field_offset(Bit32u encoding) const;
+
+   bx_bool is_reserved(Bit32u encoding) const {
+     return (encoding & VMCS_ENCODING_RESERVED_BITS) != 0;
+   }
+
+   bx_bool is_valid(Bit32u encoding) const {
+     return ! is_reserved(encoding) && (vmcs_field_offset(encoding) != 0xffffffff);
+   }
+};
+
+#define VMCS_LAUNCH_STATE_FIELD_ENCODING         (0xfffffffe)
+#define VMCS_VMX_ABORT_FIELD_ENCODING            (0xfffffffc)
+#define VMCS_REVISION_ID_FIELD_ENCODING          (0xfffffffa)
 
 #define VMCS_REVISION_ID_FIELD_ADDR              (0x0000)
 #define VMCS_VMX_ABORT_FIELD_ADDR                (0x0004)
 #define VMCS_LAUNCH_STATE_FIELD_ADDR             (0x0008)
 
-// invent Bochs CPU VMCS layout - allocate 64 fields of each type
 #define VMCS_DATA_OFFSET                         (0x0010)
 
 #if ((VMCS_DATA_OFFSET + 4*(64*15 + VMX_HIGHEST_VMCS_ENCODING)) > VMX_VMCS_AREA_SIZE)
@@ -632,10 +679,13 @@ typedef struct bx_VMCS
 #define VMX_VM_EXEC_CTRL3_INVPCID                   (1 << 12)
 #define VMX_VM_EXEC_CTRL3_VMFUNC_ENABLE             (1 << 13) /* VM Functions */
 #define VMX_VM_EXEC_CTRL3_VMCS_SHADOWING            (1 << 14) /* VMCS Shadowing */
+#define VMX_VM_EXEC_CTRL3_SGX_ENCLS_VMEXIT          (1 << 15) /* ENCLS/SGX */
 #define VMX_VM_EXEC_CTRL3_RDSEED_VMEXIT             (1 << 16)
+#define VMX_VM_EXEC_CTRL3_PML_ENABLE                (1 << 17) /* Page Modification Logging */
 #define VMX_VM_EXEC_CTRL3_EPT_VIOLATION_EXCEPTION   (1 << 18) /* #VE Exception */
+#define VMX_VM_EXEC_CTRL3_SUPPRESS_GUEST_VMX_TRACE  (1 << 19) /* Processor Trace */
 #define VMX_VM_EXEC_CTRL3_XSAVES_XRSTORS            (1 << 20) /* XSAVES */
-#define VMX_VM_EXEC_CTRL3_PCOMMIT_EXITING           (1 << 21) /* PCOMMIT */
+#define VMX_VM_EXEC_CTRL3_TSC_SCALING               (1 << 25) /* TSC Scaling */
 
 #define VMX_VM_EXEC_CTRL3_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_vmexec_ctrl2_supported_bits)
@@ -644,11 +694,12 @@ typedef struct bx_VMCS
 
    Bit64u vmcs_linkptr;
 
+   Bit64u tsc_multiplier;
+
    Bit32u vm_exceptions_bitmap;
    Bit32u vm_pf_mask;
    Bit32u vm_pf_match;
    Bit64u io_bitmap_addr[2];
-   Bit64u tsc_offset;
    bx_phy_address msr_bitmap_addr;
 
    bx_address vm_cr0_mask;
@@ -671,6 +722,8 @@ typedef struct bx_VMCS
 #if BX_SUPPORT_VMX >= 2
    Bit64u eptptr;
    Bit16u vpid;
+   Bit64u pml_address;
+   Bit16u pml_index;
 #endif
 
 #if BX_SUPPORT_VMX >= 2
@@ -694,6 +747,10 @@ typedef struct bx_VMCS
    Bit16u eptp_index;
 #endif
 
+#if BX_SUPPORT_VMX >= 2
+   Bit64u xss_exiting_bitmap;
+#endif
+
    //
    // VM-Exit Control Fields
    //
@@ -707,6 +764,8 @@ typedef struct bx_VMCS
 #define VMX_VMEXIT_CTRL1_STORE_EFER_MSR             (1 << 20) /* EFER */
 #define VMX_VMEXIT_CTRL1_LOAD_EFER_MSR              (1 << 21) /* EFER */
 #define VMX_VMEXIT_CTRL1_STORE_VMX_PREEMPTION_TIMER (1 << 22) /* VMX preemption timer */
+#define VMX_VMEXIT_CTRL1_CLEAR_BNDCFGS              (1 << 23) /* MPX */
+#define VMX_VMEXIT_CTRL1_SUPPRESS_VMX_PACKETS       (1 << 24) /* Processor Trace */
 
 #define VMX_VMEXIT_CTRL1_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_vmexit_ctrl_supported_bits)
@@ -729,6 +788,8 @@ typedef struct bx_VMCS
 #define VMX_VMENTRY_CTRL1_LOAD_PERF_GLOBAL_CTRL_MSR         (1 << 13) /* Perf Global Ctrl */
 #define VMX_VMENTRY_CTRL1_LOAD_PAT_MSR                      (1 << 14) /* PAT */
 #define VMX_VMENTRY_CTRL1_LOAD_EFER_MSR                     (1 << 15) /* EFER */
+#define VMX_VMENTRY_CTRL1_LOAD_BNDCFGS                      (1 << 16) /* MPX */
+#define VMX_VMENTRY_CTRL1_SUPPRESS_VMX_PACKETS              (1 << 17) /* Processor Trace */
 
 #define VMX_VMENTRY_CTRL1_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_vmentry_ctrl_supported_bits)
@@ -810,7 +871,7 @@ typedef struct bx_VMCS
 // 56:63 reserved, must be zero
 //
 
-#define VMX_MSR_VMX_BASIC_LO (BX_CPU_THIS_PTR cpuid->get_vmcs_revision_id())
+#define VMX_MSR_VMX_BASIC_LO (BX_CPU_THIS_PTR vmcs_map->get_vmcs_revision_id())
 #define VMX_MSR_VMX_BASIC_HI \
      (VMX_VMCS_AREA_SIZE | ((!is_cpu_extension_supported(BX_ISA_LONG_MODE)) << 16) | \
      (BX_MEMTYPE_WB << 18) | (1<<22)) | ((BX_SUPPORT_VMX >= 2) ? (1<<23) : 0)

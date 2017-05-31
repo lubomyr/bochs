@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo.cc 12514 2014-10-19 08:54:16Z vruppert $
+// $Id: voodoo.cc 13147 2017-03-24 19:57:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012-2014  The Bochs Project
+//  Copyright (C) 2012-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -130,7 +130,7 @@ Bit32s voodoo_options_save(FILE *fp)
 
 // device plugin entry points
 
-int CDECL libvoodoo_LTX_plugin_init(plugin_t *plugin, plugintype_t type, int argc, char *argv[])
+int CDECL libvoodoo_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
 {
   theVoodooDevice = new bx_voodoo_c();
   BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theVoodooDevice, BX_PLUGIN_VOODOO);
@@ -611,26 +611,6 @@ void bx_voodoo_c::update_screen_start(void)
 void bx_voodoo_c::set_irq_level(bx_bool level)
 {
   DEV_pci_set_irq(BX_VOODOO_THIS s.devfunc, BX_VOODOO_THIS pci_conf[0x3d], level);
-}
-
-
-// pci configuration space read callback handler
-Bit32u bx_voodoo_c::pci_read_handler(Bit8u address, unsigned io_len)
-{
-  Bit32u value = 0;
-
-  for (unsigned i=0; i<io_len; i++) {
-    value |= (BX_VOODOO_THIS pci_conf[address+i] << (i*8));
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("read  PCI register 0x%02x value 0x%08x", address, value));
-
-  return value;
 }
 
 

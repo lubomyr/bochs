@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hub.h 11384 2012-08-31 12:08:19Z vruppert $
+// $Id: usb_hub.h 12989 2016-12-11 12:26:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB hub emulation support (ported from QEMU)
 //
 // Copyright (C) 2005       Fabrice Bellard
-// Copyright (C) 2009-2012  The Bochs Project
+// Copyright (C) 2009-2016  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,13 +30,14 @@
 #define BX_IODEV_USB_HUB_H
 
 
-// max. number of ports defined in bochs.h
+#define USB_HUB_PORTS 8
 
 class usb_hub_device_c : public usb_device_c {
 public:
   usb_hub_device_c(Bit8u ports);
   virtual ~usb_hub_device_c(void);
 
+  virtual usb_device_c* find_device(Bit8u addr);
   virtual int handle_packet(USBPacket *p);
   virtual void handle_reset();
   virtual int handle_control(int request, int value, int index, int length, Bit8u *data);
@@ -44,6 +45,8 @@ public:
   virtual void register_state_specific(bx_list_c *parent);
   virtual void after_restore_state();
   virtual void runtime_config();
+  void restore_handler(bx_list_c *conf);
+  void event_handler(int event, USBPacket *packet, int port);
 
 private:
   struct {
@@ -57,7 +60,7 @@ private:
 
       Bit16u PortStatus;
       Bit16u PortChange;
-    } usb_port[BX_N_USB_HUB_PORTS];
+    } usb_port[USB_HUB_PORTS];
     Bit16u device_change;
   } hub;
 

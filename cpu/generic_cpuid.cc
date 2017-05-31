@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: generic_cpuid.cc 12640 2015-02-11 21:31:17Z sshwarts $
+// $Id: generic_cpuid.cc 12895 2016-03-02 20:44:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2015 Stanislav Shwartsman
@@ -304,7 +304,7 @@ void bx_generic_cpuid_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function
 {
   leaf->eax = 0; /* report max sub-leaf that supported in leaf 7 */
   leaf->ebx = get_ext3_cpuid_features();
-  leaf->ecx = 0;
+  leaf->ecx = get_ext4_cpuid_features();
   leaf->edx = 0;
 }
 
@@ -350,110 +350,7 @@ void bx_generic_cpuid_t::get_std_cpuid_leaf_A(cpuid_function_t *leaf) const
 
 // leaf 0x0000000C - reserved //
 
-// leaf 0x0000000D //
-void bx_generic_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *leaf) const
-{
-  leaf->eax = 0;
-  leaf->ebx = 0;
-  leaf->ecx = 0;
-  leaf->edx = 0;
-
-  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVE))
-  {
-    switch(subfunction) {
-    case 0:
-      // EAX - valid bits of XCR0 (lower part)
-      // EBX - Maximum size (in bytes) required by enabled features
-      // ECX - Maximum size (in bytes) required by CPU supported features
-      // EDX - valid bits of XCR0 (upper part)
-      leaf->eax = cpu->xcr0_suppmask;
-
-      leaf->ebx = 512+64;
-#if BX_SUPPORT_AVX
-      if (cpu->xcr0.get_YMM())
-        leaf->ebx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
-#endif
-#if BX_SUPPORT_EVEX
-      if (cpu->xcr0.get_OPMASK())
-        leaf->ebx = XSAVE_OPMASK_STATE_OFFSET + XSAVE_OPMASK_STATE_LEN;
-      if (cpu->xcr0.get_ZMM_HI256())
-        leaf->ebx = XSAVE_ZMM_HI256_STATE_OFFSET + XSAVE_ZMM_HI256_STATE_LEN;
-      if (cpu->xcr0.get_HI_ZMM())
-        leaf->ebx = XSAVE_HI_ZMM_STATE_OFFSET + XSAVE_HI_ZMM_STATE_LEN;
-#endif
-
-      leaf->ecx = 512+64;
-#if BX_SUPPORT_AVX
-      if (cpu->xcr0_suppmask & BX_XCR0_YMM_MASK)
-        leaf->ecx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
-#endif
-#if BX_SUPPORT_EVEX
-      if (cpu->xcr0_suppmask & BX_XCR0_OPMASK_MASK)
-        leaf->ecx = XSAVE_OPMASK_STATE_OFFSET + XSAVE_OPMASK_STATE_LEN;
-      if (cpu->xcr0_suppmask & BX_XCR0_ZMM_HI256_MASK)
-        leaf->ecx = XSAVE_ZMM_HI256_STATE_OFFSET + XSAVE_ZMM_HI256_STATE_LEN;
-      if (cpu->xcr0_suppmask & BX_XCR0_HI_ZMM_MASK)
-        leaf->ecx = XSAVE_HI_ZMM_STATE_OFFSET + XSAVE_HI_ZMM_STATE_LEN;
-#endif
-
-      leaf->edx = 0;
-      break;
-
-    case 1:
-      // EAX[0] - support for the XSAVEOPT instruction
-      // EAX[1] - support for compaction extensions to the XSAVE feature set
-      // EAX[2] - support for execution of XGETBV with ECX = 1
-      // EAX[3] - support for XSAVES, XRSTORS, and the IA32_XSS MSR
-      leaf->eax = 0;
-      if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVEOPT))
-        leaf->eax |= 0x1;
-      if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVEC))
-        leaf->eax |= (1<<1) | (1<<2);
-      leaf->ebx = 0;
-      leaf->ecx = 0;
-      leaf->edx = 0;
-      break;
-
-#if BX_SUPPORT_AVX
-    case 2: // YMM leaf
-      if (cpu->xcr0_suppmask & BX_XCR0_YMM_MASK) {
-        leaf->eax = XSAVE_YMM_STATE_LEN;
-        leaf->ebx = XSAVE_YMM_STATE_OFFSET;
-        leaf->ecx = 0;
-        leaf->edx = 0;
-      }
-      break;
-#endif
-
-#if BX_SUPPORT_EVEX
-    case 5: // OPMASK leaf
-      if (cpu->xcr0_suppmask & BX_XCR0_OPMASK_MASK) {
-        leaf->eax = XSAVE_OPMASK_STATE_LEN;
-        leaf->ebx = XSAVE_OPMASK_STATE_OFFSET;
-        leaf->ecx = 0;
-        leaf->edx = 0;
-      }
-      break;
-    case 6: // ZMM Hi256 leaf
-      if (cpu->xcr0_suppmask & BX_XCR0_ZMM_HI256_MASK) {
-        leaf->eax = XSAVE_ZMM_HI256_STATE_LEN;
-        leaf->ebx = XSAVE_ZMM_HI256_STATE_OFFSET;
-        leaf->ecx = 0;
-        leaf->edx = 0;
-      }
-      break;
-    case 7: // HI_ZMM leaf
-      if (cpu->xcr0_suppmask & BX_XCR0_HI_ZMM_MASK) {
-        leaf->eax = XSAVE_HI_ZMM_STATE_LEN;
-        leaf->ebx = XSAVE_HI_ZMM_STATE_OFFSET;
-        leaf->ecx = 0;
-        leaf->edx = 0;
-      }
-      break;
-#endif
-    }
-  }
-}
+// leaf 0x0000000D - XSAVE //
 
 // leaf 0x80000000 //
 void bx_generic_cpuid_t::get_ext_cpuid_leaf_0(cpuid_function_t *leaf) const
@@ -1507,6 +1404,28 @@ Bit32u bx_generic_cpuid_t::get_ext3_cpuid_features(void) const
 
   if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_SHA))
     features |= BX_CPUID_EXT3_SHA;
+
+  return features;
+}
+
+Bit32u bx_generic_cpuid_t::get_ext4_cpuid_features(void) const
+{
+  Bit32u features = 0;
+
+  //   [0:0]    PREFETCHWT1 instruction support
+  //   [1:1]    AVX512 VBMI instructions support
+  //   [2:2]    reserved
+  //   [3:3]    PKU: Protection keys for user-mode pages.
+  //   [4:4]    OSPKE: OS has set CR4.PKE to enable protection keys
+  //  [31:5]    reserved
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_AVX512_VBMI))
+    features |= BX_CPUID_EXT4_AVX512VBMI;
+
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_PKU)) {
+    features |= BX_CPUID_EXT4_PKU;
+    if (cpu->cr4.get_PKE())
+      features |= BX_CPUID_EXT4_OSPKE;
+  }
 
   return features;
 }

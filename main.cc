@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: main.cc 12628 2015-02-01 11:46:55Z vruppert $
+// $Id: main.cc 13076 2017-02-18 16:28:04Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -138,10 +138,10 @@ static void setupWorkingDirectory(char *path)
   /* chdir to the binary app's parent */
   int n;
   n = chdir (parentdir);
-  if (n) BX_PANIC (("failed to change dir to parent"));
+  if (n) BX_PANIC(("failed to change dir to parent"));
   /* chdir to the .app's parent */
   n = chdir ("../../../");
-  if (n) BX_PANIC (("failed to change to ../../.."));
+  if (n) BX_PANIC(("failed to change to ../../.."));
 }
 
 /* Panic button to display fatal errors.
@@ -335,7 +335,7 @@ int bxmain(void)
     }
 #if BX_WITH_WX
     else if (!strcmp(ci_name, "wx")) {
-      PLUG_load_plugin(wx, PLUGTYPE_CORE);
+      PLUG_load_gui_plugin("wx");
     }
 #endif
     else {
@@ -661,6 +661,9 @@ int bx_init_main(int argc, char *argv[])
 #if BX_SUPPORT_USB_UHCI
           fprintf(stderr, "usb_uhci\n");
 #endif
+#if BX_SUPPORT_USB_EHCI
+          fprintf(stderr, "usb_ehci\n");
+#endif
 #if BX_SUPPORT_USB_XHCI
           fprintf(stderr, "usb_xhci\n");
 #endif
@@ -741,17 +744,17 @@ int bx_init_main(int argc, char *argv[])
       // ugly hack.  I don't know how to open a window to print messages in,
       // so put them in /tmp/early-bochs-out.txt.  Sorry. -bbd
       io->init_log("/tmp/early-bochs-out.txt");
-      BX_INFO (("I was launched by double clicking.  Fixing home directory."));
+      BX_INFO(("I was launched by double clicking.  Fixing home directory."));
       arg = argc; // ignore all other args.
       setupWorkingDirectory (argv[0]);
       // there is no stdin/stdout so disable the text-based config interface.
       SIM->get_param_enum(BXPN_BOCHS_START)->set(BX_QUICK_START);
       char cwd[MAXPATHLEN];
       getwd (cwd);
-      BX_INFO (("Now my working directory is %s", cwd));
+      BX_INFO(("Now my working directory is %s", cwd));
       // if it was started from command line, there could be some args still.
       for (int a=0; a<argc; a++) {
-        BX_INFO (("argument %d is %s", a, argv[a]));
+        BX_INFO(("argument %d is %s", a, argv[a]));
       }
     }
 #endif
@@ -764,7 +767,7 @@ int bx_init_main(int argc, char *argv[])
 #endif
     else if (argv[arg][0] == '-') {
       print_usage();
-      BX_PANIC (("command line arg '%s' was not understood", argv[arg]));
+      BX_PANIC(("command line arg '%s' was not understood", argv[arg]));
     }
     else {
       // the arg did not start with -, so stop interpreting flags
@@ -778,7 +781,7 @@ int bx_init_main(int argc, char *argv[])
     CFBundleRef mainBundle;
     CFURLRef bxshareDir;
     char bxshareDirPath[MAXPATHLEN];
-    BX_INFO (("fixing default bxshare location ..."));
+    BX_INFO(("fixing default bxshare location ..."));
     // set bxshare to the directory that contains our application
     mainBundle = CFBundleGetMainBundle();
     BX_ASSERT(mainBundle != NULL);
@@ -798,7 +801,7 @@ int bx_init_main(int argc, char *argv[])
       c--;
     *c = '\0';          /* cut off last part (binary name) */
     setenv("BXSHARE", bxshareDirPath, 1);
-    BX_INFO (("now my BXSHARE is %s", getenv("BXSHARE")));
+    BX_INFO(("now my BXSHARE is %s", getenv("BXSHARE")));
     CFRelease(bxshareDir);
   }
 #endif
@@ -819,7 +822,7 @@ int bx_init_main(int argc, char *argv[])
       // there is no stdin/stdout so disable the text-based config interface.
       SIM->get_param_enum(BXPN_BOCHS_START)->set(BX_QUICK_START);
     }
-    BX_INFO (("fixing default lib location ..."));
+    BX_INFO(("fixing default lib location ..."));
     // locate the lib directory within the application bundle.
     // our libs have been placed in bochs.app/Contents/(current platform aka MacOS)/lib
     // This isn't quite right, but they are platform specific and we haven't put
@@ -835,14 +838,14 @@ int bx_init_main(int argc, char *argv[])
       return -1;
     }
     setenv("LTDL_LIBRARY_PATH", libDirPath, 1);
-    BX_INFO (("now my LTDL_LIBRARY_PATH is %s", getenv("LTDL_LIBRARY_PATH")));
+    BX_INFO(("now my LTDL_LIBRARY_PATH is %s", getenv("LTDL_LIBRARY_PATH")));
     CFRelease(libDir);
   }
 #elif BX_HAVE_GETENV && BX_HAVE_SETENV
   if (getenv("LTDL_LIBRARY_PATH") != NULL) {
-    BX_INFO (("LTDL_LIBRARY_PATH is set to '%s'", getenv("LTDL_LIBRARY_PATH")));
+    BX_INFO(("LTDL_LIBRARY_PATH is set to '%s'", getenv("LTDL_LIBRARY_PATH")));
   } else {
-    BX_INFO (("LTDL_LIBRARY_PATH not set. using compile time default '%s'",
+    BX_INFO(("LTDL_LIBRARY_PATH not set. using compile time default '%s'",
         BX_PLUGIN_PATH));
     setenv("LTDL_LIBRARY_PATH", BX_PLUGIN_PATH, 1);
   }
@@ -850,9 +853,9 @@ int bx_init_main(int argc, char *argv[])
 #endif  /* if BX_PLUGINS */
 #if BX_HAVE_GETENV && BX_HAVE_SETENV
   if (getenv("BXSHARE") != NULL) {
-    BX_INFO (("BXSHARE is set to '%s'", getenv("BXSHARE")));
+    BX_INFO(("BXSHARE is set to '%s'", getenv("BXSHARE")));
   } else {
-    BX_INFO (("BXSHARE not set. using compile time default '%s'",
+    BX_INFO(("BXSHARE not set. using compile time default '%s'",
         BX_SHARE_PATH));
     setenv("BXSHARE", BX_SHARE_PATH, 1);
   }
@@ -863,6 +866,11 @@ int bx_init_main(int argc, char *argv[])
   // initialize plugin system. This must happen before we attempt to
   // load any modules.
   plugin_startup();
+#if BX_SUPPORT_PCIUSB
+  // USB HC devices depend on USB core symbols, so we have to load it here.
+  // The devices init() unloads it if not used.
+  PLUG_load_plugin(usb_common, PLUGTYPE_CORE);
+#endif
 
   int norcfile = 1;
 
@@ -929,7 +937,7 @@ bx_bool load_and_init_display_lib(void)
     // the simulation for the second time.
     // Also, if you load wxWidgets as the configuration interface.  Its
     // plugin_init will install wxWidgets as the bx_gui.
-    return true;
+    return 1;
   }
   BX_ASSERT(bx_gui == NULL);
   bx_param_enum_c *ci_param = SIM->get_param_enum(BXPN_SEL_CONFIG_INTERFACE);
@@ -944,62 +952,15 @@ bx_bool load_and_init_display_lib(void)
     // would already be initialized.  Sorry, it doesn't work that way.
     BX_ERROR(("wxWidgets was not used as the configuration interface, so it cannot be used as the display library"));
     // choose another, hopefully different!
-    gui_param->set (0);
+    gui_param->set(0);
     gui_name = gui_param->get_selected();
     if (!strcmp (gui_name, "wx")) {
       BX_PANIC(("no alternative display libraries are available"));
-      return false;
+      return 0;
     }
     BX_ERROR(("changing display library to '%s' instead", gui_name));
   }
-#if BX_WITH_AMIGAOS
-  if (!strcmp(gui_name, "amigaos"))
-    PLUG_load_plugin (amigaos, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_CARBON
-  if (!strcmp(gui_name, "carbon"))
-    PLUG_load_plugin (carbon, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_MACOS
-  if (!strcmp(gui_name, "macos"))
-    PLUG_load_plugin (macintosh, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_NOGUI
-  if (!strcmp(gui_name, "nogui"))
-    PLUG_load_plugin (nogui, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_RFB
-  if (!strcmp(gui_name, "rfb"))
-    PLUG_load_plugin (rfb, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_SDL
-  if (!strcmp(gui_name, "sdl"))
-    PLUG_load_plugin (sdl, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_SDL2
-  if (!strcmp(gui_name, "sdl2"))
-    PLUG_load_plugin (sdl2, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_SVGA
-  if (!strcmp(gui_name, "svga"))
-    PLUG_load_plugin (svga, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_TERM
-  if (!strcmp(gui_name, "term"))
-    PLUG_load_plugin (term, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_VNCSRV
-  if (!strcmp(gui_name, "vncsrv"))
-    PLUG_load_plugin (vncsrv, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_WIN32
-  if (!strcmp(gui_name, "win32"))
-    PLUG_load_plugin (win32, PLUGTYPE_OPTIONAL);
-#endif
-#if BX_WITH_X11
-  if (!strcmp(gui_name, "x"))
-    PLUG_load_plugin (x, PLUGTYPE_OPTIONAL);
-#endif
+  PLUG_load_gui_plugin(gui_name);
 
 #if BX_GUI_SIGHANDLER
   // set the flag for guis requiring a GUI sighandler.
@@ -1010,11 +971,10 @@ bx_bool load_and_init_display_lib(void)
   }
 #endif
 
-  BX_ASSERT(bx_gui != NULL);
-  return true;
+  return (bx_gui != NULL);
 }
 
-int bx_begin_simulation (int argc, char *argv[])
+int bx_begin_simulation(int argc, char *argv[])
 {
   bx_user_quit = 0;
   if (SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
@@ -1028,8 +988,8 @@ int bx_begin_simulation (int argc, char *argv[])
   }
 
   // deal with gui selection
-  if (!load_and_init_display_lib ()) {
-    BX_PANIC (("no gui module was loaded"));
+  if (!load_and_init_display_lib()) {
+    BX_PANIC(("no gui module was loaded"));
     return 0;
   }
 
@@ -1192,12 +1152,16 @@ void bx_set_log_actions_by_device(bx_bool panic_flag)
 
 void bx_init_hardware()
 {
+  int i;
+  char pname[16];
+  bx_list_c *base;
+
   // all configuration has been read, now initialize everything.
 
   bx_pc_system.initialize(SIM->get_param_num(BXPN_IPS)->get());
 
   if (SIM->get_param_string(BXPN_LOG_FILENAME)->getptr()[0]!='-') {
-    BX_INFO (("using log file %s", SIM->get_param_string(BXPN_LOG_FILENAME)->getptr()));
+    BX_INFO(("using log file %s", SIM->get_param_string(BXPN_LOG_FILENAME)->getptr()));
     io->init_log(SIM->get_param_string(BXPN_LOG_FILENAME)->getptr());
   }
 
@@ -1300,13 +1264,28 @@ void bx_init_hardware()
   BX_INFO(("  Fast function calls: %s", BX_FAST_FUNC_CALL?"yes":"no"));
   BX_INFO(("  Handlers Chaining speedups: %s", BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS?"yes":"no"));
   BX_INFO(("Devices configuration"));
-  BX_INFO(("  NE2000 support: %s", BX_SUPPORT_NE2K?"yes":"no"));
-  BX_INFO(("  PCI support: %s, enabled=%s", BX_SUPPORT_PCI?"yes":"no",
-    SIM->get_param_bool(BXPN_PCI_ENABLED)->get() ? "yes" : "no"));
-  BX_INFO(("  SB16 support: %s", BX_SUPPORT_SB16?"yes":"no"));
-  BX_INFO(("  USB support: %s", BX_SUPPORT_PCIUSB?"yes":"no"));
-  BX_INFO(("  VGA extension support: vbe%s%s", BX_SUPPORT_CLGD54XX?" cirrus":"",
-    BX_SUPPORT_VOODOO?" voodoo":""));
+  BX_INFO(("  PCI support: %s", BX_SUPPORT_PCI?"i440FX i430FX":"no"));
+#if BX_SUPPORT_NE2K || BX_SUPPORT_E1000
+  BX_INFO(("  Networking support:%s%s",
+           BX_SUPPORT_NE2K?" NE2000":"", BX_SUPPORT_E1000?" E1000":""));
+#else
+  BX_INFO(("  Networking: no"));
+#endif
+#if BX_SUPPORT_SB16 || BX_SUPPORT_ES1370
+  BX_INFO(("  Sound support:%s%s",
+           BX_SUPPORT_SB16?" SB16":"", BX_SUPPORT_ES1370?" ES1370":""));
+#else
+  BX_INFO(("  Sound support: no"));
+#endif
+#if BX_SUPPORT_PCIUSB
+  BX_INFO(("  USB support:%s%s%s%s",
+           BX_SUPPORT_USB_UHCI?" UHCI":"", BX_SUPPORT_USB_OHCI?" OHCI":"",
+           BX_SUPPORT_USB_EHCI?" EHCI":"", BX_SUPPORT_USB_XHCI?" xHCI":""));
+#else
+  BX_INFO(("  USB support: no"));
+#endif
+  BX_INFO(("  VGA extension support: vbe%s%s",
+           BX_SUPPORT_CLGD54XX?" cirrus":"", BX_SUPPORT_VOODOO?" voodoo":""));
 
   // Check if there is a romimage
   if (SIM->get_param_string(BXPN_ROM_PATH)->isempty()) {
@@ -1350,24 +1329,22 @@ void bx_init_hardware()
                       SIM->get_param_num(BXPN_ROM_ADDRESS)->get(), 0);
 
   // Then load the optional ROM images
-  if (!SIM->get_param_string(BXPN_OPTROM1_PATH)->isempty())
-    BX_MEM(0)->load_ROM(SIM->get_param_string(BXPN_OPTROM1_PATH)->getptr(), SIM->get_param_num(BXPN_OPTROM1_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTROM2_PATH)->isempty())
-    BX_MEM(0)->load_ROM(SIM->get_param_string(BXPN_OPTROM2_PATH)->getptr(), SIM->get_param_num(BXPN_OPTROM2_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTROM3_PATH)->isempty())
-    BX_MEM(0)->load_ROM(SIM->get_param_string(BXPN_OPTROM3_PATH)->getptr(), SIM->get_param_num(BXPN_OPTROM3_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTROM4_PATH)->isempty())
-    BX_MEM(0)->load_ROM(SIM->get_param_string(BXPN_OPTROM4_PATH)->getptr(), SIM->get_param_num(BXPN_OPTROM4_ADDRESS)->get(), 2);
+  for (i=0; i<BX_N_OPTROM_IMAGES; i++) {
+    sprintf(pname, "%s.%d", BXPN_OPTROM_BASE, i+1);
+    base = (bx_list_c*) SIM->get_param(pname);
+    if (!SIM->get_param_string("file", base)->isempty())
+      BX_MEM(0)->load_ROM(SIM->get_param_string("file", base)->getptr(),
+                          SIM->get_param_num("address", base)->get(), 2);
+  }
 
   // Then load the optional RAM images
-  if (!SIM->get_param_string(BXPN_OPTRAM1_PATH)->isempty())
-    BX_MEM(0)->load_RAM(SIM->get_param_string(BXPN_OPTRAM1_PATH)->getptr(), SIM->get_param_num(BXPN_OPTRAM1_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTRAM2_PATH)->isempty())
-    BX_MEM(0)->load_RAM(SIM->get_param_string(BXPN_OPTRAM2_PATH)->getptr(), SIM->get_param_num(BXPN_OPTRAM2_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTRAM3_PATH)->isempty())
-    BX_MEM(0)->load_RAM(SIM->get_param_string(BXPN_OPTRAM3_PATH)->getptr(), SIM->get_param_num(BXPN_OPTRAM3_ADDRESS)->get(), 2);
-  if (!SIM->get_param_string(BXPN_OPTRAM4_PATH)->isempty())
-    BX_MEM(0)->load_RAM(SIM->get_param_string(BXPN_OPTRAM4_PATH)->getptr(), SIM->get_param_num(BXPN_OPTRAM4_ADDRESS)->get(), 2);
+  for (i=0; i<BX_N_OPTRAM_IMAGES; i++) {
+    sprintf(pname, "%s.%d", BXPN_OPTRAM_BASE, i+1);
+    base = (bx_list_c*) SIM->get_param(pname);
+    if (!SIM->get_param_string("file", base)->isempty())
+      BX_MEM(0)->load_RAM(SIM->get_param_string("file", base)->getptr(),
+                          SIM->get_param_num("address", base)->get());
+  }
 
 #if BX_SUPPORT_SMP == 0
   BX_CPU(0)->initialize();
@@ -1391,12 +1368,7 @@ void bx_init_hardware()
   SIM->opt_plugin_ctrl("*", 0);
   bx_pc_system.register_state();
   DEV_register_state();
-  if (SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
-    if (!SIM->restore_logopts()) {
-      BX_PANIC(("cannot restore log options"));
-      SIM->get_param_bool(BXPN_RESTORE_FLAG)->set(0);
-    }
-  } else {
+  if (!SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
     bx_set_log_actions_by_device(1);
   }
 
@@ -1405,6 +1377,10 @@ void bx_init_hardware()
 
   if (SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
     if (SIM->restore_hardware()) {
+      if (!SIM->restore_logopts()) {
+        BX_PANIC(("cannot restore log options"));
+        SIM->get_param_bool(BXPN_RESTORE_FLAG)->set(0);
+      }
       bx_sr_after_restore_state();
     } else {
       BX_PANIC(("cannot restore hardware state"));
@@ -1514,7 +1490,7 @@ void CDECL bx_signal_handler(int signum)
   // once, leading to multiple threads trying to display a dialog box,
   // leading to GUI deadlock.
   if (!SIM->is_sim_thread()) {
-    BX_INFO (("bx_signal_handler: ignored sig %d because it wasn't called from the simulator thread", signum));
+    BX_INFO(("bx_signal_handler: ignored sig %d because it wasn't called from the simulator thread", signum));
     return;
   }
 #if BX_GUI_SIGHANDLER
@@ -1542,7 +1518,7 @@ void CDECL bx_signal_handler(int signum)
 
 #if BX_GUI_SIGHANDLER
   if (bx_gui_sighandler) {
-    if ((1<<signum) & bx_gui->get_sighandler_mask ()) {
+    if ((1<<signum) & bx_gui->get_sighandler_mask()) {
       bx_gui->sighandler(signum);
       return;
     }

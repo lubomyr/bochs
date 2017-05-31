@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmexit.cc 12667 2015-02-22 21:26:26Z sshwarts $
+// $Id: vmexit.cc 12770 2015-05-16 21:25:43Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2015 Stanislav Shwartsman
@@ -127,7 +127,10 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_Instruction(bxInstruction_c *i, Bit
       }
       else
 #endif
+      {
         qualification = (Bit64u) ((Bit32u) i->displ32s());
+        qualification &= i->asize_mask();
+      }
 
       instr_info = gen_instruction_info(i, reason, rw_form);
       VMwrite32(VMCS_32BIT_VMEXIT_INSTRUCTION_INFO, instr_info);
@@ -747,6 +750,26 @@ void BX_CPU_C::Virtualization_Exception(Bit64u qualification, Bit64u guest_physi
   BX_NOTIFY_PHY_MEMORY_ACCESS(vm->ve_info_addr + 32, 8, MEMTYPE(ve_info_memtype), BX_WRITE, 0, (Bit8u*)(&ve_info.eptp_index));
 
   exception(BX_VE_EXCEPTION, 0);
+}
+
+void BX_CPU_C::vmx_page_modification_logging(Bit64u guest_paddr, unsigned dirty_update)
+{
+  VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
+
+  if (vm->pml_index >= 512) {
+    Bit32u vmexit_qualification = 0;
+    if (BX_CPU_THIS_PTR nmi_unblocking_iret)
+      vmexit_qualification |= (1 << 12);
+
+    VMexit(VMX_VMEXIT_PML_LOGFULL, vmexit_qualification);
+  }
+
+  if (dirty_update) {
+    Bit64u pAddr = vm->pml_address + 8 * vm->pml_index;
+    access_write_physical(pAddr, 8, &guest_paddr);
+    BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr, 8, MEMTYPE(resolve_memtype(pAddr)), BX_WRITE, BX_VMX_PML_WRITE, (Bit8u*)(&guest_paddr));
+    vm->pml_index--;
+  }
 }
 #endif
 

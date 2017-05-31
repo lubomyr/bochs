@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc_mem.cc 12594 2015-01-07 16:17:40Z sshwarts $
+// $Id: misc_mem.cc 13071 2017-02-14 20:11:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  I/O memory handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -87,7 +87,7 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 {
   unsigned i, idx;
 
-  BX_DEBUG(("Init $Id: misc_mem.cc 12594 2015-01-07 16:17:40Z sshwarts $"));
+  BX_DEBUG(("Init $Id: misc_mem.cc 13071 2017-02-14 20:11:58Z vruppert $"));
 
   // accept only memory size which is multiply of 1M
   BX_ASSERT((host & 0xfffff) == 0);
@@ -502,7 +502,7 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
                          path));
 }
 
-void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress, Bit8u type)
+void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress)
 {
   struct stat stat_buf;
   int fd, ret;
