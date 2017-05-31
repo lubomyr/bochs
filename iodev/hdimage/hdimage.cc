@@ -184,6 +184,7 @@ int bx_write_image(int fd, Bit64s offset, void *buf, int count)
 
 int bx_close_image(int fd, const char *pathname)
 {
+/*
 #ifndef BXIMAGE
   char lockfn[BX_PATHNAME_LEN];
 
@@ -192,6 +193,7 @@ int bx_close_image(int fd, const char *pathname)
     unlink(lockfn);
   }
 #endif
+*/
   return ::close(fd);
 }
 
@@ -201,10 +203,12 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, time_t *mt
 int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *mtime)
 #endif
 {
+/*
 #ifndef BXIMAGE
   char lockfn[BX_PATHNAME_LEN];
   int lockfd;
 #endif
+*/
 
 #ifdef WIN32
   if (fsize != NULL) {
@@ -227,6 +231,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
   }
 #endif
 
+/*
 #ifndef BXIMAGE
   sprintf(lockfn, "%s.lock", pathname);
   lockfd = ::open(lockfn, O_RDONLY);
@@ -237,6 +242,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
     return -1;
   }
 #endif
+*/
 
   int fd = ::open(pathname, flags
 #ifdef O_BINARY
@@ -269,6 +275,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
     }
   }
 #endif
+/*
 #ifndef BXIMAGE
   if ((flags & O_ACCMODE) != O_RDONLY) {
     lockfd = ::open(lockfn, O_CREAT | O_RDWR
@@ -282,6 +289,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
     }
   }
 #endif
+*/
   return fd;
 }
 
@@ -1541,6 +1549,7 @@ int redolog_t::make_header(const char* type, Bit64u size)
 
 int redolog_t::create(const char* filename, const char* type, Bit64u size)
 {
+/*
 #ifndef BXIMAGE
   char lockfn[BX_PATHNAME_LEN];
 
@@ -1549,6 +1558,7 @@ int redolog_t::create(const char* filename, const char* type, Bit64u size)
     return -1;
   }
 #endif
+*/
 
   BX_INFO(("redolog : creating redolog %s", filename));
 
