@@ -184,7 +184,7 @@ int bx_write_image(int fd, Bit64s offset, void *buf, int count)
 
 int bx_close_image(int fd, const char *pathname)
 {
-#ifndef BXIMAGE
+#if !(defined(BXIMAGE) || defined(ANDROID)) 
   char lockfn[BX_PATHNAME_LEN];
 
   sprintf(lockfn, "%s.lock", pathname);
@@ -201,7 +201,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, time_t *mt
 int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *mtime)
 #endif
 {
-#ifndef BXIMAGE
+#if !(defined(BXIMAGE) || defined(ANDROID))
   char lockfn[BX_PATHNAME_LEN];
   int lockfd;
 #endif
@@ -227,7 +227,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
   }
 #endif
 
-#ifndef BXIMAGE
+#if !(defined(BXIMAGE) || defined(ANDROID))
   sprintf(lockfn, "%s.lock", pathname);
   lockfd = ::open(lockfn, O_RDONLY);
   if (lockfd >= 0) {
@@ -269,7 +269,7 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
     }
   }
 #endif
-#ifndef BXIMAGE
+#if !(defined(BXIMAGE) || defined(ANDROID))
   if ((flags & O_ACCMODE) != O_RDONLY) {
     lockfd = ::open(lockfn, O_CREAT | O_RDWR
 #ifdef O_BINARY
@@ -1541,7 +1541,7 @@ int redolog_t::make_header(const char* type, Bit64u size)
 
 int redolog_t::create(const char* filename, const char* type, Bit64u size)
 {
-#ifndef BXIMAGE
+#if !(defined(BXIMAGE) || defined(ANDROID))
   char lockfn[BX_PATHNAME_LEN];
 
   sprintf(lockfn, "%s.lock", filename);
