@@ -14,6 +14,7 @@ Download this:
 	Android SDL Build tools
 	Android 7.1.1 (API 25) or higher
 	SDK Platform (API 25) or higher
+	Extras/Android Support Repository
 
 3) Install JDK. You can do it from apt-get tool or download from official site (in this case you must set envirnoment 
 value to JDK, see guides "How install JDK and set envirnoment values to JDK).
@@ -28,9 +29,10 @@ this values manually. Warning: values will be setted for one command-line sessio
 Script:
 	#!/bin/sh
 
-	export PATH=~/android/android-ndk-r14b:$PATH
-	export PATH=~/android/android-sdk-linux/tools:$PATH
-	export PATH=~/android/android-sdk-linux/build-tools/25.0.2:$PATH
+	export ANDROID_HOME=~/Android/android-sdk
+	export ANDROID_NDK_HOME=~/Android/Sdk/ndk-bundle
+	export PATH=$ANDROID_NDK_HOME:$ANDROID_HOME/tools:$PATH
+	export PATH=$ANDROID_HOME/build-tools/25.0.2:$PATH
 
 5) Install packages, which needs for build:
 
@@ -47,6 +49,10 @@ Commands:
 
 8) Now you can build project
 	cd bochs/build/android
-	./build-core.sh
+	./build-all.sh   // for build all project
+	
+or you can build separate part of project
+	./build-core.sh // for build core
+	./build-ui.sh   // for build ui (when core built)
 
-Your apk will be in ~/androidsdl/project/bin/MainActivity-debug.apk
+Your apk will be in this folder

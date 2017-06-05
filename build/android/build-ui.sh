@@ -14,3 +14,8 @@ fi
 if [ \! -d BochsLauncher/app/src/main/jniLibs ] ; then
    ln -s ../../../../../../../androidsdl/project/libs BochsLauncher/app/src/main/jniLibs
 fi
+
+cd BochsLauncher
+./gradlew assembleDebug
+mv app/build/outputs/apk/app-debug.apk ../bochs-debug.apk
+cd ..
