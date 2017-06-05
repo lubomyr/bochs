@@ -39,21 +39,14 @@ Commands:
 	sudo apt-get install make
 	sudo apt-get install g++
 
-6) Create and put keystore (I use debug version) in ~/.android/debug.keystore (only in this folder and with this name). In
-example, I copy debug keystore, which created my Android Studio in Windows 10 (C:\Users\USER_NAME\.android\debug.keystore).
+6) Create and put keystore (I use debug version) in ~/.android/debug.keystore
 
-7) Download required repos from GitHub:
+7) Download required repos from GitHub (both repos must be downloaded in same folder):
 	git clone git://github.com/pelya/commandergenius androidsdl
 	git clone git://github.com/lubomyr/bochs
 
-8) Copy folder ~/bochs/android/bochs into ~/androidsdl/project/jni/application/, change symlink
-~/androidsdl/project/jni/application/bochs/bochs to point to this bochs repository. For change symlink you can use this command:
+8) Now you can build project
+	cd bochs/build/android
+	./build-core.sh
 
-ln -sf *bochs folder* *symlink path*
-
-9) For build go to androidsdl folder:
-	cd ~/androidsdl
-and build apk:
-	./build.sh bochs
-
-Your apk will be in ~/androidsdk/project/bin/MainActivity-debug.apk
+Your apk will be in ~/androidsdl/project/bin/MainActivity-debug.apk

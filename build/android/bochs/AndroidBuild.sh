@@ -4,6 +4,7 @@ LOCAL_PATH=`dirname $0`
 LOCAL_PATH=`cd $LOCAL_PATH && pwd`
 
 export PATH=$LOCAL_PATH/..:$PATH # For our custom sdl-config
+ANDROIDSDL=../../../../androidsdl
 
 if [ \! -f bochs/configure ] ; then
 	sh -c "cd bochs && ./bootstrap.sh"
@@ -17,7 +18,7 @@ if [ \! -f bin-$1/Makefile ] ; then
   if [ "$1" = arm64-v8a ]; then
 	env CFLAGS="-O2 -ffast-math" \
 	env LIBS="-lgnustl_static" \
-		../setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
+		$ANDROIDSDL/project/jni/application/setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
 		--build=x86_64-unknown-linux-gnu --host=$2 --with-sdl \
 		--enable-cpu-level=6 --enable-smp --enable-3dnow --enable-x86-64 --enable-vmx=2 --enable-avx \
 		--enable-sb16 --enable-es1370 \
@@ -30,7 +31,7 @@ if [ \! -f bin-$1/Makefile ] ; then
   else
 	env CFLAGS="-Ofast" \
 	env LIBS="-lgnustl_static" \
-		../setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
+		$ANDROIDSDL/project/jni/application/setEnvironment-$1.sh sh -c "cd bin-$1 && ../bochs/configure \
 		--build=x86_64-unknown-linux-gnu --host=$2 --with-sdl \
 		--enable-cpu-level=6 --enable-smp --enable-3dnow --enable-x86-64 --enable-vmx=2 --enable-avx \
 		--enable-sb16 --enable-es1370 \
