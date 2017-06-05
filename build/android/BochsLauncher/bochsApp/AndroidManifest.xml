@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	  package="net.sourceforge.bochs.core"
+	  android:versionCode="26900"
+	  android:versionName="2.6.9"
+	  android:installLocation="auto"
+>
+	<application
+				 android:allowBackup="true"
+				 android:banner="@drawable/banner"
+				 android:isGame="true"
+	>
+		<activity android:name=".MainActivity"
+				  android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
+				  android:windowSoftInputMode="stateUnspecified"
+		>
+		</activity>
+		<meta-data android:name="com.sec.android.support.multiwindow" android:value="true" /> <!-- Samsung's multiwindow -->
+		<activity android:name=".RestartMainActivity"
+				  android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
+				  android:windowSoftInputMode="stateUnspecified"
+				  android:process=":RestartMainActivity"
+		/>
+		<service android:name=".DummyService"
+				 android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
+				 android:enabled="true"
+		/>
+	</application>
+
+	<uses-sdk android:minSdkVersion="9" android:targetSdkVersion="23"/>
+	<!-- ==INTERNET== --> <uses-permission android:name="android.permission.INTERNET" />
+	<!-- ==EXTERNAL_STORAGE== --> <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<!-- ==EXTERNAL_STORAGE== --> <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+	<!-- <uses-permission android:name="android.permission.VIBRATE"></uses-permission> --> <!-- Vibrator not supported yet by SDL -->
+
+	<uses-feature android:name="android.hardware.touchscreen" android:required="false" /> <!-- Allow TV boxes -->
+	<uses-feature android:name="android.software.leanback" android:required="false" /> <!-- Android TV requires this -->
+	<uses-feature android:name="android.hardware.microphone" android:required="false" /> <!-- Android TV requires this -->
+	<uses-feature android:name="android.hardware.gamepad" android:required="false"/> <!-- Android TV requires this -->
+	<!-- ==SCREEN-SIZE-SMALL== --> <supports-screens android:smallScreens="true" android:normalScreens="true" android:largeScreens="true" android:xlargeScreens="true" />
+
+</manifest>

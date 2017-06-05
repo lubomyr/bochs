@@ -1,0 +1,49 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="net.sourceforge.bochs"
+    android:installLocation="auto"
+    >
+    <application android:label="@string/app_name"
+        android:icon="@drawable/icon"
+        android:debuggable="false"
+        android:allowBackup="true"
+        android:banner="@drawable/banner"
+        android:isGame="true"
+        android:theme="@android:style/Theme.Holo"
+        >
+        <activity android:name=".MainActivity"
+            android:label="@string/app_name"
+            android:alwaysRetainTaskState="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="stateUnspecified"
+            >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" /> <!-- Samsung's multiwindow -->
+                <action android:name="com.sec.android.airview.HOVER" /> <!-- Stupid Samsung requires their own intent for finger-hover events -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" /> <!-- Android TV requires this -->
+                <category android:name="tv.ouya.intent.category.GAME" /> <!-- For that one user who still got an OUYA in his living room and won't throw it away just because someone else decides that it's dead -->
+            </intent-filter>
+        </activity>
+        <meta-data android:name="com.sec.android.support.multiwindow" android:value="true" /> <!-- Samsung's multiwindow -->
+        <activity android:name=".SDLActivity"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection"
+            android:windowSoftInputMode="stateUnspecified"
+            android:process=":RestartMainActivity"
+            />
+    </application>
+
+    <!-- ==INTERNET== --> <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ==EXTERNAL_STORAGE== --> <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- ==EXTERNAL_STORAGE== --> <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- <uses-permission android:name="android.permission.VIBRATE"></uses-permission> --> <!-- Vibrator not supported yet by SDL -->
+
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" /> <!-- Allow TV boxes -->
+    <uses-feature android:name="android.software.leanback" android:required="false" /> <!-- Android TV requires this -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" /> <!-- Android TV requires this -->
+    <uses-feature android:name="android.hardware.gamepad" android:required="false"/> <!-- Android TV requires this -->
+    <!-- ==SCREEN-SIZE-SMALL== --> <supports-screens android:smallScreens="true" android:normalScreens="true" android:largeScreens="true" android:xlargeScreens="true" />
+
+</manifest>
+
