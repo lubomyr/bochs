@@ -12,8 +12,8 @@ Download this:
 	Android SDK Tools
 	Android SDK Platform-tools
 	Android SDL Build tools
-	Android 6.0 (API 23) or higher
-	SDK Platform (API 23) or higher
+	Android 7.1.1 (API 25) or higher
+	SDK Platform (API 25) or higher
 
 3) Install JDK. You can do it from apt-get tool or download from official site (in this case you must set envirnoment 
 value to JDK, see guides "How install JDK and set envirnoment values to JDK).
@@ -28,9 +28,9 @@ this values manually. Warning: values will be setted for one command-line sessio
 Script:
 	#!/bin/sh
 
-	export PATH=~/android/android-ndk-r12b:$PATH
+	export PATH=~/android/android-ndk-r14b:$PATH
 	export PATH=~/android/android-sdk-linux/tools:$PATH
-	export PATH=~/android/android-sdk-linux/build-tools/24.0.0:$PATH
+	export PATH=~/android/android-sdk-linux/build-tools/25.0.2:$PATH
 
 5) Install packages, which needs for build:
 
