@@ -40,6 +40,7 @@ Commands:
 	sudo apt-get install ant //If you install manually - set envirnoment value to Ant
 	sudo apt-get install make
 	sudo apt-get install g++
+	sudo apt-get install git-core
 
 6) Create and put keystore (I use debug version) in ~/.android/debug.keystore
 
