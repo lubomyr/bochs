@@ -23,6 +23,10 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
+import com.google.android.gms.ads.MobileAds;
+
 import net.sourceforge.bochs.adapter.TabsPagerAdapter;
 
 import java.io.File;
@@ -30,12 +34,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 
 public class MainActivity extends FragmentActivity implements ActionBar.TabListener {
-
     private String appPath;
     private String configPath;
     private ViewPager viewPager;
     private ActionBar actionBar;
     private SharedPreferences sPref;
+    private AdView mAdView;
+
     final String SAVED_PATH = "saved_path";
     private final int REQUEST_EXTERNAL_STORAGE = 1;
 
@@ -53,6 +58,16 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 
         verifyStoragePermissions();
         setupTabs();
+        setAds();
+    }
+
+    private void setAds() {
+        MobileAds.initialize(getApplicationContext(),
+                getString(R.string.app_id));
+
+        mAdView = (AdView) findViewById(R.id.ad_view);
+        AdRequest adRequest = new AdRequest.Builder().build();
+        mAdView.loadAd(adRequest);
     }
 
     @SuppressWarnings("deprecation")
