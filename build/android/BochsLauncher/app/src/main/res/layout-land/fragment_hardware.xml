@@ -7,9 +7,10 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:weightSum="1.0"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:baselineAligned="false">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -28,6 +29,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="0.78"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
@@ -62,6 +64,7 @@
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="0.22"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
@@ -77,6 +80,7 @@
                         android:id="@+id/hardwareRadioButtonI430fx"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginEnd="5dp"
                         android:layout_marginRight="5dp"
                         android:text="@string/i430fx" />
 
@@ -84,17 +88,19 @@
                         android:id="@+id/hardwareRadioButtonI440fx"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginEnd="5dp"
                         android:layout_marginRight="5dp"
                         android:text="@string/i440fx" />
 
                 </RadioGroup>
 
             </LinearLayout>
-			
+
 			<LinearLayout
                 android:id="@+id/memoryLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:layout_marginTop="5dp"
                 android:background="@drawable/my_border"
@@ -124,13 +130,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:weightSum="1.0"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:baselineAligned="false">
 
                 <LinearLayout
                     android:id="@+id/vgaLayout"
                     android:layout_width="0dp"
                     android:layout_height="110dp"
                     android:layout_weight="0.33"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
@@ -163,6 +171,7 @@
                     android:layout_width="0dp"
                     android:layout_height="110dp"
                     android:layout_weight="0.33"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
@@ -195,6 +204,7 @@
                     android:layout_width="0dp"
                     android:layout_height="110dp"
                     android:layout_weight="0.34"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
@@ -225,12 +235,16 @@
 
             </LinearLayout>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/bottom_margin"/>
+
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/pciLayout"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:layout_weight="0.25"
             android:layout_marginLeft="5dp"
             android:layout_marginRight="5dp"
@@ -248,6 +262,7 @@
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -269,6 +284,7 @@
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -290,6 +306,7 @@
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -311,6 +328,7 @@
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -332,6 +350,7 @@
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">

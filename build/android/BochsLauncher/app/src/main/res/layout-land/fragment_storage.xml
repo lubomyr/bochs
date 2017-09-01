@@ -7,7 +7,7 @@
 
     <LinearLayout
         android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
+        android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:orientation="vertical">
 
@@ -16,12 +16,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:weightSum="1.0"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:baselineAligned="false">
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.33"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:background="@drawable/my_border"
                 android:gravity="center_horizontal"
@@ -37,6 +39,7 @@
                         android:id="@+id/storageCheckBoxFloppyA"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_alignParentStart="true"
                         android:layout_alignParentLeft="true"
                         android:layout_centerVertical="true"
                         android:text="@string/floppy_a" />
@@ -46,6 +49,7 @@
                         style="?android:attr/buttonStyleSmall"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
                         android:layout_alignParentRight="true"
                         android:text="@string/select" />
 
@@ -64,6 +68,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.33"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:background="@drawable/my_border"
                 android:gravity="center_horizontal"
@@ -79,6 +84,7 @@
                         android:id="@+id/storageCheckBoxFloppyB"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_alignParentStart="true"
                         android:layout_alignParentLeft="true"
                         android:layout_centerVertical="true"
                         android:text="@string/floppy_b" />
@@ -88,6 +94,7 @@
                         style="?android:attr/buttonStyleSmall"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
                         android:layout_alignParentRight="true"
                         android:text="@string/select" />
 
@@ -114,6 +121,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
                     android:layout_marginLeft="10dp"
                     android:text="@string/boot"
                     android:textAppearance="?android:attr/textAppearanceLarge" />
@@ -122,6 +130,7 @@
                     android:id="@+id/storageSpinnerBoot"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
                     android:layout_marginLeft="10dp" />
 
             </LinearLayout>
@@ -140,6 +149,7 @@
                 android:id="@+id/storageCheckBoxAta0m"
                 android:layout_width="135dp"
                 android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
                 android:layout_alignParentLeft="true"
                 android:layout_centerVertical="true"
                 android:text="@string/ata0_master" />
@@ -151,6 +161,7 @@
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageCheckBoxAta0m"
                 android:layout_toRightOf="@id/storageCheckBoxAta0m"
                 android:padding="0dp" />
 
@@ -159,7 +170,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_marginEnd="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageSpinnerAta0m"
                 android:layout_toRightOf="@id/storageSpinnerAta0m"
                 android:text="@string/vfat" />
 
@@ -168,7 +181,9 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
                 android:layout_alignParentRight="true"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:text="@string/select" />
 
@@ -177,7 +192,9 @@
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_toStartOf="@id/storageButtonAta0m"
                 android:layout_toLeftOf="@id/storageButtonAta0m"
+                android:layout_toEndOf="@id/storageCheckBoxAta0mVvfat"
                 android:layout_toRightOf="@id/storageCheckBoxAta0mVvfat"
                 android:gravity="center"
                 android:text="@string/none"
@@ -197,6 +214,7 @@
                 android:id="@+id/storageCheckBoxAta0s"
                 android:layout_width="135dp"
                 android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
                 android:layout_alignParentLeft="true"
                 android:layout_centerVertical="true"
                 android:text="@string/ata0_slave" />
@@ -208,6 +226,7 @@
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageCheckBoxAta0s"
                 android:layout_toRightOf="@id/storageCheckBoxAta0s"
                 android:padding="0dp" />
 
@@ -216,7 +235,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_marginEnd="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageSpinnerAta0s"
                 android:layout_toRightOf="@id/storageSpinnerAta0s"
                 android:text="@string/vfat" />
 
@@ -225,7 +246,9 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
                 android:layout_alignParentRight="true"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:text="@string/select" />
 
@@ -234,7 +257,9 @@
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_toStartOf="@id/storageButtonAta0s"
                 android:layout_toLeftOf="@id/storageButtonAta0s"
+                android:layout_toEndOf="@id/storageCheckBoxAta0sVvfat"
                 android:layout_toRightOf="@id/storageCheckBoxAta0sVvfat"
                 android:gravity="center"
                 android:text="@string/none"
@@ -254,6 +279,7 @@
                 android:id="@+id/storageCheckBoxAta1m"
                 android:layout_width="135dp"
                 android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
                 android:layout_alignParentLeft="true"
                 android:layout_centerVertical="true"
                 android:text="@string/ata1_master" />
@@ -265,6 +291,7 @@
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageCheckBoxAta1m"
                 android:layout_toRightOf="@id/storageCheckBoxAta1m"
                 android:padding="0dp" />
 
@@ -273,7 +300,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_marginEnd="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageSpinnerAta1m"
                 android:layout_toRightOf="@id/storageSpinnerAta1m"
                 android:text="@string/vfat" />
 
@@ -282,7 +311,9 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
                 android:layout_alignParentRight="true"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:text="@string/select" />
 
@@ -291,7 +322,9 @@
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_toStartOf="@id/storageButtonAta1m"
                 android:layout_toLeftOf="@id/storageButtonAta1m"
+                android:layout_toEndOf="@id/storageCheckBoxAta1mVvfat"
                 android:layout_toRightOf="@id/storageCheckBoxAta1mVvfat"
                 android:gravity="center"
                 android:text="@string/none"
@@ -311,6 +344,7 @@
                 android:id="@+id/storageCheckBoxAta1s"
                 android:layout_width="135dp"
                 android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
                 android:layout_alignParentLeft="true"
                 android:layout_centerVertical="true"
                 android:text="@string/ata1_slave" />
@@ -322,6 +356,7 @@
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageCheckBoxAta1s"
                 android:layout_toRightOf="@id/storageCheckBoxAta1s"
                 android:padding="0dp" />
 
@@ -330,7 +365,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_marginEnd="5dp"
                 android:layout_marginRight="5dp"
+                android:layout_toEndOf="@id/storageSpinnerAta1s"
                 android:layout_toRightOf="@id/storageSpinnerAta1s"
                 android:text="@string/vfat" />
 
@@ -339,7 +376,9 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
                 android:layout_alignParentRight="true"
+                android:layout_marginStart="5dp"
                 android:layout_marginLeft="5dp"
                 android:text="@string/select" />
 
@@ -348,13 +387,19 @@
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
+                android:layout_toStartOf="@id/storageButtonAta1s"
                 android:layout_toLeftOf="@id/storageButtonAta1s"
+                android:layout_toEndOf="@id/storageCheckBoxAta1sVvfat"
                 android:layout_toRightOf="@id/storageCheckBoxAta1sVvfat"
                 android:gravity="center"
                 android:text="@string/none"
                 android:textAppearance="?android:attr/textAppearanceMedium" />
 
         </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/bottom_margin"/>
 
     </LinearLayout>
 

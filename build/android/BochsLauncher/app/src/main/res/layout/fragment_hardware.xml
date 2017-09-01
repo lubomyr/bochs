@@ -7,7 +7,7 @@
 
     <LinearLayout
         android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
+        android:layout_height="wrap_content"
         android:gravity="center_horizontal"
         android:orientation="vertical">
 
@@ -73,6 +73,7 @@
                     android:id="@+id/hardwareRadioButtonI430fx"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="5dp"
                     android:layout_marginRight="5dp"
                     android:text="@string/i430fx" />
 
@@ -80,6 +81,7 @@
                     android:id="@+id/hardwareRadioButtonI440fx"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="5dp"
                     android:layout_marginRight="5dp"
                     android:text="@string/i440fx" />
 
@@ -122,7 +124,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
             android:weightSum="1.0"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:baselineAligned="false">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -249,6 +252,7 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -270,6 +274,7 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -291,6 +296,7 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -312,6 +318,7 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -333,6 +340,7 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
                     android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
@@ -354,6 +362,10 @@
             </LinearLayout>
 
         </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/bottom_margin"/>
 
     </LinearLayout>
 
