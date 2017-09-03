@@ -23,6 +23,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.MobileAds;
@@ -68,6 +69,15 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         mAdView = (AdView) findViewById(R.id.ad_view);
         AdRequest adRequest = new AdRequest.Builder().build();
         mAdView.loadAd(adRequest);
+        mAdView.setAdListener(new AdListener() {
+            @Override
+            public void onAdLeftApplication ()
+            {
+                if (mAdView != null) {
+                    mAdView.destroy();
+                }
+            }
+        });
     }
 
     @SuppressWarnings("deprecation")
