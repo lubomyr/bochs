@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Bochs</string>
+    <string name="storage">저장장치</string>
+    <string name="hardware">하드웨어</string>
+    <string name="misc">기타</string>
+    <string name="config_not_saved">에러, 설정이 저장되지 않았습니다.</string>
+    <string name="config_saved">설정을 저장했습니다.</string>
+    <string name="config_not_found">설정을 찾지 못했습니다.</string>
+    <string name="config_loaded">설정을 불러왔습니다.</string>
+    <string name="download_disk_images">디스크이미지 다운로드</string>
+    <string name="select">선택</string>
+    <string name="none">없음</string>
+    <string name="floppy_a">Floppy A</string>
+    <string name="floppy_b">Floppy B</string>
+    <string name="ata0_master">ata0-master</string>
+    <string name="ata0_slave">ata0-slave</string>
+    <string name="ata1_master">ata1-master</string>
+    <string name="ata1_slave">ata1-slave</string>
+    <string name="vfat">공유폴더</string>
+    <string name="boot">부팅</string>
+    <string name="cpu_model">CPU 종류:</string>
+    <string name="description">description</string>
+    <string name="chipset">칩셋:</string>
+    <string name="i430fx">i430fx</string>
+    <string name="i440fx">i440fx</string>
+    <string name="memory">메모리:</string>
+    <string name="value">value</string>
+    <string name="vga_card">그래픽카드:</string>
+    <string name="sound_card">사운드카드:</string>
+    <string name="ethernet_card">랜카드:</string>
+    <string name="pci">PCI:</string>
+    <string name="slot1">1번 슬롯:</string>
+    <string name="slot2">2번 슬롯:</string>
+    <string name="slot3">3번 슬롯:</string>
+    <string name="slot4">4번 슬롯:</string>
+    <string name="slot5">5번 슬롯:</string>
+    <string name="rom_image">rom image</string>
+    <string name="vga_rom_image">vga rom image</string>
+    <string name="clock">시계:</string>
+    <string name="sync">동기화:</string>
+    <string name="vga_update_freq">화면 업데이트 주기:</string>
+    <string name="full_screen">전체화면</string>
+    <string name="speaker">스피커</string>
+
+</resources>
