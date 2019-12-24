@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: aes.cc 11990 2013-12-03 15:44:23Z sshwarts $
+// $Id: aes.cc 13520 2018-05-27 19:09:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2008-2012 Stanislav Shwartsman
+//   Copyright (c) 2008-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -27,6 +27,8 @@
 #define LOG_THIS BX_CPU_THIS_PTR
 
 #if BX_CPU_LEVEL >= 6
+
+#include "simd_int.h"
 
 //
 // XMM - Byte Representation of a 128-bit AES State
@@ -108,7 +110,7 @@ BX_CPP_INLINE void AES_InverseShiftRows(BxPackedXmmRegister &state)
   state.xmmubyte(0xF) = tmp.xmmubyte(0x3);
 }
 
-static Bit8u sbox_transformation[256] = {
+static const Bit8u sbox_transformation[256] = {
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5,
   0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
   0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
@@ -143,7 +145,7 @@ static Bit8u sbox_transformation[256] = {
   0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
 };
 
-static Bit8u inverse_sbox_transformation[256] = {
+static const Bit8u inverse_sbox_transformation[256] = {
   0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38,
   0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
   0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87,
@@ -288,7 +290,7 @@ BX_CPP_INLINE Bit32u AES_RotWord(Bit32u x)
 }
 
 /* 66 0F 38 DB */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESIMC_VdqWdqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESIMC_VdqWdqR(bxInstruction_c *i)
 {
   BxPackedXmmRegister op = BX_READ_XMM_REG(i->src());
 
@@ -300,73 +302,147 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESIMC_VdqWdqR(bxInstruction_c *i)
 }
 
 /* 66 0F 38 DC */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESENC_VdqHdqWdqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESENC_VdqWdqR(bxInstruction_c *i)
 {
-  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->src1()), op2 = BX_READ_XMM_REG(i->src2());
+  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->dst()), op2 = BX_READ_XMM_REG(i->src());
 
   AES_ShiftRows(op1);
   AES_SubstituteBytes(op1);
   AES_MixColumns(op1);
 
-  op1.xmm64u(0) ^= op2.xmm64u(0);
-  op1.xmm64u(1) ^= op2.xmm64u(1);
+  xmm_xorps(&op1, &op2);
 
-  BX_WRITE_XMM_REGZ(i->dst(), op1, i->getVL());
+  BX_WRITE_XMM_REG(i->dst(), op1);
 
   BX_NEXT_INSTR(i);
 }
 
-/* 66 0F 38 DD */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESENCLAST_VdqHdqWdqR(bxInstruction_c *i)
+#if BX_SUPPORT_AVX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VAESENC_VdqHdqWdqR(bxInstruction_c *i)
 {
-  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->src1()), op2 = BX_READ_XMM_REG(i->src2());
+  BxPackedAvxRegister op1 = BX_READ_AVX_REG(i->src1()), op2 = BX_READ_AVX_REG(i->src2());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < len; n++) {
+    AES_ShiftRows(op1.vmm128(n));
+    AES_SubstituteBytes(op1.vmm128(n));
+    AES_MixColumns(op1.vmm128(n));
+
+    xmm_xorps(&op1.vmm128(n), &op2.vmm128(n));
+  }
+
+  BX_WRITE_AVX_REGZ(i->dst(), op1, len);
+
+  BX_NEXT_INSTR(i);
+}
+#endif
+
+/* 66 0F 38 DD */
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESENCLAST_VdqWdqR(bxInstruction_c *i)
+{
+  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->dst()), op2 = BX_READ_XMM_REG(i->src());
 
   AES_ShiftRows(op1);
   AES_SubstituteBytes(op1);
 
-  op1.xmm64u(0) ^= op2.xmm64u(0);
-  op1.xmm64u(1) ^= op2.xmm64u(1);
+  xmm_xorps(&op1, &op2);
 
-  BX_WRITE_XMM_REGZ(i->dst(), op1, i->getVL());
+  BX_WRITE_XMM_REG(i->dst(), op1);
 
   BX_NEXT_INSTR(i);
 }
 
-/* 66 0F 38 DE */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESDEC_VdqHdqWdqR(bxInstruction_c *i)
+#if BX_SUPPORT_AVX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VAESENCLAST_VdqHdqWdqR(bxInstruction_c *i)
 {
-  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->src1()), op2 = BX_READ_XMM_REG(i->src2());
+  BxPackedAvxRegister op1 = BX_READ_AVX_REG(i->src1()), op2 = BX_READ_AVX_REG(i->src2());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < len; n++) {
+    AES_ShiftRows(op1.vmm128(n));
+    AES_SubstituteBytes(op1.vmm128(n));
+
+    xmm_xorps(&op1.vmm128(n), &op2.vmm128(n));
+  }
+
+  BX_WRITE_AVX_REGZ(i->dst(), op1, len);
+
+  BX_NEXT_INSTR(i);
+}
+#endif
+
+/* 66 0F 38 DE */
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESDEC_VdqWdqR(bxInstruction_c *i)
+{
+  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->dst()), op2 = BX_READ_XMM_REG(i->src());
 
   AES_InverseShiftRows(op1);
   AES_InverseSubstituteBytes(op1);
   AES_InverseMixColumns(op1);
 
-  op1.xmm64u(0) ^= op2.xmm64u(0);
-  op1.xmm64u(1) ^= op2.xmm64u(1);
+  xmm_xorps(&op1, &op2);
 
-  BX_WRITE_XMM_REGZ(i->dst(), op1, i->getVL());
+  BX_WRITE_XMM_REG(i->dst(), op1);
 
   BX_NEXT_INSTR(i);
 }
 
-/* 66 0F 38 DF */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESDECLAST_VdqHdqWdqR(bxInstruction_c *i)
+#if BX_SUPPORT_AVX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VAESDEC_VdqHdqWdqR(bxInstruction_c *i)
 {
-  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->src1()), op2 = BX_READ_XMM_REG(i->src2());
+  BxPackedAvxRegister op1 = BX_READ_AVX_REG(i->src1()), op2 = BX_READ_AVX_REG(i->src2());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < len; n++) {
+    AES_InverseShiftRows(op1.vmm128(n));
+    AES_InverseSubstituteBytes(op1.vmm128(n));
+    AES_InverseMixColumns(op1.vmm128(n));
+
+    xmm_xorps(&op1.vmm128(n), &op2.vmm128(n));
+  }
+
+  BX_WRITE_AVX_REGZ(i->dst(), op1, len);
+
+  BX_NEXT_INSTR(i);
+}
+#endif
+
+/* 66 0F 38 DF */
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESDECLAST_VdqWdqR(bxInstruction_c *i)
+{
+  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->dst()), op2 = BX_READ_XMM_REG(i->src());
 
   AES_InverseShiftRows(op1);
   AES_InverseSubstituteBytes(op1);
 
-  op1.xmm64u(0) ^= op2.xmm64u(0);
-  op1.xmm64u(1) ^= op2.xmm64u(1);
+  xmm_xorps(&op1, &op2);
 
-  BX_WRITE_XMM_REGZ(i->dst(), op1, i->getVL());
+  BX_WRITE_XMM_REG(i->dst(), op1);
 
   BX_NEXT_INSTR(i);
 }
 
+#if BX_SUPPORT_AVX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VAESDECLAST_VdqHdqWdqR(bxInstruction_c *i)
+{
+  BxPackedAvxRegister op1 = BX_READ_AVX_REG(i->src1()), op2 = BX_READ_AVX_REG(i->src2());
+  unsigned len = i->getVL();
+
+  for (unsigned n=0; n < len; n++) {
+    AES_InverseShiftRows(op1.vmm128(n));
+    AES_InverseSubstituteBytes(op1.vmm128(n));
+
+    xmm_xorps(&op1.vmm128(n), &op2.vmm128(n));
+  }
+
+  BX_WRITE_AVX_REGZ(i->dst(), op1, len);
+
+  BX_NEXT_INSTR(i);
+}
+#endif
+
 /* 66 0F 3A DF */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESKEYGENASSIST_VdqWdqIbR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::AESKEYGENASSIST_VdqWdqIbR(bxInstruction_c *i)
 {
   BxPackedXmmRegister op = BX_READ_XMM_REG(i->src()), result;
 
@@ -382,40 +458,65 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::AESKEYGENASSIST_VdqWdqIbR(bxInstru
   BX_NEXT_INSTR(i);
 }
 
-/* 66 0F 3A 44 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PCLMULQDQ_VdqHdqWdqIbR(bxInstruction_c *i)
+BX_CPP_INLINE void xmm_pclmulqdq(BxPackedXmmRegister *r, Bit64u a, Bit64u b)
 {
-  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->src1()), op2 = BX_READ_XMM_REG(i->src2());
-  BxPackedXmmRegister r, a;
+  BxPackedXmmRegister tmp;
 
-  Bit8u imm8 = i->Ib();
+  tmp.xmm64u(0) = a;
+  tmp.xmm64u(1) = 0;
 
-  //
-  // Initialize sources for Carry Less Multiplication [R = A CLMUL B]
-  //
-
-  // A determined by imm8[0]
-  a.xmm64u(0) = op1.xmm64u(imm8 & 1);
-  a.xmm64u(1) = 0;
-
-  // B determined by imm8[4]
-  Bit64u b = op2.xmm64u((imm8 >> 4) & 1);
-
-  r.clear();
+  r->clear();
 
   for (unsigned n = 0; b && n < 64; n++) {
       if (b & 1) {
-          r.xmm64u(0) ^= a.xmm64u(0);
-          r.xmm64u(1) ^= a.xmm64u(1);
+          xmm_xorps(r, &tmp);
       }
-      a.xmm64u(1) = (a.xmm64u(1) << 1) | (a.xmm64u(0) >> 63);
-      a.xmm64u(0) <<= 1;
+      tmp.xmm64u(1) = (tmp.xmm64u(1) << 1) | (tmp.xmm64u(0) >> 63);
+      tmp.xmm64u(0) <<= 1;
       b >>= 1;
   }
+}
 
-  BX_WRITE_XMM_REGZ(i->dst(), r, i->getVL());
+/* 66 0F 3A 44 */
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::PCLMULQDQ_VdqWdqIbR(bxInstruction_c *i)
+{
+  BxPackedXmmRegister r;
+  Bit8u imm8 = i->Ib();
+
+  BxPackedXmmRegister op1 = BX_READ_XMM_REG(i->dst()), op2 = BX_READ_XMM_REG(i->src());
+
+  // Perform Carry Less Multiplication [R = A CLMUL B]
+  // A determined by op1[imm8[0]]
+  // B determined by op2[imm8[4]]
+  xmm_pclmulqdq(&r, op1.xmm64u(imm8 & 1), op2.xmm64u((imm8 >> 4) & 1));
+
+  BX_WRITE_XMM_REG(i->dst(), r);
 
   BX_NEXT_INSTR(i);
 }
+
+#if BX_SUPPORT_AVX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VPCLMULQDQ_VdqHdqWdqIbR(bxInstruction_c *i)
+{
+  BxPackedAvxRegister r;
+  unsigned len = i->getVL();
+  Bit8u imm8 = i->Ib();
+
+  r.clear();
+
+  for (unsigned n=0; n < len; n++) {
+    BxPackedXmmRegister op1 = BX_READ_AVX_REG_LANE(i->src1(), n), op2 = BX_READ_AVX_REG_LANE(i->src2(), n);
+
+    // Perform Carry Less Multiplication [R = A CLMUL B]
+    // A determined by op1[imm8[0]]
+    // B determined by op2[imm8[4]]
+    xmm_pclmulqdq(&r.vmm128(n), op1.xmm64u(imm8 & 1), op2.xmm64u((imm8 >> 4) & 1));
+  }
+
+  BX_WRITE_AVX_REG(i->dst(), r);
+
+  BX_NEXT_INSTR(i);
+}
+#endif
 
 #endif

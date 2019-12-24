@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: debug.h 12925 2016-06-12 21:23:48Z sshwarts $
+// $Id: debug.h 13281 2017-08-22 21:03:58Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2016  The Bochs Project
@@ -66,7 +66,7 @@ void bx_add_lex_input(char *buf);
 
 // Yacc defs
 extern int bxparse(void);
-extern void bxerror(char *s);
+extern void bxerror(const char *s);
 
 // register function for 'info device' command
 bx_bool bx_dbg_register_debug_info(const char *devname, void *dev);
@@ -77,7 +77,7 @@ bx_bool bx_dbg_read_linear(unsigned which_cpu, bx_address laddr, unsigned len, B
 Bit16u bx_dbg_get_selector_value(unsigned int seg_no);
 Bit16u bx_dbg_get_ip (void);
 Bit32u bx_dbg_get_eip(void);
-bx_address bx_dbg_get_instruction_pointer(void);
+bx_address bx_dbg_get_rip(void);
 Bit8u bx_dbg_get_reg8l_value(unsigned reg);
 Bit8u bx_dbg_get_reg8h_value(unsigned reg);
 Bit16u bx_dbg_get_reg16_value(unsigned reg);
@@ -110,12 +110,13 @@ void bx_dbg_xlate_address(bx_lin_address laddr);
 void bx_dbg_tlb_lookup(bx_lin_address laddr);
 void bx_dbg_show_command(const char*);
 void bx_dbg_print_stack_command(unsigned nwords);
+void bx_dbg_bt_command(unsigned dist);
 void bx_dbg_print_watchpoints(void);
 void bx_dbg_watchpoint_continue(bx_bool watch_continue);
 void bx_dbg_watch(int type, bx_phy_address address, Bit32u len);
 void bx_dbg_unwatch_all(void);
 void bx_dbg_unwatch(bx_phy_address handle);
-void bx_dbg_continue_command(void);
+void bx_dbg_continue_command(bx_bool expression);
 void bx_dbg_stepN_command(int cpu, Bit32u count);
 void bx_dbg_set_auto_disassemble(bx_bool enable);
 void bx_dbg_disassemble_switch_mode(void);
@@ -129,9 +130,9 @@ bx_bool bx_dbg_en_dis_vbreak(unsigned handle, bx_bool enable);
 bx_bool bx_dbg_del_pbreak(unsigned handle);
 bx_bool bx_dbg_del_lbreak(unsigned handle);
 bx_bool bx_dbg_del_vbreak(unsigned handle);
-int bx_dbg_vbreakpoint_command(BreakpointKind bk, Bit32u cs, bx_address eip);
-int bx_dbg_lbreakpoint_command(BreakpointKind bk, bx_address laddress);
-int bx_dbg_pbreakpoint_command(BreakpointKind bk, bx_phy_address paddress);
+int bx_dbg_vbreakpoint_command(BreakpointKind bk, Bit32u cs, bx_address eip, const char *condition);
+int bx_dbg_lbreakpoint_command(BreakpointKind bk, bx_address laddress, const char *condition);
+int bx_dbg_pbreakpoint_command(BreakpointKind bk, bx_phy_address paddress, const char *condition);
 void bx_dbg_info_bpoints_command(void);
 void bx_dbg_quit_command(void);
 #define BX_INFO_GENERAL_PURPOSE_REGS 0x01 /* bitmasks - choices for bx_dbg_info_registers_command */
@@ -169,6 +170,7 @@ void bx_dbg_info_device(const char *, const char *);
 void bx_dbg_print_help(void);
 void bx_dbg_calc_command(Bit64u value);
 void bx_dbg_dump_table(void);
+bx_bool bx_dbg_eval_condition(char *condition);
 
 // callbacks from CPU
 void bx_dbg_exception(unsigned cpu, Bit8u vector, Bit16u error_code);
@@ -188,12 +190,12 @@ void bx_dbg_show_param_command(const char *param, bx_bool xml);
 
 int bx_dbg_show_symbolic(void);
 void bx_dbg_set_symbol_command(const char *symbol, bx_address val);
-const char* bx_dbg_symbolic_address(Bit32u context, Bit32u eip, Bit32u base);
-int bx_dbg_symbol_command(const char* filename, bx_bool global, Bit32u offset);
+const char* bx_dbg_symbolic_address(bx_address context, bx_address eip, bx_address base);
+int bx_dbg_symbol_command(const char* filename, bx_bool global, bx_address offset);
 void bx_dbg_info_symbols_command(const char *Symbol);
-int bx_dbg_lbreakpoint_symbol_command(const char *Symbol);
-Bit32u bx_dbg_get_symbol_value(const char *Symbol);
-const char* bx_dbg_disasm_symbolic_address(Bit32u eip, Bit32u base);
+int bx_dbg_lbreakpoint_symbol_command(const char *Symbol, const char *condition);
+bx_address bx_dbg_get_symbol_value(const char *Symbol);
+const char* bx_dbg_disasm_symbolic_address(bx_address eip, bx_address base);
 
 #ifdef __cplusplus
 }
@@ -242,36 +244,39 @@ void bx_dbg_exit(int code);
 
 #define BX_DBG_GUARD_ICOUNT        0x0010
 
-typedef struct {
+struct bx_guard_t {
   unsigned guard_for;
 
   // instruction address breakpoints
-  struct {
+  struct ibreak {
 #if (BX_DBG_MAX_VIR_BPOINTS > 0)
     unsigned num_virtual;
-    struct {
+    struct vbreak {
       Bit32u cs;  // only use 16 bits
       bx_address eip;
       unsigned bpoint_id;
       bx_bool enabled;
+      char *condition;
     } vir[BX_DBG_MAX_VIR_BPOINTS];
 #endif
 
 #if (BX_DBG_MAX_LIN_BPOINTS > 0)
     unsigned num_linear;
-    struct {
+    struct lbreak {
       bx_address addr;
       unsigned bpoint_id;
       bx_bool enabled;
+      char *condition;
     } lin[BX_DBG_MAX_LIN_BPOINTS];
 #endif
 
 #if (BX_DBG_MAX_PHY_BPOINTS > 0)
     unsigned num_physical;
-    struct {
+    struct pbreak {
       bx_phy_address addr;
       unsigned bpoint_id;
       bx_bool enabled;
+      char *condition;
     } phy[BX_DBG_MAX_PHY_BPOINTS];
 #endif
   } iaddr;
@@ -309,7 +314,7 @@ typedef struct {
     bx_bool reset;
     bx_bool nmi;
   } async_changes_pending;
-} bx_guard_t;
+};
 
 // working information for each simulator to update when a guard
 // is reached (found)

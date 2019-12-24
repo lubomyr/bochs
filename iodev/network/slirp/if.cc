@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: if.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: if.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski.
@@ -10,8 +10,8 @@
 
 #define BX_PLUGGABLE
 
-#include "iodev.h"
 #include "slirp.h"
+#include "iodev.h"
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP
 
@@ -165,7 +165,7 @@ void if_start(Slirp *slirp)
     bool from_batchq, next_from_batchq;
     struct mbuf *ifm, *ifm_next, *ifqt;
 
-    DEBUG_CALL("if_start");
+//    DEBUG_CALL("if_start"); // Disabled to avoid flooding output
 
     if (slirp->if_start_busy) {
         return;
@@ -181,6 +181,10 @@ void if_start(Slirp *slirp)
         next_from_batchq = true;
     } else {
         ifm_next = NULL;
+    }
+
+    if (ifm_next) {
+        DEBUG_CALL("if_start"); // Report only if something's to do
     }
 
     while (ifm_next) {

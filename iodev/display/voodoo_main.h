@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo_main.h 12101 2014-01-07 22:32:22Z vruppert $
+// $Id: voodoo_main.h 13418 2017-12-29 11:18:45Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Portion of this software comes with the following license
@@ -60,87 +60,8 @@ enum
 
 /***************************************************************************
     TYPE DEFINITIONS
-***************************************************************************
+***************************************************************************/
 
-typedef void (*voodoo_vblank_func)(running_device *device, int state);
-typedef void (*voodoo_stall_func)(running_device *device, int state);
-
-*/
-typedef struct _voodoo_config voodoo_config;
-struct _voodoo_config
-{
-  int         type;
-  Bit8u       fbmem;
-  Bit8u       tmumem0;
-  Bit8u       tmumem1;
-  const char *    screen;
-  const char *    cputag;
-//  voodoo_vblank_func  vblank;
-//  voodoo_stall_func stall;
-};
-
-
-
-/***************************************************************************
-    DEVICE CONFIGURATION MACROS
-***************************************************************************
-
-#define MDRV_3DFX_VOODOO_ADD(_tag, _type, _clock, _fbmem, _screen) \
-  MDRV_DEVICE_ADD(_tag, VOODOO_GRAPHICS, _clock) \
-  MDRV_DEVICE_CONFIG_DATA32(voodoo_config, type, _type) \
-  MDRV_DEVICE_CONFIG_DATA32(voodoo_config, fbmem, _fbmem) \
-  MDRV_DEVICE_CONFIG_DATAPTR(voodoo_config, screen, _screen)
-
-#define MDRV_3DFX_VOODOO_1_ADD(_tag, _clock, _fbmem, _screen) \
-  MDRV_3DFX_VOODOO_ADD(_tag, VOODOO_1, _clock, _fbmem, _screen)
-
-#define MDRV_3DFX_VOODOO_2_ADD(_tag, _clock, _fbmem, _screen) \
-  MDRV_3DFX_VOODOO_ADD(_tag, VOODOO_2, _clock, _fbmem, _screen)
-
-#define MDRV_3DFX_VOODOO_BANSHEE_ADD(_tag, _clock, _fbmem, _screen) \
-  MDRV_3DFX_VOODOO_ADD(_tag, VOODOO_BANSHEE, _clock, _fbmem, _screen)
-
-#define MDRV_3DFX_VOODOO_3_ADD(_tag, _clock, _fbmem, _screen) \
-  MDRV_3DFX_VOODOO_ADD(_tag, VOODOO_3, _clock, _fbmem, _screen)
-
-#define MDRV_3DFX_VOODOO_TMU_MEMORY(_tmu, _tmumem) \
-  MDRV_DEVICE_CONFIG_DATA32(voodoo_config, tmumem##_tmu, _tmumem)
-
-#define MDRV_3DFX_VOODOO_VBLANK(_vblank) \
-  MDRV_DEVICE_CONFIG_DATAPTR(voodoo_config, vblank, _vblank)
-
-#define MDRV_3DFX_VOODOO_STALL(_stall) \
-  MDRV_DEVICE_CONFIG_DATAPTR(voodoo_config, stall, _stall)
-
-#define MDRV_3DFX_VOODOO_CPU(_cputag) \
-  MDRV_DEVICE_CONFIG_DATAPTR(voodoo_config, cputag, _cputag)
-
-#define MDRV_3DFX_VOODOO_MODIFY(_tag) \
-  MDRV_DEVICE_MODIFY(_tag)
-*/
-
-
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************
-
-int voodoo_update(running_device *device, bitmap_t *bitmap, const rectangle *cliprect);
-int voodoo_get_type(running_device *device);
-int voodoo_is_stalled(running_device *device);
-void voodoo_set_init_enable(running_device *device, UINT32 newval);
-
-READ32_DEVICE_HANDLER( voodoo_r );
-WRITE32_DEVICE_HANDLER( voodoo_w );
-
-READ32_DEVICE_HANDLER( banshee_r );
-WRITE32_DEVICE_HANDLER( banshee_w );
-READ32_DEVICE_HANDLER( banshee_fb_r );
-WRITE32_DEVICE_HANDLER( banshee_fb_w );
-READ32_DEVICE_HANDLER( banshee_io_r );
-WRITE32_DEVICE_HANDLER( banshee_io_w );
-READ32_DEVICE_HANDLER( banshee_rom_r );
-
-*/
 #define VOODOO_MEM 0x60000000
 #define VOODOO_REG_PAGES 1024
 #define VOODOO_LFB_PAGES 1024
@@ -149,7 +70,10 @@ READ32_DEVICE_HANDLER( banshee_rom_r );
 
 #define Voodoo_UpdateScreenStart() theVoodooDevice->update_screen_start()
 #define Voodoo_Output_Enable(x)    theVoodooDevice->output_enable(x)
-#define Voodoo_get_retrace()       theVoodooDevice->get_retrace()
-#define Voodoo_update_timing()       theVoodooDevice->update_timing()
+#define Voodoo_get_retrace(a)      theVoodooDevice->get_retrace(a)
+#define Voodoo_update_timing()     theVoodooDevice->update_timing()
+#define Voodoo_reg_write(a,b)      theVoodooDevice->reg_write(a,b)
+#define Banshee_2D_write(a,b)      theVoodooDevice->blt_reg_write(a,b)
+#define Banshee_LFB_write(a,b,c)   theVoodooDevice->mem_write_linear(a,b,c)
 
 #endif

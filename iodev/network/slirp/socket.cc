@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: socket.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: socket.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski.
@@ -473,8 +473,8 @@ sorecvfrom(struct socket *so)
 	} else {                            	/* A "normal" UDP packet */
 	  struct mbuf *m;
           int len;
-#ifdef WIN32
-          unsigned long n;
+#ifdef _WIN32
+          ULONG n;
 #else
           int n;
 #endif

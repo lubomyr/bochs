@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.cc 13124 2017-03-16 20:23:49Z sshwarts $
+// $Id: vmx.cc 13586 2019-10-26 20:09:30Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2017 Stanislav Shwartsman
+//   Copyright (c) 2009-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -24,6 +24,7 @@
 #define NEED_CPU_REG_SHORTCUTS 1
 #include "bochs.h"
 #include "cpu.h"
+#include "msr.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
 #include "iodev/iodev.h"
@@ -107,7 +108,13 @@ static const char *VMX_vmexit_reason_name[] =
   /* 62 */  "PML Log Full",
   /* 63 */  "XSAVES",
   /* 64 */  "XRSTORS",
+  /* 65 */  "Reserved65",
+  /* 66 */  "Sub-Page Protection",
+  /* 67 */  "UMWAIT",
+  /* 68 */  "TPAUSE",
 };
+
+#include "decoder/ia_opcodes.h"
 
 ////////////////////////////////////////////////////////////
 // VMCS access
@@ -142,7 +149,7 @@ Bit16u BX_CPP_AttrRegparmN(1) BX_CPU_C::VMread16(unsigned encoding)
 
   if (BX_CPU_THIS_PTR vmcshostptr) {
     Bit16u *hostAddr = (Bit16u*) (BX_CPU_THIS_PTR vmcshostptr | offset);
-    ReadHostWordFromLittleEndian(hostAddr, field);
+    field = ReadHostWordFromLittleEndian(hostAddr);
   }
   else {
     access_read_physical(pAddr, 2, (Bit8u*)(&field));
@@ -184,7 +191,7 @@ Bit32u BX_CPP_AttrRegparmN(1) BX_CPU_C::VMread32(unsigned encoding)
 
   if (BX_CPU_THIS_PTR vmcshostptr) {
     Bit32u *hostAddr = (Bit32u*) (BX_CPU_THIS_PTR vmcshostptr | offset);
-    ReadHostDWordFromLittleEndian(hostAddr, field);
+    field = ReadHostDWordFromLittleEndian(hostAddr);
   }
   else {
     access_read_physical(pAddr, 4, (Bit8u*)(&field));
@@ -228,7 +235,7 @@ Bit64u BX_CPP_AttrRegparmN(1) BX_CPU_C::VMread64(unsigned encoding)
 
   if (BX_CPU_THIS_PTR vmcshostptr) {
     Bit64u *hostAddr = (Bit64u*) (BX_CPU_THIS_PTR vmcshostptr | offset);
-    ReadHostQWordFromLittleEndian(hostAddr, field);
+    field = ReadHostQWordFromLittleEndian(hostAddr);
   }
   else {
     access_read_physical(pAddr, 8, (Bit8u*)(&field));
@@ -444,24 +451,60 @@ bx_bool BX_CPU_C::is_eptptr_valid(Bit64u eptptr)
 }
 #endif
 
-BX_CPP_INLINE Bit32u rotate_r(Bit32u val_32)
+BX_CPP_INLINE static Bit32u rotate_r(Bit32u val_32)
 {
   return (val_32 >> 8) | (val_32 << 24);
 }
 
-BX_CPP_INLINE Bit32u rotate_l(Bit32u val_32)
+BX_CPP_INLINE static Bit32u rotate_l(Bit32u val_32)
 {
   return (val_32 << 8) | (val_32 >> 24);
 }
 
-BX_CPP_INLINE Bit32u vmx_from_ar_byte_rd(Bit32u ar_byte)
+// AR.NULL is bit 16
+BX_CPP_INLINE static Bit32u vmx_pack_ar_field(Bit32u ar_field, VMCS_Access_Rights_Format access_rights_format)
 {
-  return rotate_r(ar_byte);
+  switch (access_rights_format) {
+  case VMCS_AR_ROTATE:
+    ar_field = rotate_l(ar_field);
+    break;
+  case VMCS_AR_PACK:
+    // zero out bit 11
+    ar_field &= 0xfffff7ff;
+    // Null bit (bit 16) to be stored in bit 11
+    ar_field |= ((ar_field & 0x00010000) >> 5);
+    // zero out the upper 16 bits and b8-b10
+    ar_field &= 0x0000f8ff;
+    break;
+  default:
+    break;
+  }
+
+  return ar_field;
 }
 
-BX_CPP_INLINE Bit32u vmx_from_ar_byte_wr(Bit32u ar_byte)
+// AR.NULL is bit 16
+BX_CPP_INLINE static Bit32u vmx_unpack_ar_field(Bit32u ar_field, VMCS_Access_Rights_Format access_rights_format)
 {
-  return rotate_l(ar_byte);
+  switch (access_rights_format) {
+  case VMCS_AR_ROTATE:
+    ar_field = rotate_r(ar_field);
+    break;
+  case VMCS_AR_PACK:
+    // zero out bit 16
+    ar_field &= 0xfffeffff;
+    // Null bit to be copied back from bit 11 to bit 16
+    ar_field |= ((ar_field & 0x00000800) << 5);
+    // zero out the bit 17 to bit 31
+    ar_field &= 0x0001ffff;
+    // bits 8 to 11 should be set to 0
+    ar_field &= 0xfffff0ff;
+    break;
+  default:
+    break;
+  }
+
+  return ar_field;
 }
 
 ////////////////////////////////////////////////////////////
@@ -745,12 +788,25 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
     }
     vm->pml_index = VMread16(VMCS_16BIT_GUEST_PML_INDEX);
   }
-#endif
+
+  if (vm->vmexec_ctrls3 & VMX_VM_EXEC_CTRL3_SUBPAGE_WR_PROTECT_CTRL) {
+    if ((vm->vmexec_ctrls3 & VMX_VM_EXEC_CTRL3_EPT_ENABLE) == 0) {
+       BX_ERROR(("VMFAIL: VMCS EXEC CTRL: SPP is enabled without EPT"));
+       return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
+    }
+
+    vm->spptp = (bx_phy_address) VMread64(VMCS_64BIT_CONTROL_SPPTP);
+    if (! IsValidPageAlignedPhyAddr(vm->spptp)) {
+       BX_ERROR(("VMFAIL: VMCS EXEC CTRL: SPP base phy addr malformed"));
+       return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
+    }
+  }
 
   if (vm->vmexec_ctrls3 & VMX_VM_EXEC_CTRL3_XSAVES_XRSTORS)
      vm->xss_exiting_bitmap = VMread64(VMCS_64BIT_CONTROL_XSS_EXITING_BITMAP);
   else
      vm->xss_exiting_bitmap = 0;
+#endif
 
 #endif // BX_SUPPORT_X86_64
 
@@ -913,7 +969,9 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
        case BX_SOFTWARE_INTERRUPT:
        case BX_PRIVILEGED_SOFTWARE_INTERRUPT:
        case BX_SOFTWARE_EXCEPTION:
-         if (vm->vmentry_instr_length == 0 || vm->vmentry_instr_length > 15) {
+         if ((vm->vmentry_instr_length == 0 && !BX_SUPPORT_VMX_EXTENSION(BX_VMX_SW_INTERRUPT_INJECTION_ILEN_0)) || 
+              vm->vmentry_instr_length > 15)
+         {
            BX_ERROR(("VMFAIL: VMENTRY bad injected event instr length"));
            return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
          }
@@ -1308,7 +1366,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
      bx_address base = (bx_address) VMread_natural(VMCS_GUEST_ES_BASE + 2*n);
      Bit32u limit = VMread32(VMCS_32BIT_GUEST_ES_LIMIT + 2*n);
      Bit32u ar = VMread32(VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS + 2*n);
-     ar = vmx_from_ar_byte_rd(ar);
+     ar = vmx_unpack_ar_field(ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
      bx_bool invalid = (ar >> 16) & 1;
 
      set_segment_ar_data(&guest.sregs[n], !invalid,
@@ -1507,7 +1565,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   Bit64u ldtr_base = VMread_natural(VMCS_GUEST_LDTR_BASE);
   Bit32u ldtr_limit = VMread32(VMCS_32BIT_GUEST_LDTR_LIMIT);
   Bit32u ldtr_ar = VMread32(VMCS_32BIT_GUEST_LDTR_ACCESS_RIGHTS);
-  ldtr_ar = vmx_from_ar_byte_rd(ldtr_ar);
+  ldtr_ar = vmx_unpack_ar_field(ldtr_ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
   bx_bool ldtr_invalid = (ldtr_ar >> 16) & 1;
   if (set_segment_ar_data(&guest.ldtr, !ldtr_invalid, 
          (Bit16u) ldtr_selector, ldtr_base, ldtr_limit, (Bit16u)(ldtr_ar)))
@@ -1549,7 +1607,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   Bit64u tr_base = VMread_natural(VMCS_GUEST_TR_BASE);
   Bit32u tr_limit = VMread32(VMCS_32BIT_GUEST_TR_LIMIT);
   Bit32u tr_ar = VMread32(VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS);
-  tr_ar = vmx_from_ar_byte_rd(tr_ar);
+  tr_ar = vmx_unpack_ar_field(tr_ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
   bx_bool tr_invalid = (tr_ar >> 16) & 1;
 
 #if BX_SUPPORT_X86_64
@@ -2145,7 +2203,7 @@ void BX_CPU_C::VMexitSaveGuestState(void)
      bx_address base = BX_CPU_THIS_PTR sregs[n].cache.u.segment.base;
      Bit32u limit = BX_CPU_THIS_PTR sregs[n].cache.u.segment.limit_scaled;
      Bit32u ar = (get_descriptor_h(&BX_CPU_THIS_PTR sregs[n].cache) & 0x00f0ff00) >> 8;
-     ar = vmx_from_ar_byte_wr(ar | (invalid << 16));
+     ar = vmx_pack_ar_field(ar | (invalid << 16), BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
 
      VMwrite16(VMCS_16BIT_GUEST_ES_SELECTOR + 2*n, selector);
      VMwrite32(VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS + 2*n, ar);
@@ -2159,7 +2217,7 @@ void BX_CPU_C::VMexitSaveGuestState(void)
   bx_address ldtr_base = BX_CPU_THIS_PTR ldtr.cache.u.segment.base;
   Bit32u ldtr_limit = BX_CPU_THIS_PTR ldtr.cache.u.segment.limit_scaled;
   Bit32u ldtr_ar = (get_descriptor_h(&BX_CPU_THIS_PTR ldtr.cache) & 0x00f0ff00) >> 8;
-  ldtr_ar = vmx_from_ar_byte_wr(ldtr_ar | (ldtr_invalid << 16));
+  ldtr_ar = vmx_pack_ar_field(ldtr_ar | (ldtr_invalid << 16), BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
 
   VMwrite16(VMCS_16BIT_GUEST_LDTR_SELECTOR, ldtr_selector);
   VMwrite32(VMCS_32BIT_GUEST_LDTR_ACCESS_RIGHTS, ldtr_ar);
@@ -2172,7 +2230,7 @@ void BX_CPU_C::VMexitSaveGuestState(void)
   bx_address tr_base = BX_CPU_THIS_PTR tr.cache.u.segment.base;
   Bit32u tr_limit = BX_CPU_THIS_PTR tr.cache.u.segment.limit_scaled;
   Bit32u tr_ar = (get_descriptor_h(&BX_CPU_THIS_PTR tr.cache) & 0x00f0ff00) >> 8;
-  tr_ar = vmx_from_ar_byte_wr(tr_ar | (tr_invalid << 16));
+  tr_ar = vmx_pack_ar_field(tr_ar | (tr_invalid << 16), BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
 
   VMwrite16(VMCS_16BIT_GUEST_TR_SELECTOR, tr_selector);
   VMwrite32(VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS, tr_ar);
@@ -2262,11 +2320,10 @@ void BX_CPU_C::VMexitLoadHostState(void)
 {
   VMCS_HOST_STATE *host_state = &BX_CPU_THIS_PTR vmcs.host_state;
   bx_bool x86_64_host = 0;
-  Bit32u vmexit_ctrls = BX_CPU_THIS_PTR vmcs.vmexit_ctrls;
-
   BX_CPU_THIS_PTR tsc_offset = 0;
 
 #if BX_SUPPORT_X86_64
+  Bit32u vmexit_ctrls = BX_CPU_THIS_PTR vmcs.vmexit_ctrls;
   if (vmexit_ctrls & VMX_VMEXIT_CTRL1_HOST_ADDR_SPACE_SIZE) {
      BX_DEBUG(("VMEXIT to x86-64 host"));
      x86_64_host = 1;
@@ -2563,7 +2620,7 @@ void BX_CPU_C::VMexit(Bit32u reason, Bit64u qualification)
 // VMX instructions
 ////////////////////////////////////////////////////////////
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXON(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXON(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR cr4.get_VMXE() || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -2625,7 +2682,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXON(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXOFF(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXOFF(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -2660,7 +2717,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMXOFF(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCALL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCALL(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx)
@@ -2732,7 +2789,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCALL(bxInstruction_c *i)
   BX_NEXT_TRACE(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLAUNCH(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLAUNCH(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -2916,7 +2973,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLAUNCH(bxInstruction_c *i)
   BX_NEXT_TRACE(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMPTRLD(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMPTRLD(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -2963,7 +3020,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMPTRLD(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMPTRST(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMPTRST(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -2997,9 +3054,9 @@ Bit64u BX_CPP_AttrRegparmN(1) BX_CPU_C::vmread(unsigned encoding)
     field_64 = VMread16(encoding);
   }
   else if(width == VMCS_FIELD_WIDTH_32BIT) {
-    // the real hardware write access rights rotated
+    // the real hardware write access rights stored in packed format
     if (encoding >= VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS && encoding <= VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS)
-      field_64 = vmx_from_ar_byte_rd(VMread32(encoding));
+      field_64 = vmx_unpack_ar_field(VMread32(encoding), BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
     else
       field_64 = VMread32(encoding);
   }
@@ -3025,9 +3082,12 @@ void BX_CPP_AttrRegparmN(2) BX_CPU_C::vmwrite(unsigned encoding, Bit64u val_64)
     VMwrite16(encoding, val_32 & 0xffff);
   }
   else if(width == VMCS_FIELD_WIDTH_32BIT) {
-    // the real hardware write access rights rotated
+    // the real hardware write access rights stored in packed format
     if (encoding >= VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS && encoding <= VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS)
-      VMwrite32(encoding, vmx_from_ar_byte_wr(val_32));
+      if (BX_CPU_THIS_PTR vmcs_map->get_access_rights_format() == VMCS_AR_PACK)
+        VMwrite16(encoding, (Bit16u) vmx_pack_ar_field(val_32, VMCS_AR_PACK));
+      else
+        VMwrite32(encoding, vmx_pack_ar_field(val_32, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format()));
     else
       VMwrite32(encoding, val_32);
   }
@@ -3053,9 +3113,9 @@ Bit64u BX_CPP_AttrRegparmN(1) BX_CPU_C::vmread_shadow(unsigned encoding)
     field_64 = VMread16_Shadow(encoding);
   }
   else if(width == VMCS_FIELD_WIDTH_32BIT) {
-    // the real hardware write access rights rotated
+    // the real hardware write access rights stored in packed format
     if (encoding >= VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS && encoding <= VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS)
-      field_64 = vmx_from_ar_byte_rd(VMread32_Shadow(encoding));
+      field_64 = vmx_unpack_ar_field(VMread32_Shadow(encoding), BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
     else
       field_64 = VMread32_Shadow(encoding);
   }
@@ -3081,9 +3141,12 @@ void BX_CPP_AttrRegparmN(2) BX_CPU_C::vmwrite_shadow(unsigned encoding, Bit64u v
     VMwrite16_Shadow(encoding, val_32 & 0xffff);
   }
   else if(width == VMCS_FIELD_WIDTH_32BIT) {
-    // the real hardware write access rights rotated
+    // the real hardware write access rights stored in packed format
     if (encoding >= VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS && encoding <= VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS)
-      VMwrite32_Shadow(encoding, vmx_from_ar_byte_wr(val_32));
+      if (BX_CPU_THIS_PTR vmcs_map->get_access_rights_format() == VMCS_AR_PACK)
+        VMwrite16_Shadow(encoding, (Bit16u) vmx_pack_ar_field(val_32, VMCS_AR_PACK));
+      else
+        VMwrite32_Shadow(encoding, vmx_pack_ar_field(val_32, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format()));
     else
       VMwrite32_Shadow(encoding, val_32);
   }
@@ -3102,7 +3165,7 @@ void BX_CPP_AttrRegparmN(2) BX_CPU_C::vmwrite_shadow(unsigned encoding, Bit64u v
 
 #endif
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EdGd(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EdGd(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -3114,7 +3177,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EdGd(bxInstruction_c *i)
 #if BX_SUPPORT_VMX >= 2
     if (Vmexit_Vmread(i))
 #endif
-        VMexit_Instruction(i, VMX_VMEXIT_VMREAD, BX_READ);
+      VMexit_Instruction(i, VMX_VMEXIT_VMREAD, BX_READ);
 
     vmcs_pointer = BX_CPU_THIS_PTR vmcs.vmcs_linkptr;
   }
@@ -3162,7 +3225,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EdGd(bxInstruction_c *i)
 
 #if BX_SUPPORT_X86_64
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EqGq(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EqGq(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -3174,7 +3237,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EqGq(bxInstruction_c *i)
 #if BX_SUPPORT_VMX >= 2
     if (Vmexit_Vmread(i))
 #endif
-        VMexit_Instruction(i, VMX_VMEXIT_VMREAD, BX_READ);
+      VMexit_Instruction(i, VMX_VMEXIT_VMREAD, BX_READ);
 
     vmcs_pointer = BX_CPU_THIS_PTR vmcs.vmcs_linkptr;
   }
@@ -3227,7 +3290,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMREAD_EqGq(bxInstruction_c *i)
 
 #endif
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GdEd(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GdEd(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -3239,7 +3302,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GdEd(bxInstruction_c *i)
 #if BX_SUPPORT_VMX >= 2
     if (Vmexit_Vmwrite(i))
 #endif
-        VMexit_Instruction(i, VMX_VMEXIT_VMWRITE, BX_WRITE);
+      VMexit_Instruction(i, VMX_VMEXIT_VMWRITE, BX_WRITE);
 
     vmcs_pointer = BX_CPU_THIS_PTR vmcs.vmcs_linkptr;
   }
@@ -3297,7 +3360,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GdEd(bxInstruction_c *i)
 
 #if BX_SUPPORT_X86_64
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GqEq(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GqEq(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -3309,7 +3372,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GqEq(bxInstruction_c *i)
 #if BX_SUPPORT_VMX >= 2
     if (Vmexit_Vmwrite(i))
 #endif
-        VMexit_Instruction(i, VMX_VMEXIT_VMWRITE, BX_WRITE);
+      VMexit_Instruction(i, VMX_VMEXIT_VMWRITE, BX_WRITE);
 
     vmcs_pointer = BX_CPU_THIS_PTR vmcs.vmcs_linkptr;
   }
@@ -3373,7 +3436,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMWRITE_GqEq(bxInstruction_c *i)
 
 #endif
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCLEAR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCLEAR(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
@@ -3424,14 +3487,14 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCLEAR(bxInstruction_c *i)
 
 #if BX_CPU_LEVEL >= 6
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVEPT(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVEPT(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX >= 2
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
     exception(BX_UD_EXCEPTION, 0);
 
   if (BX_CPU_THIS_PTR in_vmx_guest) {
-    VMexit_Instruction(i, VMX_VMEXIT_INVEPT, BX_READ);
+    VMexit_Instruction(i, VMX_VMEXIT_INVEPT);
   }
 
   if (CPL != 0) {
@@ -3482,14 +3545,14 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVEPT(bxInstruction_c *i)
   BX_NEXT_TRACE(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVVPID(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVVPID(bxInstruction_c *i)
 {
 #if BX_SUPPORT_VMX >= 2
   if (! BX_CPU_THIS_PTR in_vmx || ! protected_mode() || BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_COMPAT)
     exception(BX_UD_EXCEPTION, 0);
 
   if (BX_CPU_THIS_PTR in_vmx_guest) {
-    VMexit_Instruction(i, VMX_VMEXIT_INVVPID, BX_READ);
+    VMexit_Instruction(i, VMX_VMEXIT_INVVPID);
   }
 
   if (CPL != 0) {
@@ -3562,27 +3625,29 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVVPID(bxInstruction_c *i)
   BX_NEXT_TRACE(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVPCID(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVPCID(bxInstruction_c *i)
 {
-  if (v8086_mode()) {
-    BX_ERROR(("INVPCID: #GP - not recognized in v8086 mode"));
-    exception(BX_GP_EXCEPTION, 0);
-  }
-
 #if BX_SUPPORT_VMX
-  // INVPCID will always #UD in legacy VMX mode
+  // INVPCID will always #UD in legacy VMX mode, the #UD takes priority over any other exception the instruction may incur.
   if (BX_CPU_THIS_PTR in_vmx_guest) {
     if (! SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_INVPCID)) {
        BX_ERROR(("INVPCID in VMX guest: not allowed to use instruction !"));
        exception(BX_UD_EXCEPTION, 0);
     }
-
-#if BX_SUPPORT_VMX >= 2
-    if (VMEXIT(VMX_VM_EXEC_CTRL2_INVLPG_VMEXIT)) {
-      VMexit_Instruction(i, VMX_VMEXIT_INVPCID, BX_READ);
-    }
+  }
 #endif
 
+  if (v8086_mode()) {
+    BX_ERROR(("INVPCID: #GP - not recognized in v8086 mode"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+
+#if BX_SUPPORT_VMX >= 2
+  // INVPCID will always #UD in legacy VMX mode
+  if (BX_CPU_THIS_PTR in_vmx_guest) {
+    if (VMEXIT(VMX_VM_EXEC_CTRL2_INVLPG_VMEXIT)) {
+      VMexit_Instruction(i, VMX_VMEXIT_INVPCID);
+    }
   }
 #endif
 
@@ -3656,7 +3721,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::INVPCID(bxInstruction_c *i)
 
 #endif
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::GETSEC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::GETSEC(bxInstruction_c *i)
 {
 #if BX_CPU_LEVEL >= 6
   if (! BX_CPU_THIS_PTR cr4.get_SMXE())
@@ -3728,6 +3793,7 @@ void BX_CPU_C::register_vmx_state(bx_param_c *parent)
   BXRS_HEX_PARAM_FIELD(vmexec_ctrls, vpid, BX_CPU_THIS_PTR vmcs.vpid);
   BXRS_HEX_PARAM_FIELD(vmexec_ctrls, pml_address, BX_CPU_THIS_PTR vmcs.pml_address);
   BXRS_HEX_PARAM_FIELD(vmexec_ctrls, pml_index, BX_CPU_THIS_PTR vmcs.pml_index);
+  BXRS_HEX_PARAM_FIELD(vmexec_ctrls, spptp, BX_CPU_THIS_PTR vmcs.spptp);
 #endif
 #if BX_SUPPORT_VMX >= 2
   BXRS_HEX_PARAM_FIELD(vmexec_ctrls, pause_loop_exiting_gap, BX_CPU_THIS_PTR vmcs.ple.pause_loop_exiting_gap);

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: access.cc 13155 2017-03-28 18:52:53Z sshwarts $
+// $Id: access.cc 13580 2019-10-16 20:46:00Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2005-2015  The Bochs Project
+//  Copyright (C) 2005-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -82,7 +82,7 @@ BX_CPU_C::write_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned le
     case 2: case 3: /* read/write */
       if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
         seg->cache.valid |= SegAccessROK | SegAccessWOK | SegAccessROK4G | SegAccessWOK4G;
-	break;
+        break;
       }
 
       if (offset > (seg->cache.u.segment.limit_scaled - length)
@@ -155,7 +155,7 @@ BX_CPU_C::read_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned len
     case 14: case 15: /* execute/read-only, conforming */
       if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
         seg->cache.valid |= SegAccessROK | SegAccessROK4G;
-	break;
+        break;
       }
 
       if (offset > (seg->cache.u.segment.limit_scaled - length)
@@ -222,7 +222,7 @@ BX_CPU_C::execute_virtual_checks(bx_segment_reg_t *seg, Bit32u offset, unsigned 
     case 14: case 15: /* execute/read-only, conforming */
       if (seg->cache.u.segment.limit_scaled == 0xffffffff && seg->cache.u.segment.base == 0) {
         seg->cache.valid |= SegAccessROK | SegAccessROK4G;
-    	break;
+        break;
       }
 
       if (offset > (seg->cache.u.segment.limit_scaled - length)
@@ -331,7 +331,7 @@ BX_CPU_C::system_read_word(bx_address laddr)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit16u *hostAddr = (Bit16u*) (hostPageAddr | pageOffset);
-      ReadHostWordFromLittleEndian(hostAddr, data);
+      data = ReadHostWordFromLittleEndian(hostAddr);
       BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 2, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
@@ -357,7 +357,7 @@ BX_CPU_C::system_read_dword(bx_address laddr)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit32u *hostAddr = (Bit32u*) (hostPageAddr | pageOffset);
-      ReadHostDWordFromLittleEndian(hostAddr, data);
+      data = ReadHostDWordFromLittleEndian(hostAddr);
       BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 4, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }
@@ -383,7 +383,7 @@ BX_CPU_C::system_read_qword(bx_address laddr)
       bx_hostpageaddr_t hostPageAddr = tlbEntry->hostPageAddr;
       Bit32u pageOffset = PAGE_OFFSET(laddr);
       Bit64u *hostAddr = (Bit64u*) (hostPageAddr | pageOffset);
-      ReadHostQWordFromLittleEndian(hostAddr, data);
+      data = ReadHostQWordFromLittleEndian(hostAddr);
       BX_NOTIFY_LIN_MEMORY_ACCESS(laddr, (tlbEntry->ppf | pageOffset), 8, tlbEntry->get_memtype(), BX_READ, (Bit8u*) &data);
       return data;
     }

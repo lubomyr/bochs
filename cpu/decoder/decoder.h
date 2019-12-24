@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: decoder.h 13152 2017-03-26 19:14:15Z sshwarts $
+// $Id: decoder.h 13586 2019-10-26 20:09:30Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2016  The Bochs Project
+//  Copyright (C) 2016-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@
 #define BX_X86_DECODER_H
 
 // x86 Arch features
-enum {
+enum x86_feature_name {
   BX_ISA_386 = 0,                 /* 386 or earlier instruction */
   BX_ISA_X87,                     /* FPU (X87) instruction */
   BX_ISA_486,                     /* 486 new instruction */
@@ -44,6 +44,7 @@ enum {
   BX_ISA_CLFLUSH,                 /* CLFLUSH instruction */
   BX_ISA_CLFLUSHOPT,              /* CLFLUSHOPT instruction */
   BX_ISA_CLWB,                    /* CLWB instruction */
+  BX_ISA_CLDEMOTE,                /* CLDEMOTE instruction */
   BX_ISA_SSE,                     /* SSE  instruction */
   BX_ISA_SSE2,                    /* SSE2 instruction */
   BX_ISA_SSE3,                    /* SSE3 instruction */
@@ -53,6 +54,7 @@ enum {
   BX_ISA_POPCNT,                  /* POPCNT instruction */
   BX_ISA_MONITOR_MWAIT,           /* MONITOR/MWAIT instruction */
   BX_ISA_MONITORX_MWAITX,         /* MONITORX/MWAITX instruction (AMD) */
+  BX_ISA_WAITPKG,                 /* TPAUSE/UMONITOR/UMWAIT instructions */
   BX_ISA_VMX,                     /* VMX instruction */
   BX_ISA_SMX,                     /* SMX instruction */
   BX_ISA_LONG_MODE,               /* Long Mode (x86-64) support */
@@ -66,7 +68,8 @@ enum {
   BX_ISA_XSAVEOPT,                /* XSAVEOPT instruction */
   BX_ISA_XSAVEC,                  /* XSAVEC instruction */
   BX_ISA_XSAVES,                  /* XSAVES instruction */
-  BX_ISA_AES_PCLMULQDQ,           /* AES+PCLMULQDQ instruction */
+  BX_ISA_AES_PCLMULQDQ,           /* AES+PCLMULQDQ instructions */
+  BX_ISA_VAES_VPCLMULQDQ,         /* Wide vector versions of AES+PCLMULQDQ instructions */
   BX_ISA_MOVBE,                   /* MOVBE instruction */
   BX_ISA_FSGSBASE,                /* FS/GS BASE access instruction */
   BX_ISA_INVPCID,                 /* INVPCID instruction */
@@ -89,6 +92,7 @@ enum {
   BX_ISA_SMAP,                    /* SMAP support */
   BX_ISA_RDSEED,                  /* RDSEED instruction */
   BX_ISA_SHA,                     /* SHA instruction */
+  BX_ISA_GFNI,                    /* GFNI instruction */
   BX_ISA_AVX512,                  /* AVX-512 instruction */
   BX_ISA_AVX512_CD,               /* AVX-512 Conflict Detection instruction */
   BX_ISA_AVX512_PF,               /* AVX-512 Sparse Prefetch instruction */
@@ -96,15 +100,20 @@ enum {
   BX_ISA_AVX512_DQ,               /* AVX-512DQ instruction */
   BX_ISA_AVX512_BW,               /* AVX-512 Byte/Word instruction */
   BX_ISA_AVX512_VL,               /* AVX-512 Vector Length extensions */
-  BX_ISA_AVX512_VBMI,             /* AVX-512 Vector Bit Manipulation Instructions */
+  BX_ISA_AVX512_VBMI,             /* AVX-512 VBMI : Vector Bit Manipulation Instructions */
+  BX_ISA_AVX512_VBMI2,            /* AVX-512 VBMI2 : Vector Bit Manipulation Instructions */
   BX_ISA_AVX512_IFMA52,           /* AVX-512 IFMA52 Instructions */
   BX_ISA_AVX512_VPOPCNTDQ,        /* AVX-512 VPOPCNTD/VPOPCNTQ Instructions */
+  BX_ISA_AVX512_VNNI,             /* AVX-512 VNNI Instructions */
+  BX_ISA_AVX512_BITALG,           /* AVX-512 BITALG Instructions */
+  BX_ISA_AVX512_VP2INTERSECT,     /* AVX-512 VP2INTERSECT Instructions */
   BX_ISA_XAPIC,                   /* XAPIC support */
   BX_ISA_X2APIC,                  /* X2APIC support */
   BX_ISA_XAPIC_EXT,               /* XAPIC Extensions support */
   BX_ISA_PCID,                    /* PCID pages support */
   BX_ISA_SMEP,                    /* SMEP support */
   BX_ISA_TSC_DEADLINE,            /* TSC-Deadline */
+  BX_ISA_FOPCODE_DEPRECATION,     /* FOPCODE Deprecation - FOPCODE update on unmasked x87 exception only */
   BX_ISA_FCS_FDS_DEPRECATION,     /* FCS/FDS Deprecation */
   BX_ISA_FDP_DEPRECATION,         /* FDP Deprecation - FDP update on unmasked x87 exception only */
   BX_ISA_PKU,                     /* User-Mode Protection Keys */
@@ -112,6 +121,7 @@ enum {
   BX_ISA_RDPID,                   /* RDPID Support */
   BX_ISA_TCE,                     /* Translation Cache Extensions (TCE) support (AMD) */
   BX_ISA_CLZERO,                  /* CLZERO instruction support (AMD) */
+  BX_ISA_SCA_MITIGATIONS,         /* SCA Mitigations */
   BX_ISA_EXTENSION_LAST
 };                            
 
@@ -232,6 +242,13 @@ enum BxRegs64 {
 # define BX_GENERAL_REGISTERS 8
 #endif
 
+static const unsigned BX_16BIT_REG_IP  = (BX_GENERAL_REGISTERS),
+                      BX_32BIT_REG_EIP = (BX_GENERAL_REGISTERS),
+                      BX_64BIT_REG_RIP = (BX_GENERAL_REGISTERS);
+
+static const unsigned BX_TMP_REGISTER = (BX_GENERAL_REGISTERS+1);
+static const unsigned BX_NIL_REGISTER = (BX_GENERAL_REGISTERS+2);
+
 enum OpmaskRegs {
   BX_REG_OPMASK_K0,
   BX_REG_OPMASK_K1,
@@ -242,6 +259,36 @@ enum OpmaskRegs {
   BX_REG_OPMASK_K6,
   BX_REG_OPMASK_K7
 };
+
+// AVX Registers
+enum bx_avx_vector_length {
+  BX_NO_VL,
+  BX_VL128  = 1,
+  BX_VL256  = 2,
+  BX_VL512  = 4,
+};
+
+#if BX_SUPPORT_EVEX
+#  define BX_VLMAX BX_VL512
+#else
+#  if BX_SUPPORT_AVX
+#    define BX_VLMAX BX_VL256
+#  else
+#    define BX_VLMAX BX_VL128
+#  endif
+#endif
+
+#if BX_SUPPORT_EVEX
+#  define BX_XMM_REGISTERS 32
+#else
+#  if BX_SUPPORT_X86_64
+#    define BX_XMM_REGISTERS 16
+#  else
+#    define BX_XMM_REGISTERS 8
+#  endif
+#endif
+
+static const unsigned BX_VECTOR_TMP_REGISTER = (BX_XMM_REGISTERS);
 
 #endif // BX_X86_DECODER_H
 

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_slirp.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: eth_slirp.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2014-2017  The Bochs Project
@@ -22,6 +22,11 @@
 // eth_slirp.cc  - Bochs port of Qemu's slirp implementation
 
 #define BX_PLUGGABLE
+
+#ifdef __CYGWIN__
+#define __USE_W32_SOCKETS
+#define _WIN32
+#endif
 
 #include "iodev.h"
 #include "netmod.h"
@@ -364,7 +369,11 @@ void bx_slirp_pktmover_c::rx_timer_handler(void *this_ptr)
 {
   Bit32u timeout = 0;
   int ret;
+#ifdef WIN32
+  TIMEVAL tv;
+#else
   struct timeval tv;
+#endif
 
   nfds = -1;
   FD_ZERO(&rfds);

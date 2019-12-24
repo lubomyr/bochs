@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.h 13116 2017-03-14 18:21:05Z vruppert $
+// $Id: soundwin.h 13249 2017-06-02 16:56:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2015  The Bochs Project
@@ -160,12 +160,13 @@ typedef struct {
 class bx_soundlow_waveout_win_c : public bx_soundlow_waveout_c {
 public:
   bx_soundlow_waveout_win_c();
-  virtual ~bx_soundlow_waveout_win_c();
+  virtual ~bx_soundlow_waveout_win_c() {}
 
   virtual int openwaveoutput(const char *wavedev);
   virtual int set_pcm_params(bx_pcm_param_t *param);
   virtual int get_packetsize();
   virtual int output(int length, Bit8u data[]);
+  virtual int closewaveoutput();
 private:
   HWAVEOUT hWaveOut;      // Wave output device
   int WaveOutOpen;        // is it open?

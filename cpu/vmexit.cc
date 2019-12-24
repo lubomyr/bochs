@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmexit.cc 12770 2015-05-16 21:25:43Z sshwarts $
+// $Id: vmexit.cc 13314 2017-10-19 21:27:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2015 Stanislav Shwartsman
@@ -28,6 +28,8 @@
 
 #if BX_SUPPORT_VMX
 
+#include "decoder/ia_opcodes.h"
+
 // BX_READ(0) form means nnn(), rm(); BX_WRITE(1) form means rm(), nnn()
 Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
 {
@@ -49,6 +51,15 @@ Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
         instr_info |= i->src() << 28;
       break;
 
+    case VMX_VMEXIT_RDRAND:
+    case VMX_VMEXIT_RDSEED:
+      // bits 12:11 hold operand size
+      if (i->os64L())
+        instr_info |= 1 << 12;
+      else if (i->as32L())
+        instr_info |= 1 << 11;
+      break;
+
     default:
       break;
   }
@@ -57,7 +68,8 @@ Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
   //  instruction information field format
   // --------------------------------------
   //
-  // [02:00] | Memory operand scale field (encoded)
+  // [01:00] | Memory operand scale field (encoded)
+  // [02:02] | Undefined
   // [06:03] | Reg1, undefined when memory operand
   // [09:07] | Memory operand address size
   // [10:10] | Memory/Register format (0 - mem, 1 - reg)
@@ -118,6 +130,9 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_Instruction(bxInstruction_c *i, Bit
     case VMX_VMEXIT_LDTR_TR_ACCESS:
     case VMX_VMEXIT_INVEPT:
     case VMX_VMEXIT_INVVPID:
+    case VMX_VMEXIT_INVPCID:
+    case VMX_VMEXIT_XSAVES:
+    case VMX_VMEXIT_XRSTORS:
 #endif
 #if BX_SUPPORT_X86_64
       if (long64_mode()) {
@@ -131,7 +146,10 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_Instruction(bxInstruction_c *i, Bit
         qualification = (Bit64u) ((Bit32u) i->displ32s());
         qualification &= i->asize_mask();
       }
+      // fall through
 
+    case VMX_VMEXIT_RDRAND:
+    case VMX_VMEXIT_RDSEED:
       instr_info = gen_instruction_info(i, reason, rw_form);
       VMwrite32(VMCS_32BIT_VMEXIT_INSTRUCTION_INFO, instr_info);
       break;

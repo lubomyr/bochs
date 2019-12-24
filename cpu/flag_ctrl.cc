@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: flag_ctrl.cc 11480 2012-10-03 20:24:29Z sshwarts $
+// $Id: flag_ctrl.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2012  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SAHF(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::SAHF(bxInstruction_c *i)
 {
   set_SF((AH & 0x80) >> 7);
   set_ZF((AH & 0x40) >> 6);
@@ -35,28 +35,28 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SAHF(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::LAHF(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LAHF(bxInstruction_c *i)
 {
   AH = read_eflags() & 0xFF;
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CLC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::CLC(bxInstruction_c *i)
 {
   clear_CF();
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::STC(bxInstruction_c *i)
 {
   assert_CF();
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CLI(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::CLI(bxInstruction_c *i)
 {
   Bit32u IOPL = BX_CPU_THIS_PTR get_IOPL();
 
@@ -98,7 +98,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CLI(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STI(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::STI(bxInstruction_c *i)
 {
   Bit32u IOPL = BX_CPU_THIS_PTR get_IOPL();
 
@@ -147,28 +147,28 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STI(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CLD(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::CLD(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR clear_DF();
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STD(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::STD(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR assert_DF();
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CMC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::CMC(bxInstruction_c *i)
 {
   set_CF(! get_CF());
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fw(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fw(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -202,7 +202,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fw(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fw(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fw(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -266,7 +266,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fw(bxInstruction_c *i)
 
 #if BX_CPU_LEVEL >= 3
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fd(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fd(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -285,7 +285,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fd(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fd(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fd(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -303,7 +303,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fd(bxInstruction_c *i)
 
   RSP_SPECULATIVE;
 
-  Bit32u flags32 = pop_32();
+  // RF is always zero after the execution of POPF.
+  Bit32u flags32 = pop_32() & ~EFlagsRFMask;
 
   if (protected_mode()) {
     // IOPL changed only if (CPL == 0),
@@ -335,7 +336,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fd(bxInstruction_c *i)
 }
 
 #if BX_SUPPORT_X86_64
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fq(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fq(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -349,7 +350,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::PUSHF_Fq(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fq(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fq(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
@@ -365,7 +366,8 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fq(bxInstruction_c *i)
 
   BX_ASSERT (protected_mode());
 
-  Bit32u eflags32 = (Bit32u) pop_64();
+  // RF is always zero after the execution of POPF.
+  Bit32u eflags32 = (Bit32u) pop_64() & ~EFlagsRFMask;
 
   if (CPL==0)
     changeMask |= EFlagsIOPLMask;
@@ -381,7 +383,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::POPF_Fq(bxInstruction_c *i)
 
 #endif  // BX_CPU_LEVEL >= 3
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SALC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::SALC(bxInstruction_c *i)
 {
   if (get_CF()) {
     AL = 0xff;
@@ -393,7 +395,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::SALC(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STAC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::STAC(bxInstruction_c *i)
 {
   if (CPL != 0) {
     BX_ERROR(("STAC is not recognized when CPL != 0"));
@@ -405,7 +407,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::STAC(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::CLAC(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::CLAC(bxInstruction_c *i)
 {
   if (CPL != 0) {
     BX_ERROR(("CLAC is not recognized when CPL != 0"));

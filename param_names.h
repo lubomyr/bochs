@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: param_names.h 13071 2017-02-14 20:11:58Z vruppert $
+// $Id: param_names.h 13506 2018-05-11 07:44:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2017  The Bochs Project
+//  Copyright (C) 2009-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,7 @@
 #define BXPN_RESTORE_PATH                "general.restore_path"
 #define BXPN_DEBUG_RUNNING               "general.debug_running"
 #define BXPN_PLUGIN_CTRL                 "general.plugin_ctrl"
+#define BXPN_UNLOCK_IMAGES               "general.unlock_images"
 #define BXPN_CPU_NPROCESSORS             "cpu.n_processors"
 #define BXPN_CPU_NCORES                  "cpu.n_cores"
 #define BXPN_CPU_NTHREADS                "cpu.n_threads"
@@ -122,10 +123,12 @@
 #define BXPN_BOOTDRIVE2                  "boot_params.boot_drive2"
 #define BXPN_BOOTDRIVE3                  "boot_params.boot_drive3"
 #define BXPN_FLOPPYSIGCHECK              "boot_params.floppy_sig_check"
+#if BX_LOAD32BITOSHACK
 #define BXPN_LOAD32BITOS_WHICH           "boot_params.load32bitos.which"
 #define BXPN_LOAD32BITOS_PATH            "boot_params.load32bitos.path"
 #define BXPN_LOAD32BITOS_IOLOG           "boot_params.load32bitos.iolog"
 #define BXPN_LOAD32BITOS_INITRD          "boot_params.load32bitos.initrd"
+#endif
 #define BXPN_FLOPPYA                     "floppy.0"
 #define BXPN_FLOPPYA_DEVTYPE             "floppy.0.devtype"
 #define BXPN_FLOPPYA_PATH                "floppy.0.path"

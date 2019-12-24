@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: carbon.cc 13042 2017-01-15 11:44:43Z vruppert $
+// $Id: carbon.cc 13606 2019-11-14 10:34:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -432,7 +432,7 @@ pascal OSStatus CEvtHandleApplicationMenus (EventHandlerCallRef nextHandler,
       DialogItemIndex index;
       CFStringRef     cf_version;
       char            version[256];
-      sprintf(version, "Bochs x86 Emulator version %s (MacOS X port)", VER_STRING);
+      sprintf(version, "Bochs x86 Emulator version %s (MacOS X port)", VERSION);
       cf_version = CFStringCreateWithCString(NULL, version, kCFStringEncodingASCII);
 
       AlertStdCFStringAlertParamRec aboutParam = {0};

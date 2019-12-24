@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bootp.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: bootp.cc 13203 2017-04-21 15:28:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * BOOTP/DHCP server (ported from Qemu)
@@ -444,7 +444,7 @@ static void bootp_reply(Slirp *slirp, const struct bootp_t *bp)
     } else {
         static const char nak_msg[] = "requested address not available";
 
-        DPRINTF("nak'ed addr=%08x\n", ntohl(preq_addr.s_addr));
+        DPRINTF("nak'ed addr=%08x\n", ntohl(dhcp_opts.req_addr.s_addr));
 
         *q++ = RFC2132_MSG_TYPE;
         *q++ = 1;

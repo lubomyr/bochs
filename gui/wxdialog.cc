@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxdialog.cc 13010 2016-12-28 15:06:34Z vruppert $
+// $Id: wxdialog.cc 13588 2019-11-02 19:30:39Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2016  The Bochs Project
+//  Copyright (C) 2002-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,10 @@
 #include "bxversion.h"           // get version string
 #include "wxdialog.h"            // custom dialog boxes
 #include "wxmain.h"              // wxwidgets shared stuff
+
+#if !defined(wxADJUST_MINSIZE)
+#define wxADJUST_MINSIZE 0
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // constants, prototypes
@@ -684,8 +688,8 @@ ParamDialog::ParamDialog(
 ParamDialog::~ParamDialog()
 {
   paramHash->BeginFind();
-  wxNode *node;
-  while ((node = (wxNode*)paramHash->Next()) != NULL) {
+  wxHashTable::Node *node;
+  while ((node = paramHash->Next()) != NULL) {
     // assume that no ParamStruct appears in the hash table under multiple
     // keys.  If so, we will delete it twice and corrupt memory.
     ParamStruct *pstr = (ParamStruct*) node->GetData();
@@ -873,6 +877,7 @@ void ParamDialog::AddParam(
         break;
       }
     case BXT_PARAM_STRING:
+    case BXT_PARAM_BYTESTRING:
       {
         bx_param_string_c *param = (bx_param_string_c*) param_generic;
         char value[1024];
@@ -880,9 +885,9 @@ void ParamDialog::AddParam(
         bool isFilename = param->get_options() & param->IS_FILENAME;
         wxTextCtrl *txtctrl = new wxTextCtrl(context->parent, pstr->id, wxT(""), wxDefaultPosition, isFilename? longTextSize : normalTextSize);
         if (description) txtctrl->SetToolTip(wxString(description, wxConvUTF8));
-        param->sprint(value, 1024, 0);
+        param->dump_param(value, 1024);
         txtctrl->SetValue(wxString(value, wxConvUTF8));
-        if ((param->get_options() & param->RAW_BYTES) == 0) {
+        if (type != BXT_PARAM_BYTESTRING) {
           txtctrl->SetMaxLength(param->get_maxsize());
         }
         sizer->Add(txtctrl, 0, wxALL, 2);
@@ -1021,8 +1026,8 @@ bool ParamDialog::CopyGuiToParam()
   }
   // loop through all the parameters
   idHash->BeginFind();
-  wxNode *node;
-  while ((node = (wxNode*)idHash->Next()) != NULL) {
+  wxHashTable::Node *node;
+  while ((node = idHash->Next()) != NULL) {
     ParamStruct *pstr = (ParamStruct*) node->GetData();
     wxLogDebug(wxT("commit changes for param %s"), pstr->param->get_name());
     CopyGuiToParam(pstr->param);
@@ -1079,31 +1084,20 @@ bool ParamDialog::CopyGuiToParam(bx_param_c *param)
       bx_param_string_c *stringp = (bx_param_string_c*) pstr->param;
       char buf[1024];
       wxString tmp(pstr->u.text->GetValue());
-      if (stringp->get_options() & stringp->RAW_BYTES) {
-        char src[1024];
-        int p = 0;
-        unsigned int n;
-        strcpy(src, tmp.mb_str(wxConvUTF8));
-        for (i=0; i<stringp->get_maxsize(); i++)
-          buf[i] = 0;
-        for (i=0; i<stringp->get_maxsize(); i++) {
-          while (src[p] == stringp->get_separator())
-            p++;
-          if (src[p] == 0) break;
-          // try to read a byte of hex
-          if (sscanf(src+p, "%02x", &n) == 1) {
-            buf[i] = n;
-            p+=2;
-          } else {
-            wxMessageBox(wxT("Illegal raw byte format"), wxT("Error"), wxOK | wxICON_ERROR, this);
-            return false;
-          }
-        }
-      } else {
-        strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf));
-      }
+      strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf));
       buf[sizeof(buf)-1] = 0;
       if (!stringp->equals(buf)) stringp->set(buf);
+      break;
+    }
+    case BXT_PARAM_BYTESTRING: {
+      bx_param_bytestring_c *stringp = (bx_param_bytestring_c*) pstr->param;
+      wxString tmp(pstr->u.text->GetValue());
+      char src[1024];
+      strcpy(src, tmp.mb_str(wxConvUTF8));
+      if (!stringp->parse_param(src)) {
+        wxMessageBox(wxT("Illegal raw byte format"), wxT("Error"), wxOK | wxICON_ERROR, this);
+        return false;
+      }
       break;
     }
     case BXT_LIST: {
@@ -1123,8 +1117,8 @@ bool ParamDialog::CopyGuiToParam(bx_param_c *param)
 void ParamDialog::EnableChanged()
 {
   idHash->BeginFind();
-  wxNode *node;
-  while ((node = (wxNode*)idHash->Next()) != NULL) {
+  wxHashTable::Node *node;
+  while ((node = idHash->Next()) != NULL) {
     ParamStruct *pstr = (ParamStruct*) node->GetData();
     if (runtime) {
       if ((pstr->param->get_type() != BXT_LIST) && !pstr->param->get_runtime_param())
@@ -1180,7 +1174,8 @@ void ParamDialog::ProcessDependentList(ParamStruct *pstrChanged, bool enabled)
       }
     } else if ((pstrChanged->param->get_type() == BXT_PARAM_BOOL) ||
                (pstrChanged->param->get_type() == BXT_PARAM_NUM) ||
-               (pstrChanged->param->get_type() == BXT_PARAM_STRING)) {
+               (pstrChanged->param->get_type() == BXT_PARAM_STRING) ||
+               (pstrChanged->param->get_type() == BXT_PARAM_BYTESTRING)) {
       bx_param_c *param = pstrChanged->param;
       if (param->get_type() == BXT_PARAM_BOOL) {
         value = pstrChanged->u.checkbox->GetValue();
@@ -1218,8 +1213,8 @@ void ParamDialog::CopyParamToGui()
 {
   // loop through all the parameters
   idHash->BeginFind();
-  wxNode *node;
-  while ((node = (wxNode*)idHash->Next()) != NULL) {
+  wxHashTable::Node *node;
+  while ((node = idHash->Next()) != NULL) {
     ParamStruct *pstr = (ParamStruct*) node->GetData();
     IFDBG_DLG(wxLogDebug(wxT("refresh param %s"), pstr->param->get_name()));
     int type = pstr->param->get_type();
@@ -1242,7 +1237,8 @@ void ParamDialog::CopyParamToGui()
         pstr->u.choice->SetSelection(enump->get() - enump->get_min());
         break;
         }
-      case BXT_PARAM_STRING: {
+      case BXT_PARAM_STRING:
+      case BXT_PARAM_BYTESTRING: {
         bx_param_string_c *stringp = (bx_param_string_c*) pstr->param;
         pstr->u.text->SetValue(wxString(stringp->getptr(), wxConvUTF8));
         break;
@@ -1271,6 +1267,7 @@ void ParamDialog::OnEvent(wxCommandEvent& event)
         case BXT_PARAM_NUM:
         case BXT_PARAM_ENUM:
         case BXT_PARAM_STRING:
+        case BXT_PARAM_BYTESTRING:
           EnableChanged(pstr);
           break;
       }

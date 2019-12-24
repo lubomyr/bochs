@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32dialog.cc 13030 2017-01-10 21:40:05Z vruppert $
+// $Id: win32dialog.cc 13438 2018-01-19 20:27:04Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003-2017  The Bochs Project
@@ -623,7 +623,7 @@ BxEvent* win32_notify_callback(void *unused, BxEvent *event)
       return event;
     case BX_SYNC_EVT_ASK_PARAM:
       param = event->u.param.param;
-      if (param->get_type() == BXT_PARAM_STRING) {
+      if (param->get_type() == BXT_PARAM_STRING || param->get_type() == BXT_PARAM_BYTESTRING) {
         sparam = (bx_param_string_c *)param;
         opts = sparam->get_options();
         if (opts & sparam->IS_FILENAME) {
@@ -691,8 +691,10 @@ static int win32_ci_callback(void *userdata, ci_command_t command)
 #endif
           return -1;
         }
+#if BX_USE_TEXTCONFIG
       } else {
         bx_text_config_interface(BX_CI_RUNTIME);
+#endif
       }
       break;
     case CI_SHUTDOWN:

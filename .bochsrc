@@ -88,7 +88,10 @@
 #display_library: sdl2, options="fullscreen" # startup in fullscreen mode
 #display_library: term
 #display_library: vncsrv
-#display_library: win32
+# "traphotkeys" - system hotkeys not handled by host OS, but sent to guest
+#                 (win32 in mouse capture and fullscreen mode: alt-tab, win,
+#                 alt-space, alt-esc, ctrl-esc)
+#display_library: win32, options="traphotkeys"
 #display_library: wx
 #display_library: x
 
@@ -407,19 +410,20 @@ vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest
 #   EXTENSION
 #     Here you can specify the display extension to be used. With the value
 #     'none' you can use standard VGA with no extension. Other supported
-#     values are 'vbe' for Bochs VBE and 'cirrus' for Cirrus SVGA support.
+#     values are 'vbe' for Bochs VBE, 'cirrus' for Cirrus SVGA support and
+#     'voodoo' for Voodoo Graphics support (see 'voodoo' option).
 #
 #   UPDATE_FREQ
 #     This parameter specifies the number of display updates per second.
-#     The VGA update timer now uses the realtime engine and the default
-#     value is 5. This parameter can be changed at runtime.
+#     The VGA update timer by default uses the realtime engine with a value
+#     of 5. This parameter can be changed at runtime.
 #
 #   REALTIME
-#     If set to 1, the VGA timer is based on realtime, otherwise it is based
-#     on the ips setting. If the host is slow (low ips, update_freq) and the
-#     guest uses HLT appropriately, setting this to 0 and "clock: sync=none"
-#     may improve the responsiveness of the guest GUI when the guest is
-#     otherwise idle. The default value is 1.
+#     If set to 1 (default), the VGA timer is based on realtime, otherwise it
+#     is driven by the cpu and depends on the ips setting. If the host is slow
+#     (low ips, update_freq) and the guest uses HLT appropriately, setting this
+#     to 0 and "clock: sync=none" may improve the responsiveness of the guest
+#     GUI when the guest is otherwise idle.
 #
 # Examples:
 #   vga: extension=cirrus, update_freq=10
@@ -429,11 +433,16 @@ vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest
 #=======================================================================
 # VOODOO:
 # This defines the Voodoo Graphics emulation (experimental). Currently
-# supported models are 'voodoo1' and 'voodoo2'. The Voodoo2 support is
-# not yet complete.
+# supported models are 'voodoo1', 'voodoo2', 'banshee' and 'voodoo3'. The
+# Voodoo2 support is not yet complete, but almost usable. The Banshee and
+# Voodoo3 support is under construction, but basicly usable. The 2D/3D cards
+# require an external VGA BIOS the vga extension option to be set to 'voodoo'.
+# If the i440BX PCI chipset is selected, they can be assigned to AGP (slot #5).
+# The gui screen update timing for all models is controlled by the related 'vga'
+# options.
 #
 # Examples:
-#   voodoo: enabled=1, model=voodoo1
+#   voodoo: enabled=1, model=voodoo2
 #=======================================================================
 #voodoo: enabled=1, model=voodoo1
 
@@ -518,13 +527,15 @@ mouse: enabled=0
 
 #=======================================================================
 # PCI:
-# This option controls the presence of a PCI chipset in Bochs. Currently it only
-# supports the i430FX and i440FX chipsets. You can also specify the devices
-# connected to PCI slots. Up to 5 slots are available. For these combined PCI/ISA
-# devices assigning to slot is mandatory if you want to emulate the PCI model:
-# cirrus, ne2k and pcivga. These PCI-only devices are also supported, but they
-# are auto-assigned if you don't use the slot configuration: e1000, es1370,
-# pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci and voodoo.
+# This option controls the presence of a PCI chipset in Bochs. Currently it
+# supports the i430FX, i440FX and i440BX chipsets. You can also specify the
+# devices connected to PCI slots. Up to 5 slots are available. For these
+# combined PCI/ISA devices assigning to slot is mandatory if you want to emulate
+# the PCI model: cirrus, ne2k and pcivga. These PCI-only devices are also
+# supported, but they are auto-assigned if you don't use the slot configuration:
+# e1000, es1370, pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci and voodoo.
+# In case of the i440BX chipset, slot #5 is the AGP slot. Currently only the
+# 'voodoo' device can be assigned to AGP.
 #
 # Example:
 #   pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
@@ -1123,6 +1134,7 @@ speaker: enabled=1, mode=sound
 #usb_uhci: enabled=1, port1=mouse, port2=disk:usbstick.img
 #usb_uhci: enabled=1, port1=hub:7, port2=disk:growing:usbdisk.img
 #usb_uhci: enabled=1, port2=disk:undoable:usbdisk.img, options2=journal:redo.log
+#usb_uhci: enabled=1, port2=disk:usbdisk2.img, options2=sect_size:1024
 #usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2="debug,speed:full"
 #usb_uhci: enabled=1, port1=printer:printdata.bin, port2=cdrom:image.iso
 #usb_uhci: enabled=1, port2=floppy:vvfat:diskette, options2="model:teac"
@@ -1216,6 +1228,7 @@ speaker: enabled=1, mode=sound
 # other stuff
 #=======================================================================
 # WARNING: This Bochs feature is not maintained yet. Is it still used ?
+# To use it, set BX_LOAD32BITOSHACK in config.h to 1 and recompile Bochs.
 #load32bitOSImage: os=nullkernel, path=../kernel.img, iolog=../vga_io.log
 #load32bitOSImage: os=linux, path=../linux.img, iolog=../vga_io.log, initrd=../initrd.img
 

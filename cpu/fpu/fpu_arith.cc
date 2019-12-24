@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fpu_arith.cc 12769 2015-05-16 21:06:59Z sshwarts $
+// $Id: fpu_arith.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2003-2015 Stanislav Shwartsman
+//   Copyright (c) 2003-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -163,7 +163,7 @@ int FPU_handle_NaN(floatx80 a, float64 b, floatx80 &r, float_status_t &status)
   return 0;
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -172,7 +172,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -184,13 +184,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_add(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -201,7 +201,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -213,7 +213,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_add(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -222,7 +222,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -234,7 +234,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_SINGLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -245,13 +245,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_SINGLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_add(a, float32_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -263,7 +263,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_DOUBLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -274,13 +274,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FADD_DOUBLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_add(a, float64_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -292,7 +292,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_WORD_INTEGER(bxInstruction_c
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -304,13 +304,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_WORD_INTEGER(bxInstruction_c
 
   floatx80 result = floatx80_add(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -322,7 +322,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_DWORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -334,13 +334,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIADD_DWORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_add(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -349,7 +349,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -361,13 +361,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_mul(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -378,7 +378,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -390,7 +390,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_mul(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -399,7 +399,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -411,7 +411,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_SINGLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -422,13 +422,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_SINGLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_mul(a, float32_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -440,7 +440,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_DOUBLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -451,13 +451,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FMUL_DOUBLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_mul(a, float64_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -469,7 +469,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_WORD_INTEGER(bxInstruction_c
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -481,13 +481,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_WORD_INTEGER(bxInstruction_c
 
   floatx80 result = floatx80_mul(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -499,7 +499,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_DWORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -511,13 +511,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIMUL_DWORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_mul(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -526,7 +526,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -538,13 +538,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -553,7 +553,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -565,13 +565,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -582,7 +582,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -594,7 +594,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -603,7 +603,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -614,7 +614,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -626,7 +626,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -635,7 +635,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -647,7 +647,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_SINGLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -658,13 +658,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_SINGLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_sub(a, float32_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -676,7 +676,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_SINGLE_REAL(bxInstruction_c 
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -687,13 +687,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_SINGLE_REAL(bxInstruction_c 
   if (! FPU_handle_NaN(b, load_reg, result, status))
      result = floatx80_sub(float32_to_floatx80(load_reg, status), b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -705,7 +705,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_DOUBLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -716,13 +716,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUB_DOUBLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_sub(a, float64_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -734,7 +734,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_DOUBLE_REAL(bxInstruction_c 
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -746,13 +746,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSUBR_DOUBLE_REAL(bxInstruction_c 
   if (! FPU_handle_NaN(b, load_reg, result, status))
      result = floatx80_sub(float64_to_floatx80(load_reg, status), b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -764,7 +764,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_WORD_INTEGER(bxInstruction_c
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -776,13 +776,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_WORD_INTEGER(bxInstruction_c
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -794,7 +794,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_WORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -806,13 +806,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_WORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -824,7 +824,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_DWORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -833,13 +833,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUB_DWORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_sub(BX_READ_FPU_REG(0), int32_to_floatx80(load_reg), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -851,7 +851,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_DWORD_INTEGER(bxInstruction
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -863,13 +863,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FISUBR_DWORD_INTEGER(bxInstruction
 
   floatx80 result = floatx80_sub(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -878,7 +878,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -890,13 +890,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -905,7 +905,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_ST0_STj(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src()))
   {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -917,13 +917,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_ST0_STj(bxInstruction_c *i)
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -934,7 +934,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -946,7 +946,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -955,7 +955,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_STi_ST0(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_STi_ST0(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -966,7 +966,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_STi_ST0(bxInstruction_c *i)
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->dst()))
   {
-     FPU_stack_underflow(i->dst(), pop_stack);
+     FPU_stack_underflow(i, i->dst(), pop_stack);
      BX_NEXT_INSTR(i);
   }
 
@@ -978,7 +978,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_STi_ST0(bxInstruction_c *i)
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags)) {
+  if (! FPU_exception(i, status.float_exception_flags)) {
      BX_WRITE_FPU_REG(result, i->dst());
      if (pop_stack)
         BX_CPU_THIS_PTR the_i387.FPU_pop();
@@ -987,7 +987,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_STi_ST0(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -999,7 +999,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_SINGLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1010,13 +1010,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_SINGLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_div(a, float32_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_SINGLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_SINGLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1028,7 +1028,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_SINGLE_REAL(bxInstruction_c 
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1039,13 +1039,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_SINGLE_REAL(bxInstruction_c 
   if (! FPU_handle_NaN(b, load_reg, result, status))
      result = floatx80_div(float32_to_floatx80(load_reg, status), b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1057,7 +1057,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_DOUBLE_REAL(bxInstruction_c *
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1068,13 +1068,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIV_DOUBLE_REAL(bxInstruction_c *
   if (! FPU_handle_NaN(a, load_reg, result, status))
      result = floatx80_div(a, float64_to_floatx80(load_reg, status), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_DOUBLE_REAL(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_DOUBLE_REAL(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1086,7 +1086,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_DOUBLE_REAL(bxInstruction_c 
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1097,13 +1097,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDIVR_DOUBLE_REAL(bxInstruction_c 
   if (! FPU_handle_NaN(b, load_reg, result, status))
      result = floatx80_div(float64_to_floatx80(load_reg, status), b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1115,7 +1115,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_WORD_INTEGER(bxInstruction_c
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1127,13 +1127,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_WORD_INTEGER(bxInstruction_c
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_WORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_WORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1145,7 +1145,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_WORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1157,13 +1157,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_WORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1175,7 +1175,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_DWORD_INTEGER(bxInstruction_
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1187,13 +1187,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIV_DWORD_INTEGER(bxInstruction_
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_DWORD_INTEGER(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_DWORD_INTEGER(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
 
@@ -1205,7 +1205,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_DWORD_INTEGER(bxInstruction
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1217,13 +1217,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FIDIVR_DWORD_INTEGER(bxInstruction
 
   floatx80 result = floatx80_div(a, b, status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSQRT(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FSQRT(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -1231,7 +1231,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSQRT(bxInstruction_c *i)
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1240,14 +1240,14 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FSQRT(bxInstruction_c *i)
 
   floatx80 result = floatx80_sqrt(BX_READ_FPU_REG(0), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);
 }
 
 /* D9 FC */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FRNDINT(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FRNDINT(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -1255,7 +1255,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FRNDINT(bxInstruction_c *i)
   clear_C1();
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
      BX_NEXT_INSTR(i);
   }
 
@@ -1264,7 +1264,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FRNDINT(bxInstruction_c *i)
 
   floatx80 result = floatx80_round_to_int(BX_READ_FPU_REG(0), status);
 
-  if (! FPU_exception(status.float_exception_flags))
+  if (! FPU_exception(i, status.float_exception_flags))
      BX_WRITE_FPU_REG(result, 0);
 
   BX_NEXT_INSTR(i);

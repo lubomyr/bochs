@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dis_tables_avx.inc 11878 2013-10-11 20:09:51Z sshwarts $
+// $Id: dis_tables_avx.inc 13416 2017-12-28 20:20:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011 Stanislav Shwartsman
@@ -247,6 +247,11 @@ static BxDisasmOpcodeTable_t BxDisasmGroupAVX_0f70[4] = {
   /* 66 */ { 0, &Ia_vpshufd_Vdq_Hdq_Wdq_Ib },
   /* F3 */ { 0, &Ia_vpshufhw_Vdq_Hdq_Wdq_Ib },
   /* F2 */ { 0, &Ia_vpshuflw_Vdq_Hdq_Wdq_Ib }
+};
+
+static BxDisasmOpcodeTable_t BxDisasmGrpVexL_0f77[4] = {
+  /* 128 */ { GRPSSENONE(Ia_vzeroupper) },
+  /* 256 */ { GRPSSENONE(Ia_vzeroall) }
 };
 
 static BxDisasmOpcodeTable_t BxDisasmGroupAVX_0f7c[4] = {
@@ -822,7 +827,7 @@ static BxDisasmOpcodeTable_t BxDisasmOpcodesAVX[256*3] = {
   /* 74 */ { GRPSSE66(Ia_vpcmpeqb_Vdq_Hdq_Wdq) },
   /* 75 */ { GRPSSE66(Ia_vpcmpeqw_Vdq_Hdq_Wdq) },
   /* 76 */ { GRPSSE66(Ia_vpcmpeqd_Vdq_Hdq_Wdq) },
-  /* 77 */ { GRPSSENONE(Ia_vzeroupper) },
+  /* 77 */ { GRPVEXL(0f77) },
   /* 78 */ { 0, &Ia_Invalid },
   /* 79 */ { 0, &Ia_Invalid },
   /* 7A */ { 0, &Ia_Invalid },

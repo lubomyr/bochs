@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: plugin.h 13167 2017-03-31 21:32:58Z vruppert $
+// $Id: plugin.h 13504 2018-05-10 10:50:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -62,7 +62,6 @@ extern "C" {
 #define BX_PLUGIN_NE2K      "ne2k"
 #define BX_PLUGIN_EXTFPUIRQ "extfpuirq"
 #define BX_PLUGIN_PCIDEV    "pcidev"
-#define BX_PLUGIN_USB_COMMON "usb_common"
 #define BX_PLUGIN_USB_UHCI  "usb_uhci"
 #define BX_PLUGIN_USB_OHCI  "usb_ohci"
 #define BX_PLUGIN_USB_EHCI  "usb_ehci"
@@ -74,6 +73,7 @@ extern "C" {
 #define BX_PLUGIN_ACPI      "acpi"
 #define BX_PLUGIN_IODEBUG   "iodebug"
 #define BX_PLUGIN_IOAPIC    "ioapic"
+#define BX_PLUGIN_HPET      "hpet"
 #define BX_PLUGIN_VOODOO    "voodoo"
 
 
@@ -88,11 +88,14 @@ extern "C" {
 #define PLUG_load_opt_plugin(name) bx_load_plugin(name,PLUGTYPE_OPTIONAL)
 #define PLUG_load_snd_plugin(name) bx_load_plugin(name,PLUGTYPE_SOUND)
 #define PLUG_load_net_plugin(name) bx_load_plugin(name,PLUGTYPE_NETWORK)
+#define PLUG_load_usb_plugin(name) bx_load_plugin(name,PLUGTYPE_USBDEV)
+#define PLUG_load_vga_plugin(name) bx_load_plugin(name,PLUGTYPE_VGA)
 #define PLUG_load_user_plugin(name) {bx_load_plugin(name,PLUGTYPE_USER);}
 #define PLUG_unload_plugin(name) {bx_unload_plugin(#name,1);}
 #define PLUG_unload_opt_plugin(name) bx_unload_plugin(name,1)
 #define PLUG_unload_snd_plugin(name) bx_unload_plugin(name,0)
 #define PLUG_unload_net_plugin(name) bx_unload_plugin(name,0)
+#define PLUG_unload_usb_plugin(name) bx_unload_plugin(name,0)
 #define PLUG_unload_user_plugin(name) {bx_unload_plugin(name,1);}
 
 #define DEV_register_ioread_handler(b,c,d,e,f)  pluginRegisterIOReadHandler(b,c,d,e,f)
@@ -118,6 +121,8 @@ extern "C" {
 #define PLUG_load_opt_plugin(name) bx_load_plugin2(name,PLUGTYPE_OPTIONAL)
 #define PLUG_load_snd_plugin(name) bx_load_plugin2(name,PLUGTYPE_SOUND)
 #define PLUG_load_net_plugin(name) bx_load_plugin2(name,PLUGTYPE_NETWORK)
+#define PLUG_load_usb_plugin(name) bx_load_plugin2(name,PLUGTYPE_USBDEV)
+#define PLUG_load_vga_plugin(name) bx_load_plugin2(name,PLUGTYPE_VGA)
 #define PLUG_unload_plugin(name) {lib##name##_LTX_plugin_fini();}
 #define PLUG_unload_opt_plugin(name) bx_unload_opt_plugin(name,1);
 
@@ -161,12 +166,16 @@ extern "C" {
 #define DEV_cmos_get_reg(a) (bx_devices.pluginCmosDevice->get_reg(a))
 #define DEV_cmos_set_reg(a,b) (bx_devices.pluginCmosDevice->set_reg(a,b))
 #define DEV_cmos_checksum() (bx_devices.pluginCmosDevice->checksum_cmos())
+#define DEV_cmos_enable_irq(a) (bx_devices.pluginCmosDevice->enable_irq(a))
+
+///////// PIT macro
+#define DEV_pit_enable_irq(a) (bx_devices.pluginPitDevice->enable_irq(a))
 
 ///////// keyboard macros
 #define DEV_kbd_gen_scancode(key) (bx_devices.gen_scancode(key))
 #define DEV_kbd_paste_bytes(bytes, count) \
     (bx_devices.pluginKeyboard->paste_bytes(bytes,count))
-#define DEV_kbd_release_keys() (bx_devices.pluginKeyboard->release_keys())
+#define DEV_kbd_release_keys() (bx_devices.release_keys())
 
 ///////// mouse macros
 #define DEV_mouse_enabled_changed(en) (bx_devices.mouse_enabled_changed(en))
@@ -220,7 +229,7 @@ extern "C" {
 #define DEV_vga_mem_read(addr) (bx_devices.pluginVgaDevice->mem_read(addr))
 #define DEV_vga_mem_write(addr, val) (bx_devices.pluginVgaDevice->mem_write(addr, val))
 #define DEV_vga_redraw_area(left, top, right, bottom) \
-  (bx_devices.pluginVgaDevice->redraw_area(left, top, right, bottom))
+  (bx_devices.pluginVgaDevice->vga_redraw_area(left, top, right, bottom))
 #define DEV_vga_get_text_snapshot(rawsnap, height, width) \
   (bx_devices.pluginVgaDevice->get_text_snapshot(rawsnap, height, width))
 #define DEV_vga_refresh(a) \
@@ -229,7 +238,9 @@ extern "C" {
 
 ///////// PCI macros
 #define DEV_register_pci_handlers(a,b,c,d) \
-  (bx_devices.register_pci_handlers(a,b,c,d))
+  (bx_devices.register_pci_handlers(a,b,c,d,0))
+#define DEV_register_pci_handlers2(a,b,c,d,e) \
+  (bx_devices.register_pci_handlers(a,b,c,d,e))
 #define DEV_pci_get_confAddr() bx_devices.pci_get_confAddr()
 #define DEV_pci_set_irq(a,b,c) bx_devices.pluginPci2IsaBridge->pci_set_irq(a,b,c)
 #define DEV_pci_set_base_mem(a,b,c,d,e,f) \
@@ -245,6 +256,7 @@ extern "C" {
 ///////// Speaker macros
 #define DEV_speaker_beep_on(frequency) bx_devices.pluginSpeaker->beep_on(frequency)
 #define DEV_speaker_beep_off() bx_devices.pluginSpeaker->beep_off()
+#define DEV_speaker_set_line(a) bx_devices.pluginSpeaker->set_line(a)
 
 ///////// Memory macros
 #define DEV_register_memory_handlers(param,rh,wh,b,e) \
@@ -255,9 +267,8 @@ extern "C" {
     bx_devices.mem->set_memory_type((memory_area_t)a,b,c)
 #define DEV_mem_set_bios_write(a) bx_devices.mem->set_bios_write(a)
 
-///////// USB device macros
-#define DEV_usb_init_device(a,b,c,d) (usbdev_type)bx_devices.pluginUsbDevCtl->init_device(a,b,(void**)c,d)
-#define DEV_usb_send_msg(a,b) bx_devices.pluginUsbDevCtl->usb_send_msg((void*)a,b)
+///////// USB device macro
+#define DEV_usb_init_device(a,b,c,d) (usbdev_type)bx_usbdev_ctl.init_device(a,b,(void**)c,d)
 
 ///////// Sound module macros
 #define DEV_sound_get_waveout(a) (bx_soundmod_ctl.get_waveout(a))
@@ -269,7 +280,11 @@ extern "C" {
   ((eth_pktmover_c*)bx_netmod_ctl.init_module(a,(void*)b,(void*)c,d))
 
 ///////// Gameport macro
+#if BX_SUPPORT_GAMEPORT
 #define DEV_gameport_set_enabled(a) bx_devices.pluginGameport->set_enabled(a)
+#else
+#define DEV_gameport_set_enabled(a) BX_ERROR(("gameport emulation not present"))
+#endif
 
 
 #if BX_HAVE_DLFCN_H
@@ -371,6 +386,9 @@ int plugin_init(plugin_t *plugin, plugintype_t type);
 #define DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(mod) \
   extern "C" __declspec(dllexport) int __cdecl lib##mod##_net_plugin_init(plugin_t *plugin, plugintype_t type); \
   extern "C" __declspec(dllexport) void __cdecl lib##mod##_net_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(mod) \
+  extern "C" __declspec(dllexport) int __cdecl lib##mod##_dev_plugin_init(plugin_t *plugin, plugintype_t type); \
+  extern "C" __declspec(dllexport) void __cdecl lib##mod##_dev_plugin_fini(void);
 #else
 #define DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(mod) \
   int CDECL lib##mod##_LTX_plugin_init(plugin_t *plugin, plugintype_t type); \
@@ -384,6 +402,9 @@ int plugin_init(plugin_t *plugin, plugintype_t type);
 #define DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(mod) \
   int CDECL lib##mod##_net_plugin_init(plugin_t *plugin, plugintype_t type); \
   void CDECL lib##mod##_net_plugin_fini(void);
+#define DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(mod) \
+  int CDECL lib##mod##_dev_plugin_init(plugin_t *plugin, plugintype_t type); \
+  void CDECL lib##mod##_dev_plugin_fini(void);
 #endif
 
 // device plugins
@@ -406,7 +427,6 @@ DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(pci)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(pci2isa)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(pci_ide)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(pcidev)
-DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_common)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_uhci)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_ohci)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(usb_ehci)
@@ -423,6 +443,7 @@ DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(speaker)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(acpi)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(iodebug)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(ioapic)
+DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(hpet)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(voodoo)
 DECLARE_PLUGIN_INIT_FINI_FOR_MODULE(user)
 // gui plugins
@@ -458,6 +479,12 @@ DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(tuntap)
 DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(vde)
 DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(vnet)
 DECLARE_PLUGIN_INIT_FINI_FOR_NET_MODULE(win32)
+// USB device plugins
+DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(usb_cbi)
+DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(usb_hid)
+DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(usb_hub)
+DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(usb_msd)
+DECLARE_PLUGIN_INIT_FINI_FOR_USB_MODULE(usb_printer)
 
 
 #ifdef __cplusplus

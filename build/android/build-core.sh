@@ -13,5 +13,5 @@ fi
 
 cd ../../../androidsdl
 ./build.sh bochs
-mv project/bin/MainActivity-debug.apk ../bochs/build/android/bochs-core-debug.apk
+mv project/app/build/outputs/apk/release/app-release.apk ../bochs/build/android/bochs-core-debug.apk
 cd ../bochs/build/android

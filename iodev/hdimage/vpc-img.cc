@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vpc-img.cc 13055 2017-01-30 19:08:37Z vruppert $
+// $Id: vpc-img.cc 13475 2018-03-18 09:07:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // Block driver for Connectix / Microsoft Virtual PC images (ported from QEMU)
 //
 // Copyright (c) 2005  Alex Beregszaszi
 // Copyright (c) 2009  Kevin Wolf <kwolf@suse.de>
-// Copyright (C) 2012-2017  The Bochs Project
+// Copyright (C) 2012-2018  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -135,7 +135,8 @@ int vpc_image_t::open(const char* _pathname, int flags)
   heads = footer->heads;
   spt = footer->secs_per_cyl;
   sector_count = (Bit64u)(cylinders * heads * spt);
-  hd_size = sector_count * 512;
+  sect_size = 512;
+  hd_size = sector_count * sect_size;
 
   if (sector_count >= 65535 * 16 * 255) {
     bx_close_image(fd, pathname);

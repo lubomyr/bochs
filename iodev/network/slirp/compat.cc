@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: compat.cc 12935 2016-08-12 17:06:14Z vruppert $
+// $Id: compat.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * QEMU compatibility functions
  *
  * Copyright (c) 2003-2008  Fabrice Bellard
- * Copyright (C) 2014-2015  The Bochs Project
+ * Copyright (C) 2014-2017  The Bochs Project
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -56,17 +56,17 @@ void pstrcpy(char *buf, int buf_size, const char *str)
 
 void qemu_set_nonblock(int fd)
 {
-#ifndef WIN32
+#ifndef _WIN32
     int f;
     f = fcntl(fd, F_GETFL);
     fcntl(fd, F_SETFL, f | O_NONBLOCK);
 #elif !defined(_MSC_VER)
-    unsigned long opt = 1;
+    ULONG opt = 1;
     ioctlsocket(fd, FIONBIO, &opt);
 #endif
 }
 
-#ifdef WIN32
+#ifndef HAVE_INET_ATON
 int inet_aton(const char *cp, struct in_addr *ia)
 {
   uint32_t addr = inet_addr(cp);
@@ -80,7 +80,7 @@ int inet_aton(const char *cp, struct in_addr *ia)
 
 int socket_set_fast_reuse(int fd)
 {
-#ifndef WIN32
+#ifndef _WIN32
     int val = 1, ret;
 
     ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
@@ -102,7 +102,7 @@ int socket_set_nodelay(int fd)
 
 void qemu_set_cloexec(int fd)
 {
-#ifndef WIN32
+#ifndef _WIN32
     int f;
     f = fcntl(fd, F_GETFD);
     fcntl(fd, F_SETFD, f | FD_CLOEXEC);
@@ -130,7 +130,7 @@ int qemu_socket(int domain, int type, int protocol)
     return ret;
 }
 
-#ifndef WIN32
+#if !defined(_WIN32) && !defined(__CYGWIN__)
 
 #define CONFIG_SMBD_COMMAND "/usr/sbin/smbd"
 

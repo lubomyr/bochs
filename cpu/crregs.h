@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: crregs.h 13120 2017-03-15 22:48:27Z sshwarts $
+// $Id: crregs.h 13603 2019-11-12 22:02:02Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2007-2017 Stanislav Shwartsman
@@ -141,8 +141,7 @@ struct bx_cr4_t {
   BX_CPP_INLINE void set32(Bit32u val) { val32 = val; }
 };
 
-#define BX_CR4_FLUSH_TLB_MASK \
-   (BX_CR4_PSE_MASK | BX_CR4_PAE_MASK | BX_CR4_PGE_MASK | BX_CR4_PCIDE_MASK | BX_CR4_SMEP_MASK | BX_CR4_SMAP_MASK | BX_CR4_PKE_MASK)
+const Bit32u BX_CR4_FLUSH_TLB_MASK = (BX_CR4_PSE_MASK | BX_CR4_PAE_MASK | BX_CR4_PGE_MASK | BX_CR4_PCIDE_MASK | BX_CR4_SMEP_MASK | BX_CR4_SMAP_MASK | BX_CR4_PKE_MASK);
 
 #endif  // #if BX_CPU_LEVEL >= 5
 
@@ -237,19 +236,19 @@ struct bx_efer_t {
 
 #if BX_CPU_LEVEL >= 6
 
-#define XSAVE_SSE_STATE_LEN           (256)
-#define XSAVE_YMM_STATE_LEN           (256)
-#define XSAVE_OPMASK_STATE_LEN         (64)
-#define XSAVE_ZMM_HI256_STATE_LEN     (512)
-#define XSAVE_HI_ZMM_STATE_LEN       (1024)
-#define XSAVE_PKRU_STATE_LEN           (64)
+const unsigned XSAVE_SSE_STATE_LEN          = 256;
+const unsigned XSAVE_YMM_STATE_LEN          = 256;
+const unsigned XSAVE_OPMASK_STATE_LEN       = 64;
+const unsigned XSAVE_ZMM_HI256_STATE_LEN    = 512;
+const unsigned XSAVE_HI_ZMM_STATE_LEN       = 1024;
+const unsigned XSAVE_PKRU_STATE_LEN         = 64;
 
-#define XSAVE_SSE_STATE_OFFSET        (160)
-#define XSAVE_YMM_STATE_OFFSET        (576)
-#define XSAVE_OPMASK_STATE_OFFSET    (1088)
-#define XSAVE_ZMM_HI256_STATE_OFFSET (1152)
-#define XSAVE_HI_ZMM_STATE_OFFSET    (1664)
-#define XSAVE_PKRU_STATE_OFFSET      (2688)
+const unsigned XSAVE_SSE_STATE_OFFSET       = 160;
+const unsigned XSAVE_YMM_STATE_OFFSET       = 576;
+const unsigned XSAVE_OPMASK_STATE_OFFSET    = 1088;
+const unsigned XSAVE_ZMM_HI256_STATE_OFFSET = 1152;
+const unsigned XSAVE_HI_ZMM_STATE_OFFSET    = 1664;
+const unsigned XSAVE_PKRU_STATE_OFFSET      = 2688;
 
 struct xcr0_t {
   Bit32u  val32; // 32bit value of register

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gtk_enh_dbg_osdep.cc 12546 2014-11-09 19:09:11Z vruppert $
+// $Id: gtk_enh_dbg_osdep.cc 13593 2019-11-11 19:40:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -8,7 +8,7 @@
 //
 //  Modified by Bruce Ewing
 //
-//  Copyright (C) 2008-2014  The Bochs Project
+//  Copyright (C) 2008-2019  The Bochs Project
 
 #include "config.h"
 
@@ -241,13 +241,13 @@ bx_bool ShowAskDialog()
     {
         AskPrompt = gtk_label_new (ask_str.prompt);
         gtk_widget_show (AskPrompt);
-        gtk_box_pack_start (GTK_BOX (GTK_DIALOG (dialog)->vbox), AskPrompt, TRUE, TRUE, 5);
+        gtk_box_pack_start(GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), AskPrompt, TRUE, TRUE, 5);
         AskEntry = gtk_entry_new ();
         // "Enter" (activate) = OK button
         gtk_entry_set_activates_default (GTK_ENTRY (AskEntry), TRUE);
         // increase the width of the Entry to about 80 chars
         gtk_entry_set_width_chars (GTK_ENTRY (AskEntry), 80);
-        gtk_box_pack_start (GTK_BOX (GTK_DIALOG (dialog)->vbox), AskEntry, TRUE, TRUE, 5);
+        gtk_box_pack_start (GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), AskEntry, TRUE, TRUE, 5);
     }
 
     gtk_widget_show (AskEntry);
@@ -586,11 +586,11 @@ int GetASMTopIdx()
     // calculate the number of vertical "pixels" in one row (as a fraction of the scroll range)
     if (AsmLineCount == 0)
         return 0;
-    ListLineRatio = (int) (va->upper - va->lower) / AsmLineCount;
+    ListLineRatio = (int) (gtk_adjustment_get_upper(va) - gtk_adjustment_get_lower(va)) / AsmLineCount;
     if (ListLineRatio == 0)
         return 0;
-    AsmPgSize = (int) va->page_size / ListLineRatio;
-    return ((int) va->value / ListLineRatio);
+    AsmPgSize = (int) gtk_adjustment_get_page_size(va) / ListLineRatio;
+    return ((int) gtk_adjustment_get_value(va) / ListLineRatio);
 }
 
 // "pixels" is a multiple of (and therefore proportional to) ListLineRatio
@@ -598,7 +598,7 @@ int GetASMTopIdx()
 void ScrollASM(int pixels)
 {
     GtkAdjustment *va = gtk_tree_view_get_vadjustment ( GTK_TREE_VIEW(LV[ASM_WND]) );
-    gtk_adjustment_set_value (GTK_ADJUSTMENT(va), va->value + pixels);
+    gtk_adjustment_set_value(GTK_ADJUSTMENT(va), gtk_adjustment_get_value(va) + pixels);
 }
 
 // handle checkmarks in the "wordsize" popup menu
@@ -633,11 +633,11 @@ void RepackLists(int FirstListIndex)
 void MoveLists()
 {
     int i;
-    gtk_widget_ref (ScrlWin[0]);    // make sure the list widgets do not get deleted
-    gtk_widget_ref (ScrlWin[1]);    // when they are removed from their container
-    gtk_widget_ref (ScrlWin[2]);
-    gtk_widget_ref (VSepEvtBox1);
-    gtk_widget_ref (VSepEvtBox2);
+    g_object_ref(ScrlWin[0]);    // make sure the list widgets do not get deleted
+    g_object_ref(ScrlWin[1]);    // when they are removed from their container
+    g_object_ref(ScrlWin[2]);
+    g_object_ref(VSepEvtBox1);
+    g_object_ref(VSepEvtBox2);
     gtk_container_remove (GTK_CONTAINER(LVHbox), ScrlWin[0]);
     gtk_container_remove (GTK_CONTAINER(LVHbox), ScrlWin[1]);
     gtk_container_remove (GTK_CONTAINER(LVHbox), ScrlWin[2]);
@@ -648,11 +648,11 @@ void MoveLists()
     i = (DockOrder >> 8) -1;            // index of left list
 
     RepackLists(i);     // pack widgets back into container in new DockOrder
-    gtk_widget_unref (ScrlWin[0]);
-    gtk_widget_unref (ScrlWin[1]);      // and get rid of the temporary "ref"s
-    gtk_widget_unref (ScrlWin[2]);
-    gtk_widget_unref (VSepEvtBox1);
-    gtk_widget_unref (VSepEvtBox2);
+    g_object_unref(ScrlWin[0]);
+    g_object_unref(ScrlWin[1]);      // and get rid of the temporary "ref"s
+    g_object_unref(ScrlWin[2]);
+    g_object_unref(VSepEvtBox1);
+    g_object_unref(VSepEvtBox2);
 
     // use DockOrder to figure out the table X-coordinates of the 2 v-separators
     i = ListWidthPix[i];
@@ -687,7 +687,7 @@ void VSizeChange()
     if (ShowIOWindows == FALSE)
     {
         gtk_widget_hide(IOVbox);
-        GTK_TABLE(TreeTbl)->nrows = 3;  // IO windows do not exist, so total table rows = 3
+        gtk_table_resize(GTK_TABLE(TreeTbl), 3, 1);  // IO windows do not exist, so total table rows = 3
     }
     else
     {
@@ -697,7 +697,7 @@ void VSizeChange()
         gcp = gtk_entry_get_text(GTK_ENTRY(IEntry));
         strcpy (tmpcb, gcp);
         gtk_entry_set_text(GTK_ENTRY(IEntry),"");
-        GTK_TABLE(TreeTbl)->nrows = 4;  // IO windows exist, so total table rows = 4
+        gtk_table_resize(GTK_TABLE(TreeTbl), 4, 1);  // IO windows exist, so total table rows = 4
         gtk_widget_show(IOVbox);
         gtk_widget_grab_focus(IEntry);  // Input window loses focus while it is hidden
         gtk_entry_set_text(GTK_ENTRY(IEntry),tmpcb);
@@ -805,10 +805,10 @@ void RedrawColumns(int listnum)
 // autosize the columns that may be used by other dumps, once, on a DViewMode change
 void SetAutoSize6_9()
 {
-    AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-    AllCols[7]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-    AllCols[8]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-    AllCols[9]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+    gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+    gtk_tree_view_column_set_sizing(AllCols[7], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+    gtk_tree_view_column_set_sizing(AllCols[8], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+    gtk_tree_view_column_set_sizing(AllCols[9], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
 }
 
 // Show/Hide the typical pattern of Dump window columns (show the first n, hide the rest out to 17)
@@ -817,9 +817,9 @@ void ShowDListCols (int totcols)
     int i = 5;
     int firsthide = totcols + 5;        // convert from a col# to an acolnum
     while (++i < firsthide)
-        AllCols[i]->visible = TRUE;
+        gtk_tree_view_column_set_visible(AllCols[i], TRUE);
     while (i < 23)
-        AllCols[i++]->visible = FALSE;
+        gtk_tree_view_column_set_visible(AllCols[i], FALSE);
 }
 
 // OS-dependent code that runs before each ListFill routine of each type
@@ -844,9 +844,9 @@ void StartListUpdate(int listnum)
     {
         // autosize Reg "hex" column, Asm "L.Addr" column
         if (listnum == REG_WND)
-            AllCols[1]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+            gtk_tree_view_column_set_sizing(AllCols[1], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
         else if (listnum == ASM_WND)
-            AllCols[3]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+            gtk_tree_view_column_set_sizing(AllCols[3], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
         // otherwise, autosize/rename/hide all the proper Dump list columns
         else
         {
@@ -871,7 +871,7 @@ void StartListUpdate(int listnum)
                     }
                     else
                     {
-                        AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+                        gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
                         if (PrevDV == VIEW_MEMDUMP)     // autosizing address column only?
                             break;
                         PrevDAD = DumpAlign;
@@ -882,9 +882,10 @@ void StartListUpdate(int listnum)
                             ShowDListCols (2);      // show only columns 0 and 17
                             break;
                         }
-                        AllCols[7]->visible = TRUE;     // columns must be visible to set col titles!
-                        AllCols[8]->visible = TRUE;
-                        AllCols[9]->visible = TRUE;
+                        // columns must be visible to set col titles!
+                        gtk_tree_view_column_set_visible(AllCols[7], TRUE);
+                        gtk_tree_view_column_set_visible(AllCols[8], TRUE);
+                        gtk_tree_view_column_set_visible(AllCols[9], TRUE);
                         gtk_tree_view_column_set_title(AllCols[7], "0");
                         gtk_tree_view_column_set_title(AllCols[8], "1");
                         gtk_tree_view_column_set_title(AllCols[9], "2");
@@ -892,11 +893,11 @@ void StartListUpdate(int listnum)
                         {
                             if (((i - 7) & (DumpAlign - 1)) == 0)       // either autosize,
                             {
-                                AllCols[i]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-                                AllCols[i]->visible = TRUE;
+                                gtk_tree_view_column_set_sizing(AllCols[i], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+                                gtk_tree_view_column_set_visible(AllCols[i], TRUE);
                             }
                             else            // or set the column invisible
-                                AllCols[i]->visible = FALSE;
+                                gtk_tree_view_column_set_visible(AllCols[i], FALSE);
                         }
                     }
                     break;
@@ -914,7 +915,7 @@ void StartListUpdate(int listnum)
                     break;
 
                 case VIEW_IDT:
-                    AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+                    gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
                     if (PrevDV == VIEW_IDT)     // autosizing only?
                         break;
                     ShowDListCols (2);      // show 1 column, hide the rest out to 17
@@ -923,7 +924,7 @@ void StartListUpdate(int listnum)
                     break;
 
                 case VIEW_PAGING:
-                    AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+                    gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
                     if (PrevDV == VIEW_PAGING)      // autosizing only?
                         break;
                     ShowDListCols (2);      // show 1 column, hide the rest out to 17
@@ -932,8 +933,8 @@ void StartListUpdate(int listnum)
                     break;
 
                 case VIEW_STACK:
-                    AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-                    AllCols[7]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+                    gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+                    gtk_tree_view_column_set_sizing(AllCols[7], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
                     if (PrevDV == VIEW_STACK)       // autosizing only?
                         break;
                     ShowDListCols (3);      // show 2 columns, hide the rest out to 17
@@ -943,8 +944,8 @@ void StartListUpdate(int listnum)
                     break;
 
                 case VIEW_BREAK:
-                    AllCols[6]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
-                    AllCols[7]->column_type = GTK_TREE_VIEW_COLUMN_AUTOSIZE;
+                    gtk_tree_view_column_set_sizing(AllCols[6], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+                    gtk_tree_view_column_set_sizing(AllCols[7], GTK_TREE_VIEW_COLUMN_AUTOSIZE);
                     if (PrevDV == VIEW_STACK)       // autosizing only?
                         break;
                     ShowDListCols (3);      // show 2 columns, hide the rest out to 17
@@ -1132,7 +1133,7 @@ void sizing_cancel()
         gtk_event_box_set_above_child (GTK_EVENT_BOX(VSepEvtBox2), TRUE);
         if (Sizing < 10)    // cancel (p)resize mode motion detection
             g_signal_handler_disconnect (LVEvtBox, mmov_hID);
-        gdk_window_set_cursor (GTK_WIDGET(LVEvtBox)->window, NULL); // change the cursor to normal
+        gdk_window_set_cursor (gtk_widget_get_window(LVEvtBox), NULL); // change the cursor to normal
         Sizing = 0;
     }
     EnterSizeMode = FALSE;
@@ -1145,17 +1146,19 @@ void sizing_cancel()
 void enter_resize_mode()
 {
     // need reasonably accurate column widths in horz. limit calculations -- update widths
+    GtkAllocation alloc;
     int width0, width1;
     gint totwidth;
-    gint height;
     EnterSizeMode = FALSE;      // presize mode may never have reset this
     // a GtkAllocation structure (inside every widget) is a rectangle: relative x, y, + width & height
-    width0 = ScrlWin[0]->allocation.width;
+    gtk_widget_get_allocation(ScrlWin[0], &alloc);
+    width0 = alloc.width;
     ListWidthPix[0] = width0;
-    width1 = ScrlWin[1]->allocation.width;
+    gtk_widget_get_allocation(ScrlWin[1], &alloc);
+    width1 = alloc.width;
     ListWidthPix[1] = width1;
 
-    gdk_drawable_get_size (window->window, &totwidth, &height);
+    totwidth = gdk_window_get_width(gtk_widget_get_window(window));
     ListWidthPix[2] = totwidth - (width0 + width1);
 
     if (Sizing < 0)         // in presize mode? -- enter full resize mode
@@ -1285,7 +1288,7 @@ gboolean MemMouseDown_cb(GtkWidget *widget, GdkEventButton *event, gpointer data
 
     while (event->x >= cellx && column < 23)
     {
-        int j = cellx += AllCols[column]->width;
+        int j = cellx += gtk_tree_view_column_get_width(AllCols[column]);
         if (event->x >= j){
             ++column;
             cellx = j;
@@ -1368,8 +1371,8 @@ void Close_cb(GtkWidget *widget, gpointer data)
     // holding one extra reference to both ScrlWin[2] widgets
     // but I "sank" PTree myself, so it is my understanding that I need to "destroy" it myself
     gtk_widget_destroy(PTree);
-    gtk_widget_unref(PTree);
-    gtk_widget_unref(LV[2]);
+    g_object_unref(PTree);
+    g_object_unref(LV[2]);
     gdk_cursor_unref(SizeCurs);
     gdk_cursor_unref(DockCurs);
 
@@ -1441,7 +1444,8 @@ gboolean TblSizeEvent(GtkWidget *widget, GdkEventConfigure *event, gpointer data
     gint WinSizeY;
     GdkWindow *TblGdk = gtk_widget_get_parent_window(TreeTbl);
 
-    gdk_drawable_get_size (TblGdk, &WinSizeX, &WinSizeY);
+    WinSizeX = gdk_window_get_width(TblGdk);
+    WinSizeY = gdk_window_get_height(TblGdk);
 
     // don't "resize" on minimize, if window is too small, or if width is (almost) unchanged
     // -- five pixels spread over 3 windows is negligible
@@ -1562,7 +1566,8 @@ gboolean LvLeave(GtkWidget *widget, GdkEventCrossing *event, gpointer data)
     gint width;
     gint height;
     // get the width and height of the ListView hbox window
-    gdk_drawable_get_size (event->window, &width, &height);
+    width = gdk_window_get_width(event->window);
+    height = gdk_window_get_height(event->window);
 
     // cursor moved outside the box (not just onto a vert. separator)?
     if (absx < x_org || absx >= (x_org + width) || absy < y_org || absy >= (y_org + height))
@@ -1610,7 +1615,7 @@ gboolean VsEnter(GtkWidget *widget, GdkEventCrossing *event, gpointer SepNum)
     if (Sizing == 0)
     {
         Sizing = VsepNum - 2;       // Sizing = -1 or -2 for "presize"
-        gdk_window_set_cursor (GTK_WIDGET(LVEvtBox)->window, SizeCurs);
+        gdk_window_set_cursor (gtk_widget_get_window(LVEvtBox), SizeCurs);
         EnterSizeMode = TRUE;
         CurScrX = (unsigned int) (event->x_root + 0.5);
         gtk_event_box_set_above_child (GTK_EVENT_BOX(LVEvtBox), TRUE);
@@ -1633,14 +1638,17 @@ gboolean LV_MouseUp(GtkWidget *widget, GdkEventButton *event, gpointer data)
 // either cancel or complete a dock or sizing
 gboolean LEB_MouseUp(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
+    GtkAllocation alloc;
     int width0, width1, fList, oldcList, dest;
     gint totwidth, heightLV, x, zip;
     if (Sizing != 0 || xClick >= 0)     // complete a resize or dock operation
     {
         int cx = (int)(event->x + 0.5);
         int cy = (int)(event->y + 0.5);
-        heightLV = ScrlWin[0]->allocation.height;
-        gdk_drawable_get_size (window->window, &totwidth, &zip);
+        gtk_widget_get_allocation(ScrlWin[0], &alloc);
+        heightLV = alloc.height;
+        totwidth = gdk_window_get_width(gtk_widget_get_window(window));
+        zip = gdk_window_get_height(gtk_widget_get_window(window));
         dest = fList = (DockOrder >> 8) -1;
 
         if (Sizing < 10)    // complete a resize operation
@@ -1662,14 +1670,16 @@ gboolean LEB_MouseUp(GtkWidget *widget, GdkEventButton *event, gpointer data)
         else    // complete a Docking operation
         {
             // get "local" x mouse coordinate value (main window relative)
-            gdk_window_get_pointer (GTK_WIDGET(LVEvtBox)->window, &x, &zip, NULL);
+            gdk_window_get_pointer(gtk_widget_get_window(LVEvtBox), &x, &zip, NULL);
             // verify that mouseup was within a LV window
             if (x >= 0 && cy >= 0 && x < totwidth && cy < heightLV)
             {
                 // update the widths of the LVs
-                width0 = ScrlWin[0]->allocation.width;
+                gtk_widget_get_allocation(ScrlWin[0], &alloc);
+                width0 = alloc.width;
                 ListWidthPix[0] = width0;
-                width1 = ScrlWin[1]->allocation.width;
+                gtk_widget_get_allocation(ScrlWin[1], &alloc);
+                width1 = alloc.width;
                 ListWidthPix[1] = width1;
                 ListWidthPix[2] = totwidth - (width0 + width1);
                 oldcList = CurCenterList;
@@ -1697,94 +1707,94 @@ void AttachSignals()
 {
     int i;
     g_signal_connect (G_OBJECT(window), "destroy",
-        GTK_SIGNAL_FUNC(Close_cb), (gpointer) NULL);
-    g_signal_connect (G_OBJECT(CmdBtn[0]), "clicked", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) (glong) BtnLkup[0]);
-    g_signal_connect (G_OBJECT(CmdBtn[1]), "clicked", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) (glong) BtnLkup[1]);
-    g_signal_connect (G_OBJECT(CmdBtn[2]), "clicked", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) (glong) BtnLkup[2]);
-    g_signal_connect (G_OBJECT(CmdBtn[3]), "clicked", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) (glong) BtnLkup[3]);
-    g_signal_connect (G_OBJECT(CmdBtn[4]), "clicked", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) (glong) BtnLkup[4]);
+        G_CALLBACK(Close_cb), (gpointer) NULL);
+    g_signal_connect (G_OBJECT(CmdBtn[0]), "clicked", G_CALLBACK(nbCmd_cb), (gpointer) (glong) BtnLkup[0]);
+    g_signal_connect (G_OBJECT(CmdBtn[1]), "clicked", G_CALLBACK(nbCmd_cb), (gpointer) (glong) BtnLkup[1]);
+    g_signal_connect (G_OBJECT(CmdBtn[2]), "clicked", G_CALLBACK(nbCmd_cb), (gpointer) (glong) BtnLkup[2]);
+    g_signal_connect (G_OBJECT(CmdBtn[3]), "clicked", G_CALLBACK(Cmd_cb), (gpointer) (glong) BtnLkup[3]);
+    g_signal_connect (G_OBJECT(CmdBtn[4]), "clicked", G_CALLBACK(nbCmd_cb), (gpointer) (glong) BtnLkup[4]);
 
     i = BX_SMP_PROCESSORS;
     if (i > 1)
     {
         while (--i >= 0)
-            g_signal_connect (G_OBJECT(CpuBtn[i]), "clicked", GTK_SIGNAL_FUNC(CPUb_cb), (gpointer) (glong) i);
+            g_signal_connect (G_OBJECT(CpuBtn[i]), "clicked", G_CALLBACK(CPUb_cb), (gpointer) (glong) i);
     }
 
 // activate the menu items
-    g_signal_connect (G_OBJECT(ContMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_CONT);
-    g_signal_connect (G_OBJECT(StepMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_STEP1);
-    g_signal_connect (G_OBJECT(StepNMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_STEPN);
-    g_signal_connect (G_OBJECT(BreakMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_BREAK);
-    g_signal_connect (G_OBJECT(SetBrkMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_BRKPT);
+    g_signal_connect (G_OBJECT(ContMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_CONT);
+    g_signal_connect (G_OBJECT(StepMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_STEP1);
+    g_signal_connect (G_OBJECT(StepNMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_STEPN);
+    g_signal_connect (G_OBJECT(BreakMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_BREAK);
+    g_signal_connect (G_OBJECT(SetBrkMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_BRKPT);
     Cmd2MI[CMD_BRKPT - CMD_IDX_LO + 1] = SetBrkMI;
-    g_signal_connect (G_OBJECT(WatchWrMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_WPTWR);
+    g_signal_connect (G_OBJECT(WatchWrMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_WPTWR);
     Cmd2MI[CMD_WPTWR - CMD_IDX_LO + 1] = WatchWrMI;
-    g_signal_connect (G_OBJECT(WatchRdMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_WPTRD);
+    g_signal_connect (G_OBJECT(WatchRdMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_WPTRD);
     Cmd2MI[CMD_WPTRD - CMD_IDX_LO + 1] = WatchRdMI;
-    g_signal_connect (G_OBJECT(FindMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_FIND);
-    g_signal_connect (G_OBJECT(RefreshMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_RFRSH);
+    g_signal_connect (G_OBJECT(FindMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_FIND);
+    g_signal_connect (G_OBJECT(RefreshMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_RFRSH);
 
-    g_signal_connect (G_OBJECT(PhyDumpMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_PHYDMP);
-    g_signal_connect (G_OBJECT(LinDumpMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_LINDMP);
-    g_signal_connect (G_OBJECT(StackMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_STACK);
-    g_signal_connect (G_OBJECT(GDTMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_GDTV);
-    g_signal_connect (G_OBJECT(IDTMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_IDTV);
-    g_signal_connect (G_OBJECT(PageMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_PAGEV);
+    g_signal_connect (G_OBJECT(PhyDumpMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_PHYDMP);
+    g_signal_connect (G_OBJECT(LinDumpMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_LINDMP);
+    g_signal_connect (G_OBJECT(StackMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_STACK);
+    g_signal_connect (G_OBJECT(GDTMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_GDTV);
+    g_signal_connect (G_OBJECT(IDTMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_IDTV);
+    g_signal_connect (G_OBJECT(PageMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_PAGEV);
     Cmd2MI[CMD_PAGEV - CMD_IDX_LO + 1] = PageMI;
-    g_signal_connect (G_OBJECT(ViewBrkMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_VBRK);
-    g_signal_connect (G_OBJECT(MemDumpMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_CMEM);
-    g_signal_connect (G_OBJECT(PTreeMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_PTREE);
-    g_signal_connect (G_OBJECT(DisAsmMI), "activate", GTK_SIGNAL_FUNC(Cmd_cb), (gpointer) CMD_DISASM);
+    g_signal_connect (G_OBJECT(ViewBrkMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_VBRK);
+    g_signal_connect (G_OBJECT(MemDumpMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_CMEM);
+    g_signal_connect (G_OBJECT(PTreeMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_PTREE);
+    g_signal_connect (G_OBJECT(DisAsmMI), "activate", G_CALLBACK(Cmd_cb), (gpointer) CMD_DISASM);
 
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MODEB]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_MODEB);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_ONECPU]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_ONECPU);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MODEB]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_MODEB);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_ONECPU]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_ONECPU);
     Cmd2MI[CMD_ONECPU - CMD_IDX_LO + 1] = ChkMIs[CHK_CMD_ONECPU];
-    g_signal_connect (G_OBJECT(DefDisMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_DADEF);
-    g_signal_connect (G_OBJECT(SyntaxMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_ATTI);
-    g_signal_connect (G_OBJECT(FontMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_FONT);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_UCASE]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_UCASE);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IOWIN]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_IOWIN);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_SBTN]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_SBTN);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MHEX]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_MHEX);
+    g_signal_connect (G_OBJECT(DefDisMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_DADEF);
+    g_signal_connect (G_OBJECT(SyntaxMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_ATTI);
+    g_signal_connect (G_OBJECT(FontMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_FONT);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_UCASE]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_UCASE);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IOWIN]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_IOWIN);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_SBTN]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_SBTN);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MHEX]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_MHEX);
     Cmd2MI[CMD_MHEX - CMD_IDX_LO + 1] = ChkMIs[CHK_CMD_MHEX];
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MASCII]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_MASCII);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_MASCII]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_MASCII);
     Cmd2MI[CMD_MASCII - CMD_IDX_LO + 1] = ChkMIs[CHK_CMD_MASCII];
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_LEND]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_LEND);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IGNSA]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_IGNSA);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IGNNT]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_IGNNT);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_RCLR]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_RCLR);
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_EREG]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_EREG);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_LEND]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_LEND);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IGNSA]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_IGNSA);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_IGNNT]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_IGNNT);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_RCLR]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_RCLR);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_EREG]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_EREG);
     Cmd2MI[CMD_EREG - CMD_IDX_LO + 1] = ChkMIs[CHK_CMD_EREG];
-    g_signal_connect (G_OBJECT(ChkMIs[S_REG]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_SREG);
-    g_signal_connect (G_OBJECT(ChkMIs[SYS_R]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_SYSR);
-    g_signal_connect (G_OBJECT(ChkMIs[C_REG]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_CREG);
-    g_signal_connect (G_OBJECT(ChkMIs[FPU_R]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_FPUR);
+    g_signal_connect (G_OBJECT(ChkMIs[S_REG]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_SREG);
+    g_signal_connect (G_OBJECT(ChkMIs[SYS_R]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_SYSR);
+    g_signal_connect (G_OBJECT(ChkMIs[C_REG]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_CREG);
+    g_signal_connect (G_OBJECT(ChkMIs[FPU_R]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_FPUR);
     Cmd2MI[CMD_FPUR - CMD_IDX_LO + 1] = ChkMIs[FPU_R];
-    g_signal_connect (G_OBJECT(ChkMIs[XMM_R]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_XMMR);
+    g_signal_connect (G_OBJECT(ChkMIs[XMM_R]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_XMMR);
     Cmd2MI[CMD_XMMR - CMD_IDX_LO + 1] = ChkMIs[XMM_R];
-    g_signal_connect (G_OBJECT(ChkMIs[D_REG]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_DREG);
+    g_signal_connect (G_OBJECT(ChkMIs[D_REG]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_DREG);
     Cmd2MI[CMD_DREG - CMD_IDX_LO + 1] = ChkMIs[D_REG];
-//  g_signal_connect (G_OBJECT(ChkMIs[T_REG]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_TREG);
+//  g_signal_connect (G_OBJECT(ChkMIs[T_REG]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_TREG);
 //  Cmd2MI[CMD_TREG - CMD_IDX_LO + 1] = ChkMIs[T_REG];
-    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_LOGVIEW]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_LOGVIEW);
+    g_signal_connect (G_OBJECT(ChkMIs[CHK_CMD_LOGVIEW]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_LOGVIEW);
 
-    g_signal_connect (G_OBJECT(AboutMI), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_ABOUT);
+    g_signal_connect (G_OBJECT(AboutMI), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_ABOUT);
 
-    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_WS_1);
-    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+1]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_WS_2);
-    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+2]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_WS_4);
-    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+3]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_WS_8);
-    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+4]), "activate", GTK_SIGNAL_FUNC(nbCmd_cb), (gpointer) CMD_WS16);
+    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_WS_1);
+    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+1]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_WS_2);
+    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+2]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_WS_4);
+    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+3]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_WS_8);
+    g_signal_connect (G_OBJECT(ChkMIs[WSChkIdx+4]), "activate", G_CALLBACK(nbCmd_cb), (gpointer) CMD_WS16);
 
     g_signal_connect (G_OBJECT (IEntry), "key_press_event", G_CALLBACK (keydown_event_cb), NULL);
     g_signal_connect (G_OBJECT (window), "key_press_event", G_CALLBACK (redirect_keydown), NULL);
     g_signal_connect (LV[0], "button_press_event", G_CALLBACK (RegMouseDown_cb), NULL);
-    g_signal_connect (LV[0], "row-activated", GTK_SIGNAL_FUNC(Reg_DblClick), (gpointer) 0);
+    g_signal_connect (LV[0], "row-activated", G_CALLBACK(Reg_DblClick), (gpointer) 0);
     g_signal_connect (LV[1], "button_press_event", G_CALLBACK (AsmMouseDown_cb), NULL);
-    g_signal_connect (LV[1], "row-activated", GTK_SIGNAL_FUNC(Asm_DblClick), (gpointer) 1);
+    g_signal_connect (LV[1], "row-activated", G_CALLBACK(Asm_DblClick), (gpointer) 1);
     g_signal_connect (LV[2], "button_press_event", G_CALLBACK (MemMouseDown_cb), NULL);
-    g_signal_connect (LV[2], "row-activated", GTK_SIGNAL_FUNC(Mem_DblClick), NULL);
+    g_signal_connect (LV[2], "row-activated", G_CALLBACK(Mem_DblClick), NULL);
 
     g_signal_connect (G_OBJECT (LVEvtBox), "leave_notify_event", G_CALLBACK (LvLeave), NULL);
     g_signal_connect (G_OBJECT (VSepEvtBox1), "enter_notify_event", G_CALLBACK (VsEnter), (gpointer) 0);
@@ -1822,7 +1832,7 @@ static gboolean VGAWrefreshTick(GtkWidget *widget)
             gtk_event_box_set_above_child (GTK_EVENT_BOX(VSepEvtBox2), FALSE);
             gtk_event_box_set_above_child (GTK_EVENT_BOX(LVEvtBox), TRUE);
             Sizing = SizeList;      // Sizing tells which ListView is being moved
-            gdk_window_set_cursor (GTK_WIDGET(LVEvtBox)->window, DockCurs);
+            gdk_window_set_cursor (gtk_widget_get_window(LVEvtBox), DockCurs);
         }
     }
     UpdateStatus();
@@ -2083,7 +2093,7 @@ void MakeList(int listnum, const char *ColNameArray[])
 
     gtk_tree_view_set_model(GTK_TREE_VIEW(LV[listnum]), GTK_TREE_MODEL(Database));
     // ListView now holds a reference to Database -- don't need the local reference anymore
-    g_object_unref (G_OBJECT (Database));
+    g_object_unref(G_OBJECT (Database));
 }
 
 // gtk version of multithreading (doesn't seem to work on some platforms?):
@@ -2226,7 +2236,7 @@ bx_bool OSInit()
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(ScrlWinOut), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     OText = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(OText), FALSE);    // set it to "read only"
-    GTK_WIDGET_UNSET_FLAGS(OText, GTK_CAN_FOCUS);
+    gtk_widget_set_can_focus(OText, FALSE);
     gtk_container_add (GTK_CONTAINER(ScrlWinOut), OText);
 // a TextView *already has* a viewport, so DON'T add another one -- or it won't scroll properly!
 //  gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(ScrlWinOut), OText);
@@ -2253,7 +2263,7 @@ bx_bool OSInit()
         sprintf (bigbuf, "<b>%s</b>",BTxt[i]);      // create "bold" pango markup for buttons
         gtk_label_set_markup (GTK_LABEL(tmpLbl), bigbuf);
         gtk_container_add (GTK_CONTAINER(GTK_BUTTON(CmdBtn[i])), tmpLbl);
-        GTK_WIDGET_UNSET_FLAGS(CmdBtn[i], GTK_CAN_FOCUS);
+        gtk_widget_set_can_focus(CmdBtn[i], FALSE);
         gtk_box_pack_start(GTK_BOX(CmdBHbox), CmdBtn[i], TRUE, TRUE, 0);
     }
     gtk_box_pack_start(GTK_BOX(MainVbox), CmdBHbox, FALSE, FALSE, 0);
@@ -2271,7 +2281,7 @@ bx_bool OSInit()
             CpuB_label[i] = tmpLbl;
             gtk_label_set_markup (GTK_LABEL(tmpLbl), bigbuf);
             gtk_container_add (GTK_CONTAINER(GTK_BUTTON(CpuBtn[i])), tmpLbl);
-            GTK_WIDGET_UNSET_FLAGS(CpuBtn[i], GTK_CAN_FOCUS);
+            gtk_widget_set_can_focus(CpuBtn[i], FALSE);
             gtk_box_pack_start(GTK_BOX(CpuBHbox), CpuBtn[i], TRUE, TRUE, 0);
             sprintf (bigbuf, "<b>cpu%d</b>",++i);       // create the next CPU button label
         }
@@ -2291,7 +2301,7 @@ bx_bool OSInit()
         // always want a horizontal scrollbar, to divide lists from Output window visually
         gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(ScrlWin[i]), GTK_POLICY_ALWAYS, GTK_POLICY_AUTOMATIC);
         LV[i] = gtk_tree_view_new();
-        GTK_WIDGET_UNSET_FLAGS(LV[i], GTK_CAN_FOCUS);
+        gtk_widget_set_can_focus(LV[i], FALSE);
         gtk_container_add (GTK_CONTAINER(ScrlWin[i]), LV[i]);
 // all TreeViews *already have* a viewport, so DON'T add another one with the ScrollWindow, or it won't scroll properly!
         MakeList(i, &LColNames[i*3]);
@@ -2310,14 +2320,14 @@ bx_bool OSInit()
     renderer = gtk_cell_renderer_text_new();
     gtk_tree_view_column_pack_start(treecol, renderer, TRUE);
     gtk_tree_view_column_add_attribute(treecol, renderer, "text", 0);   // pull display text from treestore col 0
-    GTK_WIDGET_UNSET_FLAGS(PTree, GTK_CAN_FOCUS);
+    gtk_widget_set_can_focus(PTree, FALSE);
     treestore = gtk_tree_store_new(1, G_TYPE_STRING);
     gtk_tree_view_set_model(GTK_TREE_VIEW(PTree), GTK_TREE_MODEL(treestore));
     g_object_unref(treestore);      // PTree now references treestore itself
 
-    gtk_widget_ref (PTree);     // keep an extra ref to both ScrlWin[2] widgets,
-    gtk_widget_ref (LV[2]);     // so they don't get deleted when removed from their container
-    gtk_object_sink (GTK_OBJECT (PTree));   // the PTree reference is "floating", so "sink" it
+    g_object_ref(PTree);     // keep an extra ref to both ScrlWin[2] widgets,
+    g_object_ref(LV[2]);     // so they don't get deleted when removed from their container
+    g_object_ref_sink(G_OBJECT(PTree));   // the PTree reference is "floating", so "sink" it
 
     AttachSignals();        // this must be called AFTER InitMenus()
     TakeInputFocus();
@@ -2335,8 +2345,8 @@ bx_bool OSInit()
     // build the sizing/docking cursors
     SizeCurs = gdk_cursor_new (GDK_SB_H_DOUBLE_ARROW);
     DockCurs = gdk_cursor_new (GDK_CROSSHAIR);
-    gdk_cursor_ref (SizeCurs);
-    gdk_cursor_ref (DockCurs);
+    gdk_cursor_ref(SizeCurs);
+    gdk_cursor_ref(DockCurs);
 
     if (!font_init) {
       char *fn;
@@ -2354,7 +2364,7 @@ bx_bool OSInit()
     pango_layout_set_font_description (layout, fontdesc); 
     pango_layout_get_pixel_size (layout, &width, &i);
     pango_font_description_free (fontdesc);
-    g_object_unref (layout);
+    g_object_unref(layout);
     OneCharWide = width;        // The "width" I'm getting is about half what I expect
 //  OneCharWide = width >> 1;   // pretend that an average char width is half an "M"
     if (OneCharWide > 12) OneCharWide = 12;
@@ -2368,9 +2378,9 @@ bx_bool OSInit()
     g_timeout_add(50, (GSourceFunc) BochsUpdateTick, (gpointer) window);
 
     g_signal_connect (G_OBJECT (window), "configure_event", G_CALLBACK (TblSizeEvent), NULL);
-    // could use: gtk_tree_view_column_get_width(), etc.
-    AllCols[4]->fixed_width = AllCols[4]->width;
-    AllCols[4]->column_type = GTK_TREE_VIEW_COLUMN_FIXED;
+    width = gtk_tree_view_column_get_width(AllCols[4]);
+    gtk_tree_view_column_set_fixed_width(AllCols[4], width);
+    gtk_tree_view_column_set_sizing(AllCols[4], GTK_TREE_VIEW_COLUMN_FIXED);
 
     if (!SIM->is_wx_selected()) {
       MakeGTKthreads();
@@ -2396,28 +2406,25 @@ void MakeBL(TreeParent *h_P, bx_param_c *p)
     int j = strlen (tmpcb);
     switch (p->get_type())
     {
-        case BXT_PARAM_NUM:
-            if (((bx_param_num_c*)p)->get_base() == BASE_DEC)
-                sprintf (tmpcb + j,": " FMT_LL "d",((bx_param_num_c*)p)->get64());
-            else
-                sprintf (tmpcb + j,": 0x" FMT_LL "X",((bx_param_num_c*)p)->get64());
-            break;
         case BXT_LIST:
             as_list = (bx_list_c *)p;
             n = as_list->get_size();
             break;
-        case BXT_PARAM_BOOL:
             sprintf (tmpcb + j,": %s",((bx_param_bool_c*)p)->get()?"true":"false");
             break;
-        case BXT_PARAM_ENUM:
             sprintf (tmpcb + j,": %s",((bx_param_enum_c*)p)->get_selected());
             break;
+        case BXT_PARAM_BOOL:
+        case BXT_PARAM_ENUM:
+        case BXT_PARAM_NUM:
         case BXT_PARAM_STRING:
-            ((bx_param_string_c*)p)->sprint(tmpstr, BX_PATHNAME_LEN, 0);
+        case BXT_PARAM_BYTESTRING:
+            p->dump_param(tmpstr, BX_PATHNAME_LEN);
             sprintf(tmpcb + j,": %s", tmpstr);
             break;
         case BXT_PARAM_DATA:
             sprintf (tmpcb + j,": binary data, size=%d",((bx_shadow_data_c*)p)->get_size());
+            break;
     }
     MakeTreeChild (h_P, n, &h_new);
     if (n > 0)

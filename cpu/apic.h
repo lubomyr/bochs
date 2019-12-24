@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: apic.h 13152 2017-03-26 19:14:15Z sshwarts $
+// $Id: apic.h 13602 2019-11-12 22:00:29Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2002-2017 Zwane Mwaikambo, Stanislav Shwartsman
@@ -25,12 +25,14 @@
 
 #if BX_SUPPORT_APIC
 
-#define APIC_LEVEL_TRIGGERED	1
-#define APIC_EDGE_TRIGGERED	0
+enum {
+  APIC_EDGE_TRIGGERED  = 0,
+  APIC_LEVEL_TRIGGERED = 1
+};
 
-#define BX_LAPIC_BASE_ADDR  0xfee00000  // default Local APIC address
+const bx_phy_address BX_LAPIC_BASE_ADDR = 0xfee00000;  // default Local APIC address
+
 #define BX_NUM_LOCAL_APICS  BX_SMP_PROCESSORS
-#define BX_LAPIC_MAX_INTS   256
 
 enum {
   BX_APIC_GLOBALLY_DISABLED = 0,
@@ -108,6 +110,28 @@ typedef Bit32u apic_dest_t; /* same definition in ioapic.h */
 #define BX_LAPIC_IER7                 0x4E0
 #define BX_LAPIC_IER8                 0x4F0
 
+/* APIC delivery modes */
+enum {
+  APIC_DM_FIXED	   = 0,
+  APIC_DM_LOWPRI   = 1,
+  APIC_DM_SMI      = 2,
+  APIC_DM_RESERVED = 3,
+  APIC_DM_NMI      = 4,
+  APIC_DM_INIT     = 5,
+  APIC_DM_SIPI     = 6,
+  APIC_DM_EXTINT   = 7
+};
+
+#define APIC_LVT_ENTRIES 6
+enum {
+  APIC_LVT_TIMER   = 0,
+  APIC_LVT_THERMAL = 1,
+  APIC_LVT_PERFMON = 2,
+  APIC_LVT_LINT0   = 3,
+  APIC_LVT_LINT1   = 4,
+  APIC_LVT_ERROR   = 5
+};
+
 class BOCHSAPI bx_local_apic_c : public logfunctions
 {
   bx_phy_address base_addr;
@@ -130,19 +154,19 @@ class BOCHSAPI bx_local_apic_c : public logfunctions
 
   // ISR=in-service register. When an IRR bit is cleared, the corresponding
   // bit in ISR is set.
-  Bit8u isr[BX_LAPIC_MAX_INTS];
+  Bit32u isr[8];
   // TMR=trigger mode register.  Cleared for edge-triggered interrupts
   // and set for level-triggered interrupts. If set, local APIC must send
   // EOI message to all other APICs.
-  Bit8u tmr[BX_LAPIC_MAX_INTS];
+  Bit32u tmr[8];
   // IRR=interrupt request register. When an interrupt is triggered by
   // the I/O APIC or another processor, it sets a bit in irr. The bit is
   // cleared when the interrupt is acknowledged by the processor.
-  Bit8u irr[BX_LAPIC_MAX_INTS];
+  Bit32u irr[8];
 #if BX_CPU_LEVEL >= 6
   // IER=interrupt enable register. Only vectors that are enabled in IER
   // participare in APIC's computation of highest priority pending interrupt.
-  Bit8u ier[BX_LAPIC_MAX_INTS];
+  Bit32u ier[8];
 #endif
 
 #define APIC_ERR_ILLEGAL_ADDR    0x80
@@ -160,14 +184,7 @@ class BOCHSAPI bx_local_apic_c : public logfunctions
   Bit32u icr_hi;                // Interrupt command register (ICR)
   Bit32u icr_lo;
 
-#define APIC_LVT_ENTRIES 6
   Bit32u lvt[APIC_LVT_ENTRIES];
-#define APIC_LVT_TIMER   0
-#define APIC_LVT_THERMAL 1
-#define APIC_LVT_PERFMON 2
-#define APIC_LVT_LINT0   3
-#define APIC_LVT_LINT1   4
-#define APIC_LVT_ERROR   5
 
   Bit32u timer_initial;         // Initial timer count (in order to reload periodic timer)
   Bit32u timer_current;         // Current timer count
@@ -179,16 +196,6 @@ class BOCHSAPI bx_local_apic_c : public logfunctions
   // Internal timer state, not accessible from bus
   bx_bool timer_active;
   int timer_handle;
-
-/* APIC delivery modes */
-#define APIC_DM_FIXED	0
-#define APIC_DM_LOWPRI	1
-#define APIC_DM_SMI	2
-/* RESERVED		3 */
-#define APIC_DM_NMI	4
-#define APIC_DM_INIT	5
-#define APIC_DM_SIPI	6
-#define APIC_DM_EXTINT	7
 
 #if BX_SUPPORT_VMX >= 2
   int vmx_timer_handle;
@@ -205,6 +212,10 @@ class BOCHSAPI bx_local_apic_c : public logfunctions
 #endif
 
   BX_CPU_C *cpu;
+
+  bx_bool get_vector(Bit32u *reg, unsigned vector);
+  void set_vector(Bit32u *reg, unsigned vector);
+  void clear_vector(Bit32u *reg, unsigned vector);
 
 public:
   bx_bool INTR;
@@ -230,7 +241,7 @@ public:
   void trigger_irq(Bit8u vector, unsigned trigger_mode, bx_bool bypass_irr_isr = 0);
   void untrigger_irq(Bit8u vector, unsigned trigger_mode);
   Bit8u acknowledge_int(void);  // only the local CPU should call this
-  int highest_priority_int(Bit8u *array);
+  int highest_priority_int(Bit32u *array);
   void receive_EOI(Bit32u value);
   void send_ipi(apic_dest_t dest, Bit32u lo_cmd);
   void write_spurious_interrupt_register(Bit32u value);

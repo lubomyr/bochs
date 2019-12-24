@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ioapic.cc 13095 2017-03-03 09:06:47Z vruppert $
+// $Id: ioapic.cc 13187 2017-04-14 19:35:21Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2017  The Bochs Project
@@ -135,7 +135,6 @@ void bx_ioapic_c::init(void)
 {
   BX_INFO(("initializing I/O APIC"));
   set_enabled(1, 0x0000);
-  reset(BX_RESET_HARDWARE);
 #if BX_DEBUGGER
   // register device for the 'info device' command (calls debug_dump())
   bx_dbg_register_debug_info("ioapic", this);

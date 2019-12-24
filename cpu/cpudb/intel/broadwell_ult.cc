@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: broadwell_ult.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: broadwell_ult.cc 13271 2017-08-09 20:36:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2015-2017 Stanislav Shwartsman
@@ -33,7 +33,7 @@
 broadwell_ult_t::broadwell_ult_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
 {
   if (BX_SUPPORT_VMX == 1)
-    BX_INFO(("You must compile with --enable-vmx=2 for Intel Core i7 Haswell VMX configuration"));
+    BX_INFO(("You must compile with --enable-vmx=2 for Intel Core i7 Broadwell VMX configuration"));
 
   if (! BX_SUPPORT_MONITOR_MWAIT)
     BX_INFO(("WARNING: MONITOR/MWAIT support is not compiled in !"));
@@ -102,7 +102,7 @@ broadwell_ult_t::broadwell_ult_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
 
 void broadwell_ult_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
 {
-  static const char* brand_string = "Intel(R) Processor 5Y70 CPU @ 1.10GHz\0\0\0\0\0\0\0\0\0\0";
+  static const char* brand_string = "Intel(R) Processor 5Y70 CPU @ 1.10GHz\0\0\0\0\0\0\0\0\0\0\0";
   static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
@@ -202,7 +202,7 @@ void broadwell_ult_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_
 // MSR 0000048B: 0005-7CFF-0000-0000    BX_MSR_VMX_PROCBASED_CTRLS2
 // MSR 0000048C: 0000-0F01-0633-4141    BX_MSR_VMX_MSR_VMX_EPT_VPID_CAP
 // MSR 0000048D: 0000-007F-0000-0016    BX_MSR_VMX_TRUE_PINBASED_CTRLS
-// MSR 0000048E: FFF9-FFFE-0400-6172    BX_MSR_VMX_TRUE_PINBASED_CTRLS
+// MSR 0000048E: FFF9-FFFE-0400-6172    BX_MSR_VMX_TRUE_PROCBASED_CTRLS
 // MSR 0000048F: 007F-FFFF-0003-6DFB    BX_MSR_VMX_TRUE_VMEXIT_CTRLS
 // MSR 00000490: 0000-FFFF-0000-11FB    BX_MSR_VMX_TRUE_VMENTRY_CTRLS
 

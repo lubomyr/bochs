@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: osdep.cc 12982 2016-12-05 19:05:31Z sshwarts $
+// $Id: osdep.cc 13297 2017-09-14 16:18:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,7 @@
 //
 
 #include "bochs.h"
+#include "bxthread.h"
 
 //////////////////////////////////////////////////////////////////////
 // Missing library functions.  These should work on any platform

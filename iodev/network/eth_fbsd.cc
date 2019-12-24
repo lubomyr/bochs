@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_fbsd.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: eth_fbsd.cc 13257 2017-06-16 08:27:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2017  The Bochs Project
@@ -116,6 +116,7 @@ public:
                      eth_rx_handler_t rxh,
                      eth_rx_status_t rxstat,
                      bx_devmodel_c *dev, const char *script);
+  virtual ~bx_fbsd_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 
 private:
@@ -308,9 +309,16 @@ bx_fbsd_pktmover_c::bx_fbsd_pktmover_c(const char *netif,
 #endif
 }
 
+bx_fbsd_pktmover_c::~bx_fbsd_pktmover_c()
+{
+#if BX_ETH_FBSD_LOGGING
+  fclose(pktlog);
+  fclose(pktlog_txt);
+#endif
+}
+
 // the output routine - called with pre-formatted ethernet frame.
-void
-bx_fbsd_pktmover_c::sendpkt(void *buf, unsigned io_len)
+void bx_fbsd_pktmover_c::sendpkt(void *buf, unsigned io_len)
 {
 #if BX_ETH_FBSD_LOGGING
   BX_DEBUG(("sendpkt length %u", io_len));

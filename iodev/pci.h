@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci.h 13150 2017-03-26 08:09:28Z vruppert $
+// $Id: pci.h 13472 2018-03-04 04:53:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -36,6 +36,8 @@
 #define BX_PCI_INTC 3
 #define BX_PCI_INTD 4
 
+class bx_pci_vbridge_c;
+
 class bx_pci_bridge_c : public bx_pci_device_c {
 public:
   bx_pci_bridge_c();
@@ -44,6 +46,12 @@ public:
   virtual void reset(unsigned type);
   virtual void register_state(void);
   virtual void after_restore_state(void);
+
+  static bx_bool agp_ap_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bx_bool agp_ap_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+
+  Bit32u agp_aperture_read(bx_phy_address addr, unsigned len, bx_bool agp);
+  void   agp_aperture_write(bx_phy_address addr, Bit32u value, unsigned len, bx_bool agp);
 
   virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 #if BX_DEBUGGER
@@ -56,5 +64,19 @@ private:
   unsigned chipset;
   Bit8u DRBA[8];
   Bit8u dram_detect;
+  Bit32u gart_base;
+  bx_pci_vbridge_c *vbridge;
+};
+
+class bx_pci_vbridge_c : public bx_pci_device_c {
+public:
+  bx_pci_vbridge_c();
+  virtual ~bx_pci_vbridge_c();
+  virtual void init(void);
+  virtual void reset(unsigned type);
+  virtual void register_state(void);
+  virtual void after_restore_state(void);
+
+  virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 };
 #endif

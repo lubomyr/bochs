@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ip_output.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: ip_output.cc 13202 2017-04-20 18:51:18Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1982, 1986, 1988, 1990, 1993
@@ -74,7 +74,8 @@ ip_output(struct socket *so, struct mbuf *m0)
 	 */
 	ip->ip_v = IPVERSION;
 	ip->ip_off &= IP_DF;
-	ip->ip_id = htons(slirp->ip_id++);
+	slirp->ip_id++;
+	ip->ip_id = htons(slirp->ip_id);
 	ip->ip_hl = hlen >> 2;
 
 	/*

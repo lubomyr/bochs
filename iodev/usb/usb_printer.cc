@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_printer.cc 13054 2017-01-29 08:48:08Z vruppert $
+// $Id: usb_printer.cc 13241 2017-05-28 08:13:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -33,6 +33,31 @@
 #include "usb_printer.h"
 
 #define LOG_THIS
+
+// USB device plugin entry points
+
+int CDECL libusb_printer_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  return 0; // Success
+}
+
+void CDECL libusb_printer_dev_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+//
+// Define the static class that registers the derived USB device class,
+// and allocates one on request.
+//
+class bx_usb_printer_locator_c : public usbdev_locator_c {
+public:
+  bx_usb_printer_locator_c(void) : usbdev_locator_c("usb_printer") {}
+protected:
+  usb_device_c *allocate(usbdev_type devtype, const char *args) {
+    return (new usb_printer_device_c(devtype, args));
+  }
+} bx_usb_printer_match;
 
 static const Bit8u bx_printer_dev_descriptor[] = {
   0x12,       /*  u8 bLength; */

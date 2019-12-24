@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.cc 12925 2016-06-12 21:23:48Z sshwarts $
+// $Id: icache.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2007-2015 Stanislav Shwartsman
@@ -29,12 +29,15 @@
 #include "param_names.h"
 #include "cpustats.h"
 
+#include "decoder/ia_opcodes.h"
+
 bxPageWriteStampTable pageWriteStampTable;
 
-extern int fetchDecode32(const Bit8u *fetchPtr, Bit32u fetchModeMask, bx_bool handle_lock_cr0, bxInstruction_c *i, unsigned remainingInPage);
+extern int fetchDecode32(const Bit8u *fetchPtr, bx_bool is_32, bxInstruction_c *i, unsigned remainingInPage);
 #if BX_SUPPORT_X86_64
-extern int fetchDecode64(const Bit8u *fetchPtr, Bit32u fetchModeMask, bx_bool handle_lock_cr0, bxInstruction_c *i, unsigned remainingInPage);
+extern int fetchDecode64(const Bit8u *fetchPtr, bxInstruction_c *i, unsigned remainingInPage);
 #endif
+extern int assignHandler(bxInstruction_c *i, Bit32u fetchModeMask);
 
 void flushICaches(void)
 {
@@ -58,7 +61,7 @@ void handleSMC(bx_phy_address pAddr, Bit32u mask)
 
 #if BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS
 
-BX_INSF_TYPE BX_CPU_C::BxEndTrace(bxInstruction_c *i)
+void BX_CPU_C::BxEndTrace(bxInstruction_c *i)
 {
   // do nothing, return to main cpu_loop
 }
@@ -108,10 +111,10 @@ bxICacheEntry_c* BX_CPU_C::serveICacheMiss(Bit32u eipBiased, bx_phy_address pAdd
   {
 #if BX_SUPPORT_X86_64
     if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64)
-      ret = fetchDecode64(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage);
+      ret = fetchDecode64(fetchPtr, i, remainingInPage);
     else
 #endif
-      ret = fetchDecode32(fetchPtr, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage);
+      ret = fetchDecode32(fetchPtr, BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.u.segment.d_b, i, remainingInPage);
 
     if (ret < 0) {
       // Fetching instruction on segment/page boundary
@@ -141,6 +144,8 @@ bxICacheEntry_c* BX_CPU_C::serveICacheMiss(Bit32u eipBiased, bx_phy_address pAdd
       BX_CPU_THIS_PTR iCache.commit_page_split_trace(BX_CPU_THIS_PTR pAddrFetchPage, entry);
       return entry;
     }
+
+    ret = assignHandler(i, BX_CPU_THIS_PTR fetchModeMask);
 
     // add instruction to the trace
     unsigned iLen = i->ilen();
@@ -260,15 +265,17 @@ void BX_CPU_C::boundaryFetch(const Bit8u *fetchPtr, unsigned remainingInPage, bx
 
 #if BX_SUPPORT_X86_64
   if (BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64)
-    ret = fetchDecode64(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage+fetchBufferLimit);
+    ret = fetchDecode64(fetchBuffer, i, remainingInPage+fetchBufferLimit);
   else
 #endif
-    ret = fetchDecode32(fetchBuffer, BX_CPU_THIS_PTR fetchModeMask, BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8), i, remainingInPage+fetchBufferLimit);
+    ret = fetchDecode32(fetchBuffer, BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.u.segment.d_b, i, remainingInPage+fetchBufferLimit);
 
   if (ret < 0) {
     BX_INFO(("boundaryFetch #GP(0): failed to complete instruction decoding"));
     exception(BX_GP_EXCEPTION, 0);
   }
+
+  ret = assignHandler(i, BX_CPU_THIS_PTR fetchModeMask);
 
   // Restore EIP since we fudged it to start at the 2nd page boundary.
   RIP = BX_CPU_THIS_PTR prev_rip;

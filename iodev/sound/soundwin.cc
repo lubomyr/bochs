@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: soundwin.cc 13249 2017-06-02 16:56:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2017  The Bochs Project
@@ -88,14 +88,6 @@ bx_soundlow_waveout_win_c::bx_soundlow_waveout_win_c()
   WaveOutHdr = (LPWAVEHDR) newbuffer(sizeof(WAVEHDR));
   if (WaveOutHdr == NULL)
     BX_PANIC(("Allocated memory was too small!"));
-}
-
-bx_soundlow_waveout_win_c::~bx_soundlow_waveout_win_c()
-{
-  if (WaveOutOpen == 1) {
-    waveOutReset(hWaveOut);
-    waveOutClose(hWaveOut);
-  }
 }
 
 int bx_soundlow_waveout_win_c::openwaveoutput(const char *wavedev)
@@ -217,6 +209,16 @@ int bx_soundlow_waveout_win_c::output(int length, Bit8u data[])
   }
   Sleep(1000 / SOUNDWIN_PACKETS_PER_SEC);
 
+  return BX_SOUNDLOW_OK;
+}
+
+int bx_soundlow_waveout_win_c::closewaveoutput()
+{
+  if (WaveOutOpen == 1) {
+    waveOutReset(hWaveOut);
+    waveOutClose(hWaveOut);
+    WaveOutOpen = 1;
+  }
   return BX_SOUNDLOW_OK;
 }
 

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: enh_dbg.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: enh_dbg.cc 13280 2017-08-22 18:47:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -2633,7 +2633,7 @@ void SetBreak(int OneEntry)
         {
             bx_address nbrk = (bx_address) AsmLA[L];
             // Set a "regular" bochs linear breakpoint to that address
-            int BpId = bx_dbg_lbreakpoint_command(bkRegular, nbrk);
+            int BpId = bx_dbg_lbreakpoint_command(bkRegular, nbrk, NULL);
             if (BpId >= 0)
             {
                 // insertion sort the new Brkpt into the local list

@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcipnic.cc 13147 2017-03-24 19:57:25Z vruppert $
+// $Id: pcipnic.cc 13497 2018-05-01 15:54:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  Fen Systems Ltd. (http://www.fensystems.co.uk/)
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -156,16 +156,16 @@ void bx_pcipnic_c::init(void)
                             "Experimental PCI Pseudo NIC");
 
   // initialize readonly registers
-  init_pci_conf(PNIC_PCI_VENDOR, PNIC_PCI_DEVICE, 0x01, 0x020000, 0x00);
-  BX_PNIC_THIS pci_conf[0x3d] = BX_PCI_INTA;
+  init_pci_conf(PNIC_PCI_VENDOR, PNIC_PCI_DEVICE, 0x01, 0x020000, 0x00, BX_PCI_INTA);
 
   BX_PNIC_THIS s.statusbar_id = bx_gui->register_statusitem("PNIC", 1);
 
   // Attach to the selected ethernet module
   BX_PNIC_THIS ethdev = DEV_net_init_module(base, rx_handler, rx_status_handler, this);
 
-  BX_PNIC_THIS pci_base_address[4] = 0;
+  BX_PNIC_THIS init_bar_io(4, 16, read_handler, write_handler, &pnic_iomask[0]);
   BX_PNIC_THIS pci_rom_address = 0;
+  BX_PNIC_THIS pci_rom_read_handler = mem_read_handler;
   bootrom = SIM->get_param_string("bootrom", base);
   if (!bootrom->isempty()) {
     BX_PNIC_THIS load_pci_rom(bootrom->getptr());
@@ -234,21 +234,7 @@ void bx_pcipnic_c::register_state(void)
 
 void bx_pcipnic_c::after_restore_state(void)
 {
-  if (DEV_pci_set_base_io(BX_PNIC_THIS_PTR, read_handler, write_handler,
-                          &BX_PNIC_THIS pci_base_address[4],
-                          &BX_PNIC_THIS pci_conf[0x20],
-                          16, &pnic_iomask[0], "PNIC")) {
-    BX_INFO(("new base address: 0x%04x", BX_PNIC_THIS pci_base_address[4]));
-  }
-  if (BX_PNIC_THIS pci_rom_size > 0) {
-    if (DEV_pci_set_base_mem(BX_PNIC_THIS_PTR, mem_read_handler,
-                             mem_write_handler,
-                             &BX_PNIC_THIS pci_rom_address,
-                             &BX_PNIC_THIS pci_conf[0x30],
-                             BX_PNIC_THIS pci_rom_size)) {
-      BX_INFO(("new ROM address: 0x%08x", BX_PNIC_THIS pci_rom_address));
-    }
-  }
+  bx_pci_device_c::after_restore_pci_state(mem_read_handler);
 }
 
 void bx_pcipnic_c::set_irq_level(bx_bool level)
@@ -283,13 +269,6 @@ bx_bool bx_pcipnic_c::mem_read_handler(bx_phy_address addr, unsigned len,
   return 1;
 }
 
-bx_bool bx_pcipnic_c::mem_write_handler(bx_phy_address addr, unsigned len,
-                                        void *data, void *param)
-{
-  BX_INFO(("write to ROM ignored (addr=0x%08x len=%d)", (Bit32u)addr, len));
-  return 1;
-}
-
 // static IO port read callback handler
 // redirects to non-static class handler to avoid virtual functions
 
@@ -310,7 +289,7 @@ Bit32u bx_pcipnic_c::read(Bit32u address, unsigned io_len)
 
   BX_DEBUG(("register read from address 0x%04x - ", (unsigned) address));
 
-  offset = address - BX_PNIC_THIS pci_base_address[4];
+  offset = address - BX_PNIC_THIS pci_bar[4].addr;
 
   switch (offset) {
   case PNIC_REG_STAT:
@@ -359,7 +338,7 @@ void bx_pcipnic_c::write(Bit32u address, Bit32u value, unsigned io_len)
 
   BX_DEBUG(("register write to address 0x%04x - ", (unsigned) address));
 
-  offset = address - BX_PNIC_THIS pci_base_address[4];
+  offset = address - BX_PNIC_THIS pci_bar[4].addr;
 
   switch (offset) {
   case PNIC_REG_CMD:
@@ -405,13 +384,12 @@ void bx_pcipnic_c::pnic_timer(void)
 void bx_pcipnic_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {
   Bit8u value8, oldval;
-  bx_bool baseaddr_change = 0;
-  bx_bool romaddr_change = 0;
 
   if (((address >= 0x10) && (address < 0x20)) ||
       ((address > 0x23) && (address < 0x30)))
     return;
 
+  BX_DEBUG_PCI_WRITE(address, value, io_len);
   for (unsigned i=0; i<io_len; i++) {
     value8 = (value >> (i*8)) & 0xFF;
     oldval = BX_PNIC_THIS pci_conf[address+i];
@@ -419,60 +397,11 @@ void bx_pcipnic_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_le
       case 0x04:
         value8 &= 0x01;
         break;
-      case 0x3c:
-        if (value8 != oldval) {
-          BX_INFO(("new irq line = %d", value8));
-        }
-        break;
-      case 0x20:
-        value8 = (value8 & 0xfc) | 0x01;
-      case 0x21:
-      case 0x22:
-      case 0x23:
-        baseaddr_change = (value8 != oldval);
-        break;
-      case 0x30:
-      case 0x31:
-      case 0x32:
-      case 0x33:
-        if (BX_PNIC_THIS pci_rom_size > 0) {
-          if ((address+i) == 0x30) {
-            value8 &= 0x01;
-          } else if ((address+i) == 0x31) {
-            value8 &= 0xfc;
-          }
-          romaddr_change = 1;
-          break;
-        }
       default:
         value8 = oldval;
     }
     BX_PNIC_THIS pci_conf[address+i] = value8;
   }
-  if (baseaddr_change) {
-    if (DEV_pci_set_base_io(BX_PNIC_THIS_PTR, read_handler, write_handler,
-                            &BX_PNIC_THIS pci_base_address[4],
-                            &BX_PNIC_THIS pci_conf[0x20],
-                            16, &pnic_iomask[0], "PNIC")) {
-      BX_INFO(("new base address: 0x%04x", BX_PNIC_THIS pci_base_address[4]));
-    }
-  }
-  if (romaddr_change) {
-    if (DEV_pci_set_base_mem(BX_PNIC_THIS_PTR, mem_read_handler,
-                             mem_write_handler,
-                             &BX_PNIC_THIS pci_rom_address,
-                             &BX_PNIC_THIS pci_conf[0x30],
-                             BX_PNIC_THIS pci_rom_size)) {
-      BX_INFO(("new ROM address: 0x%08x", BX_PNIC_THIS pci_rom_address));
-    }
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%08x", address, value));
 }
 
 

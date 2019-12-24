@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundfile.h 13116 2017-03-14 18:21:05Z vruppert $
+// $Id: soundfile.h 13249 2017-06-02 16:56:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2015  The Bochs Project
@@ -26,7 +26,7 @@
 class bx_soundlow_waveout_file_c : public bx_soundlow_waveout_c {
 public:
   bx_soundlow_waveout_file_c();
-  virtual ~bx_soundlow_waveout_file_c();
+  virtual ~bx_soundlow_waveout_file_c() {}
 
   virtual int openwaveoutput(const char *wavedev);
   virtual int set_pcm_params(bx_pcm_param_t *param);

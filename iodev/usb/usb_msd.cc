@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.cc 13138 2017-03-19 12:22:27Z vruppert $
+// $Id: usb_msd.cc 13476 2018-03-23 19:02:38Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
 //
 //  Copyright (c) 2006 CodeSourcery.
 //  Written by Paul Brook
-//  Copyright (C) 2009-2016  The Bochs Project
+//  Copyright (C) 2009-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -38,6 +38,31 @@
 #include "usb_msd.h"
 
 #define LOG_THIS
+
+// USB device plugin entry points
+
+int CDECL libusb_msd_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  return 0; // Success
+}
+
+void CDECL libusb_msd_dev_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+//
+// Define the static class that registers the derived USB device class,
+// and allocates one on request.
+//
+class bx_usb_msd_locator_c : public usbdev_locator_c {
+public:
+  bx_usb_msd_locator_c(void) : usbdev_locator_c("usb_msd") {}
+protected:
+  usb_device_c *allocate(usbdev_type devtype, const char *args) {
+    return (new usb_msd_device_c(devtype, args));
+  }
+} bx_usb_msd_match;
 
 enum USBMSDMode {
   USB_MSDM_CBW,
@@ -338,6 +363,7 @@ usb_msd_device_c::usb_msd_device_c(usbdev_type type, const char *filename)
     }
     s.journal[0] = 0;
     s.size = 0;
+    s.sect_size = 512;
   } else if (d.type == USB_DEV_TYPE_CDROM) {
     strcpy(d.devname, "BOCHS USB CDROM");
     s.fname = filename;
@@ -420,6 +446,20 @@ bx_bool usb_msd_device_c::set_option(const char *option)
     } else {
       BX_ERROR(("Option 'size' is only valid for USB VVFAT disks"));
     }
+  } else if (!strncmp(option, "sect_size:", 10)) {
+    if (d.type == USB_DEV_TYPE_DISK) {
+      s.sect_size = (unsigned)strtol(option+10, &suffix, 10);
+      if (strlen(suffix) > 0) {
+        BX_ERROR(("Option 'sect_size': ignoring extra data"));
+      }
+      if ((s.sect_size != 512) && (s.sect_size != 1024) && (s.sect_size != 4096)) {
+        BX_ERROR(("Option 'sect_size': invalid value, using default"));
+        s.sect_size = 512;
+      }
+      return 1;
+    } else {
+      BX_ERROR(("Option 'sect_size' is only valid for USB disks"));
+    }
   }
   return 0;
 }
@@ -433,6 +473,9 @@ bx_bool usb_msd_device_c::init()
       s.hdimage->cylinders = (unsigned)(hdsize/16.0/63.0/512.0);
       s.hdimage->heads = 16;
       s.hdimage->spt = 63;
+      s.hdimage->sect_size = 512;
+    } else {
+      s.hdimage->sect_size = s.sect_size;
     }
     if (s.hdimage->open(s.fname) < 0) {
       BX_ERROR(("could not open hard drive image file '%s'", s.fname));
@@ -440,7 +483,8 @@ bx_bool usb_msd_device_c::init()
     } else {
       s.scsi_dev = new scsi_device_t(s.hdimage, 0, usb_msd_command_complete, (void*)this);
     }
-    sprintf(s.info_txt, "USB HD: path='%s', mode='%s'", s.fname, hdimage_mode_names[s.image_mode]);
+    sprintf(s.info_txt, "USB HD: path='%s', mode='%s', sect_size=%d", s.fname,
+            hdimage_mode_names[s.image_mode], s.hdimage->sect_size);
   } else if (d.type == USB_DEV_TYPE_CDROM) {
     s.cdrom = DEV_hdimage_init_cdrom(s.fname);
     s.scsi_dev = new scsi_device_t(s.cdrom, 0, usb_msd_command_complete, (void*)this);
@@ -553,7 +597,7 @@ int usb_msd_device_c::handle_control(int request, int value, int index, int leng
         case USB_DT_DEVICE_QUALIFIER:
           BX_DEBUG(("USB_REQ_GET_DESCRIPTOR: Device Qualifier"));
           // device qualifier
-          if (d.speed >= USB_SPEED_HIGH) {
+          if (d.speed == USB_SPEED_HIGH) {
             data[0] = 10;
             data[1] = USB_DT_DEVICE_QUALIFIER;
             memcpy(data+2, bx_msd_dev_descriptor+2, 6);
@@ -561,8 +605,8 @@ int usb_msd_device_c::handle_control(int request, int value, int index, int leng
             data[9] = 0;
             ret = 10;
           } else {
-            // a low- or full-speed only device (i.e.: a non high-speed device) must return
-            //  request error on this function
+            // a low-, full- or super-speed device (i.e.: a non high-speed device)
+            // must return request error on this function
             BX_ERROR(("USB MSD handle_control: full-speed only device returning stall on Device Qualifier."));
             goto fail;
           }

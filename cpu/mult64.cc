@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: mult64.cc 11313 2012-08-05 13:52:40Z sshwarts $
+// $Id: mult64.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2012  The Bochs Project
+//  Copyright (C) 2001-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -199,7 +199,7 @@ void long_idiv(Bit128s *quotient,Bit64s *remainder,Bit128s *dividend,Bit64s divi
   }
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::MUL_RAXEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::MUL_RAXEqR(bxInstruction_c *i)
 {
   Bit128u product_128;
 
@@ -220,13 +220,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::MUL_RAXEqR(bxInstruction_c *i)
   SET_FLAGS_OSZAPC_LOGIC_64(product_128.lo);
   if(product_128.hi != 0)
   {
-    ASSERT_FLAGS_OxxxxC();
+    BX_CPU_THIS_PTR oszapc.assert_flags_OxxxxC();
   }
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_RAXEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_RAXEqR(bxInstruction_c *i)
 {
   Bit128s product_128;
 
@@ -252,13 +252,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_RAXEqR(bxInstruction_c *i)
 
   /* magic compare between RDX:RAX and sign extended RAX */
   if (((Bit64u)(product_128.hi) + (product_128.lo >> 63)) != 0) {
-    ASSERT_FLAGS_OxxxxC();
+    BX_CPU_THIS_PTR oszapc.assert_flags_OxxxxC();
   }
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::DIV_RAXEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::DIV_RAXEqR(bxInstruction_c *i)
 {
   Bit64u remainder_64, quotient_64l;
   Bit128u op1_128, quotient_128;
@@ -292,7 +292,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::DIV_RAXEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IDIV_RAXEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::IDIV_RAXEqR(bxInstruction_c *i)
 {
   Bit64s remainder_64, quotient_64l;
   Bit128s op1_128, quotient_128;
@@ -334,7 +334,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IDIV_RAXEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqIdR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqIdR(bxInstruction_c *i)
 {
   Bit128s product_128;
 
@@ -349,13 +349,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqIdR(bxInstruction_c *i)
   SET_FLAGS_OSZAPC_LOGIC_64(product_128.lo);
 
   if (((Bit64u)(product_128.hi) + (product_128.lo >> 63)) != 0) {
-    ASSERT_FLAGS_OxxxxC();
+    BX_CPU_THIS_PTR oszapc.assert_flags_OxxxxC();
   }
 
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqR(bxInstruction_c *i)
 {
   Bit128s product_128;
 
@@ -370,7 +370,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::IMUL_GqEqR(bxInstruction_c *i)
   SET_FLAGS_OSZAPC_LOGIC_64(product_128.lo);
 
   if (((Bit64u)(product_128.hi) + (product_128.lo >> 63)) != 0) {
-    ASSERT_FLAGS_OxxxxC();
+    BX_CPU_THIS_PTR oszapc.assert_flags_OxxxxC();
   }
 
   BX_NEXT_INSTR(i);

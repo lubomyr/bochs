@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hid.cc 13170 2017-04-02 08:47:14Z vruppert $
+// $Id: usb_hid.cc 13241 2017-05-28 08:13:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB HID emulation support (mouse and tablet) ported from QEMU
@@ -58,6 +58,31 @@
 #include "usb_hid.h"
 
 #define LOG_THIS
+
+// USB device plugin entry points
+
+int CDECL libusb_hid_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+{
+  return 0; // Success
+}
+
+void CDECL libusb_hid_dev_plugin_fini(void)
+{
+  // Nothing here yet
+}
+
+//
+// Define the static class that registers the derived USB device class,
+// and allocates one on request.
+//
+class bx_usb_hid_locator_c : public usbdev_locator_c {
+public:
+  bx_usb_hid_locator_c(void) : usbdev_locator_c("usb_hid") {}
+protected:
+  usb_device_c *allocate(usbdev_type devtype, const char *args) {
+    return (new usb_hid_device_c(devtype));
+  }
+} bx_usb_hid_match;
 
 /* HID interface requests */
 #define GET_REPORT   0xa101

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pc_system.h 12589 2014-12-31 12:27:32Z vruppert $
+// $Id: pc_system.h 13188 2017-04-15 20:31:07Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -95,6 +95,7 @@ public:
   void   setTimerParam(unsigned timerID, Bit32u param);
   void   start_timers(void);
   void   activate_timer(unsigned timer_index, Bit32u useconds, bx_bool continuous);
+  void   activate_timer_nsec(unsigned timer_index, Bit64u nseconds, bx_bool continuous);
   void   deactivate_timer(unsigned timer_index);
   unsigned triggeredTimerID(void) {
     return triggeredTimer;
@@ -124,6 +125,7 @@ public:
   void activate_timer_ticks(unsigned index, Bit64u instructions,
                             bx_bool continuous);
   Bit64u time_usec();
+  Bit64u time_nsec();
   Bit64u time_usec_sequential();
   static BX_CPP_INLINE Bit64u time_ticks() {
     return bx_pc_system.ticksTotal +

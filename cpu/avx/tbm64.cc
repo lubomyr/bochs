@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: tbm64.cc 12437 2014-07-25 08:35:06Z vruppert $
+// $Id: tbm64.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2014 Stanislav Shwartsman
+//   Copyright (c) 2011-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@
 
 #include "scalar_arith.h"
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BEXTR_GqEqIdR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BEXTR_GqEqIdR(bxInstruction_c *i)
 {
   Bit16u control = (Bit16u) i->Id();
   unsigned start = control & 0xff;
@@ -42,7 +42,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BEXTR_GqEqIdR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCFILL_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCFILL_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -56,7 +56,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCFILL_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCI_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCI_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -70,7 +70,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCI_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCIC_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCIC_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -84,7 +84,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCIC_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCMSK_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCMSK_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -98,7 +98,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCMSK_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCS_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCS_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -112,7 +112,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLCS_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSFILL_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSFILL_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -126,7 +126,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSFILL_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSIC_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSIC_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -140,7 +140,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSIC_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::T1MSKC_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::T1MSKC_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 
@@ -154,7 +154,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::T1MSKC_BqEqR(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::TZMSK_BqEqR(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::TZMSK_BqEqR(bxInstruction_c *i)
 {
   Bit64u op_64 = BX_READ_64BIT_REG(i->src());
 

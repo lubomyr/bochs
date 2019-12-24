@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundalsa.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: soundalsa.cc 13249 2017-06-02 16:56:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2013-2017  The Bochs Project
@@ -135,15 +135,6 @@ bx_soundlow_waveout_alsa_c::bx_soundlow_waveout_alsa_c()
   alsa_waveout.buffer = NULL;
 }
 
-bx_soundlow_waveout_alsa_c::~bx_soundlow_waveout_alsa_c()
-{
-  if (alsa_waveout.handle != NULL) {
-    snd_pcm_drain(alsa_waveout.handle);
-    snd_pcm_close(alsa_waveout.handle);
-    alsa_waveout.handle = NULL;
-  }
-}
-
 int bx_soundlow_waveout_alsa_c::openwaveoutput(const char *wavedev)
 {
   set_pcm_params(&real_pcm_param);
@@ -177,6 +168,16 @@ int bx_soundlow_waveout_alsa_c::output(int length, Bit8u data[])
     BX_ERROR(("ALSA: error from writei: %s", snd_strerror(ret)));
   }  else if (ret != (int)alsa_waveout.frames) {
     BX_ERROR(("ALSA: short write, write %d frames", ret));
+  }
+  return BX_SOUNDLOW_OK;
+}
+
+int bx_soundlow_waveout_alsa_c::closewaveoutput()
+{
+  if (alsa_waveout.handle != NULL) {
+    snd_pcm_drain(alsa_waveout.handle);
+    snd_pcm_close(alsa_waveout.handle);
+    alsa_waveout.handle = NULL;
   }
   return BX_SOUNDLOW_OK;
 }

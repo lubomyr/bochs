@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: extplugin.h 13109 2017-03-12 07:48:08Z vruppert $
+// $Id: extplugin.h 13302 2017-10-10 18:06:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // Copyright (C) 2002-2017  The Bochs Project
@@ -34,6 +34,8 @@ enum plugintype_t {
   PLUGTYPE_OPTIONAL,
   PLUGTYPE_SOUND,
   PLUGTYPE_NETWORK,
+  PLUGTYPE_USBDEV,
+  PLUGTYPE_VGA,
   PLUGTYPE_USER
 };
 

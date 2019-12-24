@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cmos.h 11182 2012-05-15 17:03:45Z vruppert $
+// $Id: cmos.h 13470 2018-02-24 18:04:36Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2012  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -46,14 +46,17 @@ public:
   virtual void debug_dump(int argc, char **argv);
 #endif
 
-  virtual Bit32u get_reg(unsigned reg) {
+  virtual Bit32u get_reg(Bit8u reg) {
     return s.reg[reg];
   }
-  virtual void set_reg(unsigned reg, Bit32u val) {
+  virtual void set_reg(Bit8u reg, Bit32u val) {
     s.reg[reg] = val;
   }
   virtual time_t get_timeval() {
     return s.timeval;
+  }
+  virtual void enable_irq(bx_bool enabled) {
+    s.irq_enabled = enabled;
   }
 
   struct {
@@ -63,12 +66,15 @@ public:
     int     uip_timer_index;
     time_t  timeval;
     Bit8u   cmos_mem_address;
+    Bit8u   cmos_ext_mem_addr;
     bx_bool timeval_change;
     bx_bool rtc_mode_12hour;
     bx_bool rtc_mode_binary;
     bx_bool rtc_sync;
+    bx_bool irq_enabled;
 
-    Bit8u   reg[128];
+    Bit8u   reg[256];
+    Bit8u   max_reg;
   } s;  // state information
 
 private:

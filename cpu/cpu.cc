@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpu.cc 12894 2016-02-22 19:57:24Z sshwarts $
+// $Id: cpu.cc 13568 2019-08-09 19:57:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,8 @@
 #define LOG_THIS BX_CPU_THIS_PTR
 
 #include "cpustats.h"
+
+jmp_buf BX_CPU_C::jmp_buf_env;
 
 void BX_CPU_C::cpu_loop(void)
 {
@@ -134,12 +136,6 @@ void BX_CPU_C::cpu_loop(void)
 
 void BX_CPU_C::cpu_run_trace(void)
 {
-  if (setjmp(BX_CPU_THIS_PTR jmp_buf_env)) {
-    // can get here only from exception function or VMEXIT
-    BX_CPU_THIS_PTR icount++;
-    return;
-  }
-
   // check on events which occurred for previous instructions (traps)
   // and ones which are asynchronous to the CPU (hardware interrupts)
   if (BX_CPU_THIS_PTR async_event) {
@@ -216,7 +212,7 @@ bxICacheEntry_c* BX_CPU_C::getICacheEntry(void)
 #if BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS && BX_ENABLE_TRACE_LINKING
 
 // The function is called after taken branch instructions and tries to link the branch to the next trace
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::linkTrace(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::linkTrace(bxInstruction_c *i)
 {
 #if BX_SUPPORT_SMP
   if (BX_SMP_PROCESSORS > 1)
@@ -697,9 +693,11 @@ bx_bool BX_CPU_C::dbg_instruction_epilog(void)
            (bx_guard.iaddr.vir[n].cs  == cs) &&
            (bx_guard.iaddr.vir[n].eip == debug_eip))
         {
-          BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_VIR;
-          BX_CPU_THIS_PTR guard_found.iaddr_index = n;
-          return(1); // on a breakpoint
+          if (! bx_guard.iaddr.vir[n].condition || bx_dbg_eval_condition(bx_guard.iaddr.vir[n].condition)) {
+            BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_VIR;
+            BX_CPU_THIS_PTR guard_found.iaddr_index = n;
+            return(1); // on a breakpoint
+          }
         }
       }
     }
@@ -710,9 +708,11 @@ bx_bool BX_CPU_C::dbg_instruction_epilog(void)
         if (bx_guard.iaddr.lin[n].enabled &&
            (bx_guard.iaddr.lin[n].addr == BX_CPU_THIS_PTR guard_found.laddr))
         {
-          BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_LIN;
-          BX_CPU_THIS_PTR guard_found.iaddr_index = n;
-          return(1); // on a breakpoint
+          if (! bx_guard.iaddr.lin[n].condition || bx_dbg_eval_condition(bx_guard.iaddr.lin[n].condition)) {
+            BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_LIN;
+            BX_CPU_THIS_PTR guard_found.iaddr_index = n;
+            return(1); // on a breakpoint
+          }
         }
       }
     }
@@ -725,9 +725,11 @@ bx_bool BX_CPU_C::dbg_instruction_epilog(void)
         for (unsigned n=0; n<bx_guard.iaddr.num_physical; n++) {
           if (bx_guard.iaddr.phy[n].enabled && (bx_guard.iaddr.phy[n].addr == phy))
           {
-            BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_PHY;
-            BX_CPU_THIS_PTR guard_found.iaddr_index = n;
-            return(1); // on a breakpoint
+            if (! bx_guard.iaddr.phy[n].condition || bx_dbg_eval_condition(bx_guard.iaddr.phy[n].condition)) {
+              BX_CPU_THIS_PTR guard_found.guard_found = BX_DBG_GUARD_IADDR_PHY;
+              BX_CPU_THIS_PTR guard_found.iaddr_index = n;
+              return(1); // on a breakpoint
+            }
           }
         }
       }

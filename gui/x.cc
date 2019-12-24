@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: x.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: x.cc 13559 2019-04-21 20:08:32Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2017  The Bochs Project
@@ -39,7 +39,9 @@ extern "C" {
 #include <X11/Xos.h>
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
+#if BX_HAVE_XRANDR_H
 #include <X11/extensions/Xrandr.h>
+#endif
 #if BX_HAVE_XPM_H
 #include <X11/xpm.h>
 #endif
@@ -60,7 +62,9 @@ public:
   DECLARE_GUI_NEW_VIRTUAL_METHODS()
   virtual void beep_on(float frequency);
   virtual void beep_off();
+#if BX_HAVE_XRANDR_H
   virtual void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
+#endif
   virtual void set_display_mode(disp_mode_t newmode);
   virtual void set_mouse_mode_absxy(bx_bool mode);
 #if BX_SHOW_IPS
@@ -1800,6 +1804,7 @@ void bx_x_gui_c::beep_off()
   BX_INFO(("X11 Beep OFF"));
 }
 
+#if BX_HAVE_XRANDR_H
 void bx_x_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
 {
   int num_sizes;
@@ -1829,6 +1834,7 @@ void bx_x_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
   // always return 32 bit depth
   *bpp = 32;
 }
+#endif
 
 void bx_x_gui_c::set_display_mode(disp_mode_t newmode)
 {
