@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="net.sourceforge.bochs.core"
-	  android:versionCode="26900"
-	  android:versionName="2.6.9"
+	  android:versionCode="261000"
+	  android:versionName="2.6.10"
 	  android:installLocation="auto"
 >
 	<application
