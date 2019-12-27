@@ -321,7 +321,7 @@ class Config {
         if (useSb16)
             fw.write("sb16: wavemode=1, dmatimer=500000\n");
         if (useEs1370)
-            fw.write("es1370: enabled=1\n");
+            fw.write("es1370: enabled=1, wavemode=1\n");
         if (useVoodoo)
             fw.write("voodoo: enabled=1, model=voodoo1\n");
         fw.write("mouse: enabled=1\n");
