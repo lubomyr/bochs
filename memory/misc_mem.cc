@@ -37,14 +37,8 @@ Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #endif
 
 #ifdef __ANDROID__
-#  define fopen64 fopen
-#  ifdef __USE_FILE_OFFSET64
-#    define ftello64 ftello
-#    define fseeko64 fseeko
-#  else
 #    define ftello64 ftell
 #    define fseeko64 fseek
-#  endif
 #endif
 
 BX_MEM_C::BX_MEM_C()
