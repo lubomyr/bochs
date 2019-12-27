@@ -15,6 +15,17 @@
 #include <dirent.h>
 #endif
 
+#ifdef ANDROID
+int getdtablesize()
+{
+    struct rlimit r;
+    if (getrlimit(RLIMIT_NOFILE, &r) < 0) {
+        return sysconf(_SC_OPEN_MAX);
+    }
+    return r.rlim_cur;
+}
+#endif
+
 #if BX_NETWORKING && BX_NETMOD_SLIRP
 
 #ifdef DEBUG
@@ -192,8 +203,7 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
 			}
 		}
 #else
-//		for (s = getdtablesize() - 1; s >= 3; s--)
-		for (s = getpagesize() - 1; s >= 3; s--)
+		for (s = getdtablesize() - 1; s >= 3; s--)
 		   close(s);
 #endif
 
