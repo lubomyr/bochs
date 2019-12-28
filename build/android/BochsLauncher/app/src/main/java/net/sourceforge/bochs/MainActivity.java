@@ -1,40 +1,40 @@
 package net.sourceforge.bochs;
 
 import android.Manifest;
-import android.app.ActionBar;
-import android.app.ActionBar.Tab;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
-import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.support.annotation.NonNull;
+import android.support.design.widget.TabLayout;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.FragmentActivity;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.view.ViewPager;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import net.sourceforge.bochs.adapter.TabsPagerAdapter;
+import net.sourceforge.bochs.adapter.ViewPagerAdapter;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-public class MainActivity extends FragmentActivity implements ActionBar.TabListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private String appPath;
+    static String appPath;
     private String configPath;
     private ViewPager viewPager;
-    private ActionBar actionBar;
     private SharedPreferences sPref;
     final String SAVED_PATH = "saved_path";
     private final int REQUEST_EXTERNAL_STORAGE = 1;
@@ -51,64 +51,38 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
         if (!Config.configLoaded)
             Config.setDefaulValues();
 
-        verifyStoragePermissions();
-        setupTabs();
-    }
+        //initToolbar();
+        ViewPager viewPager = (ViewPager) findViewById(R.id.viewpager);
 
-    @SuppressWarnings("deprecation")
-    private void setupTabs() {
-        // Initilization
-        viewPager = (ViewPager) findViewById(R.id.pager);
-        actionBar = getActionBar();
-        TabsPagerAdapter mAdapter = new TabsPagerAdapter(getSupportFragmentManager());
+        //tabs = {getString(R.string.storage), getString(R.string.hardware), getString(R.string.misc)};
+        TabLayout tabLayout = (TabLayout) findViewById(R.id.tabs);
+        tabLayout.setupWithViewPager(viewPager);
 
-        viewPager.setAdapter(mAdapter);
-        actionBar.setHomeButtonEnabled(false);
-        actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
-
-        // Tab titles
-        String[] tabs = {getString(R.string.storage), getString(R.string.hardware), getString(R.string.misc)};
-
-        // Adding Tabs
-        for (String tab_name : tabs) {
-            actionBar.addTab(actionBar.newTab().setText(tab_name)
-                    .setTabListener(this));
+        // Tab layout setup ( divider beetwin tab)
+        View root = tabLayout.getChildAt(0);
+        if (root instanceof LinearLayout) {
+            ((LinearLayout) root).setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE);
+            GradientDrawable drawable = new GradientDrawable();
+            drawable.setColor(ContextCompat.getColor(this, R.color.colorBorder));
+            drawable.setSize(2, 1);
+            ((LinearLayout) root).setDividerPadding(20);
+            ((LinearLayout) root).setDividerDrawable(drawable);
         }
 
-        /**
-         * on swiping the viewpager make respective tab selected
-         * */
-        viewPager.setOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+        ImageView startBtn = (ImageView) findViewById(R.id.start);
+        startBtn.setOnClickListener(this);
 
-            @Override
-            public void onPageSelected(int position) {
-                // on changing the page
-                // make respected tab selected
-                actionBar.setSelectedNavigationItem(position);
-            }
+        ImageView downloadBtn = (ImageView) findViewById(R.id.download);
+        downloadBtn.setOnClickListener(this);
 
-            @Override
-            public void onPageScrolled(int arg0, float arg1, int arg2) {
-            }
+        setupViewPager(viewPager);
 
-            @Override
-            public void onPageScrollStateChanged(int arg0) {
-            }
-        });
-
+        verifyStoragePermissions();
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        switch (id) {
+    public void onClick(View view) {
+        switch (view.getId()) {
             case R.id.start:
                 save();
                 break;
@@ -116,22 +90,23 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                 downloadImages();
                 break;
         }
-        return super.onOptionsItemSelected(item);
     }
 
-    @Override
-    public void onTabReselected(Tab tab, FragmentTransaction ft) {
-    }
+    private void setupViewPager(ViewPager viewPager) {
+        ViewPagerAdapter adapter = new ViewPagerAdapter(getSupportFragmentManager());
 
-    @Override
-    public void onTabSelected(Tab tab, FragmentTransaction ft) {
-        // on tab selected
-        // show respected fragment view
-        viewPager.setCurrentItem(tab.getPosition());
-    }
+        // Tab titles
+        String[] tabs = {getString(R.string.storage), getString(R.string.hardware), getString(R.string.misc)};
 
-    @Override
-    public void onTabUnselected(Tab tab, FragmentTransaction ft) {
+        StorageTabFragment storageTabFragment =  new StorageTabFragment();
+        adapter.addFragment(storageTabFragment, tabs[0]);
+        HardwareTabFragment hardwareTabFragment =  new HardwareTabFragment();
+        adapter.addFragment(hardwareTabFragment, tabs[1]);
+        MiscTabFragment miscTabFragment =  new MiscTabFragment();
+        adapter.addFragment(miscTabFragment, tabs[2]);
+
+        viewPager.setAdapter(adapter);
+        viewPager.setOffscreenPageLimit(2);
     }
 
     static String getFileName(String path) {
@@ -160,7 +135,6 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
 
     private void checkConfig() {
         if (!Config.configLoaded) {
-            Config.configLoaded = true;
             try {
                 Config.readConfig(configPath);
             } catch (FileNotFoundException e) {
@@ -168,6 +142,7 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
                 return;
             }
             Toast.makeText(MainActivity.this, getString(R.string.config_loaded), Toast.LENGTH_SHORT).show();
+            Config.configLoaded = true;
         }
     }
 
@@ -184,15 +159,13 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
             case REQUEST_EXTERNAL_STORAGE:
                 if (grantResults.length != 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // Permission Granted
                     createDirIfNotExists();
                     checkConfig();
-                } else {
-                    Toast.makeText(this, "Permission Denied", Toast.LENGTH_LONG).show();
                 }
                 break;
             default:
@@ -201,11 +174,9 @@ public class MainActivity extends FragmentActivity implements ActionBar.TabListe
     }
 
     public void verifyStoragePermissions() {
-        if (ActivityCompat.checkSelfPermission(this,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
 
-            String[] PERMISSIONS_STORAGE = new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE};
+            String[] PERMISSIONS_STORAGE = new String[]{ Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE };
 
             ActivityCompat.requestPermissions(
                     this,

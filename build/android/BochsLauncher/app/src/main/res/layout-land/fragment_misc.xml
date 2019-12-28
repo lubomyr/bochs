@@ -25,7 +25,8 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/rom_image" />
+                android:text="@string/rom_image"
+                android:textAllCaps="false" />
 
             <TextView
                 android:id="@+id/miscTextViewRomImage"
@@ -59,7 +60,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
-                android:layout_marginLeft="10dp"
                 android:text="@string/none"
                 android:textAppearance="?android:attr/textAppearanceMedium" />
 
@@ -93,8 +93,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:layout_marginLeft="5dp"
+                        android:layout_marginStart="5dp"
                         android:text="@string/sync"
                         android:textAppearance="?android:attr/textAppearanceMedium" />
 
@@ -112,8 +111,7 @@
                 android:id="@+id/vgaUpdateFreqLayout"
                 android:layout_width="200dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_marginLeft="5dp"
+                android:layout_marginStart="5dp"
                 android:background="@drawable/my_border"
                 android:gravity="center_horizontal"
                 android:orientation="vertical">

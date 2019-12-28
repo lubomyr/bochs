@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Bochs</string>
+    <string name="storage">存储</string>
+    <string name="hardware">配置</string>
+    <string name="misc">其它</string>
+    <string name="config_not_saved">发生错误, 配置文件无法保存</string>
+    <string name="config_saved">配置文件已保存</string>
+    <string name="config_not_found">找不到配置文件</string>
+    <string name="config_loaded">config loaded</string>
+    <string name="download_disk_images">下载磁盘映像</string>
+    <string name="select">选择</string>
+    <string name="none">无</string>
+    <string name="floppy_a">软盘A</string>
+    <string name="floppy_b">软盘B</string>
+    <string name="ata0_master">ata0-master</string>
+    <string name="ata0_slave">ata0-slave</string>
+    <string name="ata1_master">ata1-master</string>
+    <string name="ata1_slave">ata1-slave</string>
+    <string name="vfat">共享文件夹</string>
+    <string name="boot">启动</string>
+    <string name="cpu_model">CPU类型:</string>
+    <string name="description">描述</string>
+    <string name="chipset">芯片组:</string>
+    <string name="i430fx">i430fx</string>
+    <string name="i440fx">i440fx</string>
+    <string name="memory">内存:</string>
+    <string name="value">值</string>
+    <string name="vga_card">VGA显示卡:</string>
+    <string name="sound_card">声卡:</string>
+    <string name="ethernet_card">网卡:</string>
+    <string name="pci">PCI:</string>
+    <string name="slot1">Slot1:</string>
+    <string name="slot2">Slot2:</string>
+    <string name="slot3">Slot3:</string>
+    <string name="slot4">Slot4:</string>
+    <string name="slot5">Slot5:</string>
+    <string name="rom_image">rom 镜像</string>
+    <string name="vga_rom_image">vga rom 镜像</string>
+    <string name="clock">时钟:</string>
+    <string name="sync">同步:</string>
+    <string name="vga_update_freq">VGA刷新频率:</string>
+    <string name="full_screen">全屏模式</string>
+    <string name="speaker">扬声器</string>
+
+</resources>
