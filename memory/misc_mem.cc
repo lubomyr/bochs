@@ -36,9 +36,14 @@
 Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #endif
 
-#ifdef __ANDROID__
+#ifdef ANDROID_32BIT
 #    define ftello64 ftell
 #    define fseeko64 fseek
+#endif
+
+#ifdef ANDROID_ARM64
+#    define ftello64 ftello
+#    define fseeko64 fseeko
 #endif
 
 BX_MEM_C::BX_MEM_C()
