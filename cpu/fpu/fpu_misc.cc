@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fpu_misc.cc 11415 2012-09-12 21:08:40Z vruppert $
+// $Id: fpu_misc.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2003-2012 Stanislav Shwartsman
+//   Copyright (c) 2003-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -31,7 +31,7 @@
 #include "softfloatx80.h"
 
 /* D9 C8 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FXCH_STi(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FXCH_STi(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -46,7 +46,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FXCH_STi(bxInstruction_c *i)
 
   if (st0_tag == FPU_Tag_Empty || sti_tag == FPU_Tag_Empty)
   {
-     FPU_exception(FPU_EX_Stack_Underflow);
+     FPU_exception(i, FPU_EX_Stack_Underflow);
 
      if(BX_CPU_THIS_PTR the_i387.is_IA_masked())
      {
@@ -69,13 +69,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FXCH_STi(bxInstruction_c *i)
 }
 
 /* D9 E0 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCHS(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCHS(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      clear_C1();
@@ -87,13 +87,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCHS(bxInstruction_c *i)
 }
 
 /* D9 E1 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FABS(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FABS(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0)) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      clear_C1();
@@ -105,7 +105,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FABS(bxInstruction_c *i)
 }
 
 /* D9 F6 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDECSTP(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FDECSTP(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -118,7 +118,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FDECSTP(bxInstruction_c *i)
 }
 
 /* D9 F7 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FINCSTP(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FINCSTP(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -131,7 +131,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FINCSTP(bxInstruction_c *i)
 }
 
 /* DD C0 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FFREE_STi(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FFREE_STi(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
@@ -149,7 +149,7 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FFREE_STi(bxInstruction_c *i)
  */
 
 /* DF C0 */
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FFREEP_STi(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FFREEP_STi(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);

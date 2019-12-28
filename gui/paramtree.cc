@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paramtree.cc 13134 2017-03-18 19:28:02Z sshwarts $
+// $Id: paramtree.cc 13459 2018-02-04 22:20:46Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2010-2015  The Bochs Project
+//  Copyright (C) 2010-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -279,27 +279,78 @@ void bx_param_num_c::set_enabled(int en)
   update_dependents();
 }
 
-int bx_param_num_c::parse_param(const char *value)
+int bx_param_num_c::parse_param(const char *ptr)
 {
-  if (value != NULL) {
-    if ((value[0] == '0') && (value[1] == 'x')) {
-      set(strtoul(value, NULL, 16));
+  if (ptr != NULL) {
+    Bit64u value;
+    if (get_base() == BASE_DOUBLE) {
+      double f2value = strtod(ptr, NULL);
+      memcpy(&value, &f2value, sizeof(double));
+      set(value);
+    } else if (get_base() == BASE_FLOAT) {
+      float f1value = (float)strtod(ptr, NULL);
+      memcpy(&value, &f1value, sizeof(float));
+      set(value);
+    } else if ((ptr[0] == '0') && (ptr[1] == 'x')) {
+      set(strtoull(ptr, NULL, 16));
     } else {
-      if (value[strlen(value)-1] == 'K') {
-        set(1000 * strtoul(value, NULL, 10));
+      if (ptr[strlen(ptr)-1] == 'K') {
+        set(1000 * strtoul(ptr, NULL, 10));
       }
-      else if (value[strlen(value)-1] == 'M') {
-        set(1000000 * strtoul(value, NULL, 10));
+      else if (ptr[strlen(ptr)-1] == 'M') {
+        set(1000000 * strtoul(ptr, NULL, 10));
       }
       else {
-        set(strtoul(value, NULL, 10));
+        set(strtoul(ptr, NULL, 10));
       }
     }
-
     return 1;
   }
 
   return 0;
+}
+
+void bx_param_num_c::dump_param(FILE *fp)
+{
+  char tmpstr[BX_PATHNAME_LEN+1];
+  dump_param(tmpstr, BX_PATHNAME_LEN, 0);
+  fputs(tmpstr, fp);
+}
+
+int bx_param_num_c::dump_param(char *buf, int len, bx_bool dquotes)
+{
+  Bit64s value = get64();
+  if (get_base() == BASE_DOUBLE) {
+    double f2value;
+    memcpy(&f2value, &value, sizeof(double));
+    snprintf(buf, len, "%f", f2value);
+  } else if (get_base() == BASE_FLOAT) {
+    float f1value;
+    memcpy(&f1value, &value, sizeof(float));
+    snprintf(buf, len, "%f", f1value);
+  } else if (get_base() == BASE_DEC) {
+    if (get_min() >= BX_MIN_BIT64U) {
+      if ((Bit64u) get_max() > BX_MAX_BIT32U) {
+        snprintf(buf, len, FMT_LL"u", value);
+      } else {
+        snprintf(buf, len, "%u", (Bit32u) value);
+      }
+    } else {
+      snprintf(buf, len, "%d", (Bit32s) value);
+    }
+  } else {
+    if (get_format()) {
+      snprintf(buf, len, get_format(), value);
+    } else {
+      if ((Bit64u)get_max() > BX_MAX_BIT32U) {
+        snprintf(buf, len, "0x" FMT_LL "x", (Bit64u) value);
+      } else {
+        snprintf(buf, len, "0x%x", (Bit32u) value);
+      }
+    }
+  }
+
+  return strlen(buf);
 }
 
 // Signed 64 bit
@@ -455,6 +506,19 @@ bx_shadow_num_c::bx_shadow_num_c(bx_param_c *parent,
   }
 }
 
+// Float (floating point)
+bx_shadow_num_c::bx_shadow_num_c(bx_param_c *parent,
+    const char *name,
+    float *ptr_to_real_val)
+: bx_param_num_c(parent, name, NULL, NULL, BX_MIN_BIT64U, BX_MAX_BIT64U, 0, 1)
+{
+  this->varsize = 32;
+  this->lowbit = 0;
+  this->mask = BX_MAX_BIT32U;
+  val.pfloat = ptr_to_real_val;
+  this->base = BASE_FLOAT;
+}
+
 // Double (floating point)
 bx_shadow_num_c::bx_shadow_num_c(bx_param_c *parent,
     const char *name,
@@ -539,18 +603,29 @@ bx_param_bool_c::bx_param_bool_c(bx_param_c *parent,
   set_type(BXT_PARAM_BOOL);
 }
 
-int bx_param_bool_c::parse_param(const char *value)
+int bx_param_bool_c::parse_param(const char *ptr)
 {
-  if (value != NULL) {
-    if (!strcmp(value, "0") || !stricmp(value, "false")) {
+  if (ptr != NULL) {
+    if (!strcmp(ptr, "0") || !stricmp(ptr, "false")) {
       set(0); return 1;
     } 
-    if (!strcmp(value, "1") || !stricmp(value, "true")) {
+    if (!strcmp(ptr, "1") || !stricmp(ptr, "true")) {
       set(1); return 1;
     }
   }
 
   return 0;
+}
+
+void bx_param_bool_c::dump_param(FILE *fp)
+{
+  fprintf(fp, "%s", get()?"true":"false");
+}
+
+int bx_param_bool_c::dump_param(char *buf, int len, bx_bool dquotes)
+{
+  snprintf(buf, len, "%s", get()?"true":"false");
+  return strlen(buf);
 }
 
 bx_shadow_bool_c::bx_shadow_bool_c(bx_param_c *parent,
@@ -705,13 +780,24 @@ void bx_param_enum_c::set_enabled(int en)
   update_dependents();
 }
 
-int bx_param_enum_c::parse_param(const char *value)
+int bx_param_enum_c::parse_param(const char *ptr)
 {
-  if (value != NULL) {
-    return set_by_name(value);
+  if (ptr != NULL) {
+    return set_by_name(ptr);
   }
 
   return 0;
+}
+
+void bx_param_enum_c::dump_param(FILE *fp)
+{
+  fprintf(fp, "%s", get_selected());
+}
+
+int bx_param_enum_c::dump_param(char *buf, int len, bx_bool dquotes)
+{
+  snprintf(buf, len, "%s", get_selected());
+  return strlen(buf);
 }
 
 bx_param_string_c::bx_param_string_c(bx_param_c *parent,
@@ -744,23 +830,6 @@ bx_param_string_c::bx_param_string_c(bx_param_c *parent,
     BX_ASSERT(parent->get_type() == BXT_LIST);
     this->parent = (bx_list_c *)parent;
     this->parent->add(this);
-  }
-}
-
-bx_param_filename_c::bx_param_filename_c(bx_param_c *parent,
-    const char *name,
-    const char *label,
-    const char *description,
-    const char *initial_val,
-    int maxsize)
-  : bx_param_string_c(parent, name, label, description, initial_val, maxsize)
-{
-  set_options(IS_FILENAME);
-  int len = strlen(initial_val);
-  if ((len > 4) && (initial_val[len - 4] == '.')) {
-    ext = &initial_val[len - 3];
-  } else {
-    ext = NULL;
   }
 }
 
@@ -815,10 +884,7 @@ void bx_param_string_c::set_dependent_list(bx_list_c *l)
 
 Bit32s bx_param_string_c::get(char *buf, int len)
 {
-  if (options & RAW_BYTES)
-    memcpy(buf, val, len);
-  else
-    strncpy(buf, val, len);
+  strncpy(buf, val, len);
   if (handler) {
     // the handler can choose to replace the value in val/len.  Also its
     // return value is passed back as the return value of get.
@@ -831,56 +897,38 @@ void bx_param_string_c::set(const char *buf)
 {
   char *oldval = new char[maxsize];
 
-  if (options & RAW_BYTES) {
-    memcpy(oldval, val, maxsize);
-  } else {
-    strncpy(oldval, val, maxsize);
-    oldval[maxsize - 1] = 0;
-  }
+  strncpy(oldval, val, maxsize);
+  oldval[maxsize - 1] = 0;
   if (handler) {
     // the handler can return a different char* to be copied into the value
     buf = (*handler)(this, 1, oldval, buf, -1);
   }
-  if (options & RAW_BYTES) {
-    memcpy(val, buf, maxsize);
-  } else {
-    strncpy(val, buf, maxsize);
-    val[maxsize - 1] = 0;
-  }
+  strncpy(val, buf, maxsize);
+  val[maxsize - 1] = 0;
   delete [] oldval;
   if (dependent_list != NULL) update_dependents();
 }
 
-bx_bool bx_param_string_c::equals(const char *buf)
+bx_bool bx_param_string_c::equals(const char *buf) const
 {
-  if (options & RAW_BYTES)
-    return (memcmp(val, buf, maxsize) == 0);
-  else
-    return (strncmp(val, buf, maxsize) == 0);
+  return (strncmp(val, buf, maxsize) == 0);
 }
 
 void bx_param_string_c::set_initial_val(const char *buf)
 {
-  if (options & RAW_BYTES)
-    memcpy(initial_val, buf, maxsize);
-  else
-    strncpy(initial_val, buf, maxsize);
+  strncpy(initial_val, buf, maxsize);
   set(initial_val);
 }
 
-bx_bool bx_param_string_c::isempty()
+bx_bool bx_param_string_c::isempty() const
 {
-  if (options & RAW_BYTES) {
-    return (memcmp(val, initial_val, maxsize) == 0);
-  } else {
-    return ((strlen(val) == 0) || !strcmp(val, "none"));
-  }
+  return (strlen(val) == 0) || !strcmp(val, "none");
 }
 
-int bx_param_string_c::parse_param(const char *value)
+int bx_param_string_c::parse_param(const char *ptr)
 {
-  if (value != NULL) {
-    set(value);
+  if (ptr != NULL) {
+    set(ptr);
   } else {
     set("");
   }
@@ -888,46 +936,135 @@ int bx_param_string_c::parse_param(const char *value)
   return 1;
 }
 
-int bx_param_string_c::sprint(char *buf, int len, bx_bool dquotes)
+void bx_param_string_c::dump_param(FILE *fp)
 {
-  char tmpbyte[4];
+  char tmpstr[BX_PATHNAME_LEN+1];
+  dump_param(tmpstr, BX_PATHNAME_LEN, 0);
+  fputs(tmpstr, fp);
+}
 
-  if (get_options() & RAW_BYTES) {
-    buf[0] = 0;
-    for (int j = 0; j < maxsize; j++) {
-      if (j > 0) {
-        tmpbyte[0] = separator;
-        tmpbyte[1] = 0;
-        strcat(buf, tmpbyte);
-      }
-      sprintf(tmpbyte, "%02x", (Bit8u)val[j]);
-      strcat(buf, tmpbyte);
+int bx_param_string_c::dump_param(char *buf, int len, bx_bool dquotes)
+{
+  if (!isempty()) {
+    if (dquotes) {
+      snprintf(buf, len, "\"%s\"", val);
+    } else {
+      snprintf(buf, len, "%s", val);
     }
   } else {
-    if (!isempty()) {
-      if (dquotes) {
-        snprintf(buf, len, "\"%s\"", val);
-      } else {
-        snprintf(buf, len, "%s", val);
-      }
-    } else {
-      strcpy(buf, "none");
-    }
+    strcpy(buf, "none");
   }
   return strlen(buf);
+}
+
+Bit32s bx_param_bytestring_c::get(char *buf, int len)
+{
+  memcpy(buf, val, len);
+  if (handler) {
+    // the handler can choose to replace the value in val/len.  Also its
+    // return value is passed back as the return value of get.
+    (*handler)(this, 0, buf, buf, len);
+  }
+  return 0;
+}
+
+void bx_param_bytestring_c::set(const char *buf)
+{
+  char *oldval = new char[maxsize];
+
+  memcpy(oldval, val, maxsize);
+  if (handler) {
+    // the handler can return a different char* to be copied into the value
+    buf = (*handler)(this, 1, oldval, buf, -1);
+  }
+  memcpy(val, buf, maxsize);
+  delete [] oldval;
+  if (dependent_list != NULL) update_dependents();
+}
+
+bx_bool bx_param_bytestring_c::equals(const char *buf) const
+{
+  return (memcmp(val, buf, maxsize) == 0);
+}
+
+void bx_param_bytestring_c::set_initial_val(const char *buf)
+{
+  memcpy(initial_val, buf, maxsize);
+  set(initial_val);
+}
+
+bx_bool bx_param_bytestring_c::isempty() const
+{
+  return (memcmp(val, initial_val, maxsize) == 0);
+}
+
+int bx_param_bytestring_c::parse_param(const char *ptr)
+{
+  int j, p = 0, ret = 1;
+  unsigned n;
+  char buf[512];
+
+  memset(buf, 0, get_maxsize());
+  for (j = 0; j < get_maxsize(); j++) {
+    if (ptr[p] == get_separator()) {
+      p++;
+    }
+    if (sscanf(ptr+p, "%02x", &n) == 1) {
+      buf[j] = n;
+      p += 2;
+    } else {
+      ret = 0;
+    }
+  }
+  if (!equals(buf)) set(buf);
+
+  return ret;
+}
+
+int bx_param_bytestring_c::dump_param(char *buf, int len, bx_bool dquotes)
+{
+  buf[0] = 0;
+  for (int j = 0; j < maxsize; j++) {
+    char tmpbyte[4];
+    if (j > 0) {
+      tmpbyte[0] = separator;
+      tmpbyte[1] = 0;
+      strcat(buf, tmpbyte);
+    }
+    sprintf(tmpbyte, "%02x", (Bit8u)val[j]);
+    strcat(buf, tmpbyte);
+  }
+  return strlen(buf);
+}
+
+bx_param_filename_c::bx_param_filename_c(bx_param_c *parent,
+    const char *name,
+    const char *label,
+    const char *description,
+    const char *initial_val,
+    int maxsize)
+  : bx_param_string_c(parent, name, label, description, initial_val, maxsize)
+{
+  set_options(IS_FILENAME);
+  int len = strlen(initial_val);
+  if ((len > 4) && (initial_val[len - 4] == '.')) {
+    ext = &initial_val[len - 3];
+  } else {
+    ext = NULL;
+  }
 }
 
 bx_shadow_data_c::bx_shadow_data_c(bx_param_c *parent,
     const char *name,
     Bit8u *ptr_to_data,
     Bit32u data_size,
-    bx_bool text_fmt)
+    bx_bool is_text)
   : bx_param_c(SIM->gen_param_id(), name, "")
 {
   set_type(BXT_PARAM_DATA);
   this->data_ptr = ptr_to_data;
   this->data_size = data_size;
-  this->text_fmt = text_fmt;
+  this->is_text = is_text;
   if (parent) {
     BX_ASSERT(parent->get_type() == BXT_LIST);
     this->parent = (bx_list_c *)parent;

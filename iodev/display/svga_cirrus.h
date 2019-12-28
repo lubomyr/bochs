@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: svga_cirrus.h 13147 2017-03-24 19:57:25Z vruppert $
+// $Id: svga_cirrus.h 13434 2018-01-11 19:02:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2004 Makoto Suzuki (suzu)
@@ -57,20 +57,14 @@
 #define CIRRUS_VIDEO_MEMORY_KB    (CIRRUS_VIDEO_MEMORY_MB * 1024)
 #define CIRRUS_VIDEO_MEMORY_BYTES (CIRRUS_VIDEO_MEMORY_KB * 1024)
 
-typedef void (*bx_cirrus_bitblt_rop_t)(
-    Bit8u *dst,const Bit8u *src,
-    int dstpitch,int srcpitch,
-    int bltwidth,int bltheight);
-
 class bx_svga_cirrus_c : public bx_vgacore_c
 {
 public:
   bx_svga_cirrus_c();
   virtual ~bx_svga_cirrus_c();
 
-  virtual void init_vga_extension(void);
+  virtual bx_bool init_vga_extension(void);
   virtual void reset(unsigned type);
-  virtual void refresh_display(void *this_ptr, bx_bool redraw);
   virtual void redraw_area(unsigned x0, unsigned y0,
                            unsigned width, unsigned height);
   virtual Bit8u mem_read(bx_phy_address addr);
@@ -87,6 +81,9 @@ public:
   virtual void debug_dump(int argc, char **argv);
 #endif
 
+protected:
+  virtual void update(void);
+
 private:
   static Bit32u svga_read_handler(void *this_ptr, Bit32u address, unsigned io_len);
   static void   svga_write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);
@@ -97,11 +94,7 @@ private:
   BX_CIRRUS_SMF void mem_write_mode4and5_8bpp(Bit8u mode, Bit32u offset, Bit8u value);
   BX_CIRRUS_SMF void mem_write_mode4and5_16bpp(Bit8u mode, Bit32u offset, Bit8u value);
 
-  static void   svga_timer_handler(void *);
-  static Bit64s svga_param_handler(bx_param_c *param, int set, Bit64s val);
-  BX_CIRRUS_SMF void   svga_timer(void);
   BX_CIRRUS_SMF void   svga_modeupdate(void);
-  BX_CIRRUS_SMF void   svga_update(void);
 
   BX_CIRRUS_SMF void   svga_init_members();
 
@@ -174,8 +167,8 @@ private:
   BX_CIRRUS_SMF void svga_colorexpand_transp_memsrc();
 
   BX_CIRRUS_SMF bx_bool svga_asyncbitblt_next();
-  BX_CIRRUS_SMF bx_cirrus_bitblt_rop_t svga_get_fwd_rop_handler(Bit8u rop);
-  BX_CIRRUS_SMF bx_cirrus_bitblt_rop_t svga_get_bkwd_rop_handler(Bit8u rop);
+  BX_CIRRUS_SMF bx_bitblt_rop_t svga_get_fwd_rop_handler(Bit8u rop);
+  BX_CIRRUS_SMF bx_bitblt_rop_t svga_get_bkwd_rop_handler(Bit8u rop);
 
   struct {
     Bit8u index;
@@ -214,7 +207,7 @@ private:
   Bit8u *disp_ptr;
 
   struct {
-    bx_cirrus_bitblt_rop_t rop_handler;
+    bx_bitblt_rop_t rop_handler;
     int pixelwidth;
     int bltwidth;
     int bltheight;
@@ -249,6 +242,8 @@ private:
   struct {
     Bit16u x, y, w, h;
   } redraw;
+
+  bx_ddc_c ddc;
 
   bx_bool is_unlocked() { return svga_unlock_special; }
 

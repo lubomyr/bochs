@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: siminterface.cc 13616 2019-11-23 15:15:50Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -156,6 +156,7 @@ public:
     return get_first_atadevice(BX_ATA_DEVICE_DISK);
   }
   virtual bx_bool is_pci_device(const char *name);
+  virtual bx_bool is_agp_device(const char *name);
 #if BX_DEBUGGER
   virtual void debug_break();
   virtual void debug_interpret_cmd(char *cmd);
@@ -285,7 +286,7 @@ bx_param_num_c *bx_real_sim_c::get_param_num(const char *pname, bx_param_c *base
   int type = gen->get_type();
   if (type == BXT_PARAM_NUM || type == BXT_PARAM_BOOL || type == BXT_PARAM_ENUM)
     return (bx_param_num_c *)gen;
-  BX_ERROR(("get_param_num(%s) could not find an integer parameter with that name", pname));
+  BX_ERROR(("get_param_num(%s) could not find a number parameter with that name", pname));
   return NULL;
 }
 
@@ -296,9 +297,9 @@ bx_param_string_c *bx_real_sim_c::get_param_string(const char *pname, bx_param_c
     BX_ERROR(("get_param_string(%s) could not find a parameter", pname));
     return NULL;
   }
-  if (gen->get_type() == BXT_PARAM_STRING)
+  if (gen->get_type() == BXT_PARAM_STRING || gen->get_type() == BXT_PARAM_BYTESTRING)
     return (bx_param_string_c *)gen;
-  BX_ERROR(("get_param_string(%s) could not find an integer parameter with that name", pname));
+  BX_ERROR(("get_param_string(%s) could not find a string parameter with that name", pname));
   return NULL;
 }
 
@@ -788,17 +789,34 @@ bx_param_c *bx_real_sim_c::get_first_atadevice(Bit32u search_type)
 bx_bool bx_real_sim_c::is_pci_device(const char *name)
 {
 #if BX_SUPPORT_PCI
-  unsigned i;
+  unsigned i, max_pci_slots = BX_N_PCI_SLOTS;
   char devname[80];
   char *device;
 
   if (SIM->get_param_bool(BXPN_PCI_ENABLED)->get()) {
-    for (i = 0; i < BX_N_PCI_SLOTS; i++) {
+    if (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX) {
+      max_pci_slots = 4;
+    }
+    for (i = 0; i < max_pci_slots; i++) {
       sprintf(devname, "pci.slot.%d", i+1);
       device = SIM->get_param_string(devname)->getptr();
       if ((strlen(device) > 0) && (!strcmp(name, device))) {
         return 1;
       }
+    }
+  }
+#endif
+  return 0;
+}
+
+bx_bool bx_real_sim_c::is_agp_device(const char *name)
+{
+#if BX_SUPPORT_PCI
+  if (get_param_bool(BXPN_PCI_ENABLED)->get() &&
+      (SIM->get_param_enum(BXPN_PCI_CHIPSET)->get() == BX_PCI_CHIPSET_I440BX)) {
+    const char *device = SIM->get_param_string("pci.slot.5")->getptr();
+    if ((strlen(device) > 0) && (!strcmp(name, device))) {
+      return 1;
     }
   }
 #endif
@@ -1201,12 +1219,11 @@ static int bx_restore_getline(FILE *fp, char *line, int maxlen)
 bx_bool bx_real_sim_c::restore_bochs_param(bx_list_c *root, const char *sr_path, const char *restore_name)
 {
   char devstate[BX_PATHNAME_LEN], devdata[BX_PATHNAME_LEN];
-  char line[512], buf[512], pname[80];
+  char line[512], buf[512];
+  char pname[81]; // take extra 81st character for /0
   char *ptr;
-  int i, j, p;
+  int i;
   unsigned n;
-  double fvalue;
-  Bit64u value;
   bx_param_c *param = NULL;
   FILE *fp, *fp2;
 
@@ -1246,59 +1263,29 @@ bx_bool bx_real_sim_c::restore_bochs_param(bx_list_c *root, const char *sr_path,
               }
               switch (param->get_type()) {
                 case BXT_PARAM_NUM:
-                  if (((bx_param_num_c*)param)->get_base() == BASE_DOUBLE) {
-                    fvalue = strtod(ptr, NULL);
-                    memcpy(&value, &fvalue, sizeof(double));
-                    ((bx_param_num_c*)param)->set(value);
-                  } else if ((ptr[0] == '0') && (ptr[1] == 'x')) {
-                    ((bx_param_num_c*)param)->set(strtoull(ptr, NULL, 16));
-                  } else {
-                    ((bx_param_num_c*)param)->set(strtoull(ptr, NULL, 10));
-                  }
-                  break;
                 case BXT_PARAM_BOOL:
-                  ((bx_param_bool_c*)param)->set(!strcmp(ptr, "true"));
-                  break;
                 case BXT_PARAM_ENUM:
-                  ((bx_param_enum_c*)param)->set_by_name(ptr);
-                  break;
                 case BXT_PARAM_STRING:
-                  {
-                    bx_param_string_c *sparam = (bx_param_string_c*)param;
-                    if (sparam->get_options() & bx_param_string_c::RAW_BYTES) {
-                      p = 0;
-                      for (j = 0; j < sparam->get_maxsize(); j++) {
-                        if (ptr[p] == sparam->get_separator()) {
-                          p++;
-                        }
-                        if (sscanf(ptr+p, "%02x", &n) == 1) {
-                          buf[j] = n;
-                          p += 2;
-                        }
-                      }
-                      if (!sparam->equals(buf)) sparam->set(buf);
-                    } else {
-                      if (!sparam->equals(ptr)) sparam->set(ptr);
-                    }
-                  }
+                case BXT_PARAM_BYTESTRING:
+                  param->parse_param(ptr);
                   break;
                 case BXT_PARAM_DATA:
                   {
                     bx_shadow_data_c *dparam = (bx_shadow_data_c*)param;
-                    if (!dparam->get_format()) {
+                    if (!dparam->is_text_format()) {
                       sprintf(devdata, "%s/%s", sr_path, ptr);
                       fp2 = fopen(devdata, "rb");
                       if (fp2 != NULL) {
                         fread(dparam->getptr(), 1, dparam->get_size(), fp2);
                         fclose(fp2);
                       }
-                    } else if (!strcmp(ptr, "{")) {
+                    } else if (!strcmp(ptr, "[")) {
                       i = 0;
                       do {
                         bx_restore_getline(fp, buf, BX_PATHNAME_LEN);
                         ptr = strtok(buf, " ");
                         while (ptr) {
-                          if (!strcmp(ptr, "}")) {
+                          if (!strcmp(ptr, "]")) {
                             i = 0;
                             break;
                           } else {
@@ -1368,8 +1355,6 @@ bx_bool bx_real_sim_c::restore_hardware()
 bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_path, int level)
 {
   int i, j;
-  Bit64s value;
-  double fvalue;
   char pname[BX_PATHNAME_LEN], tmpstr[BX_PATHNAME_LEN];
   FILE *fp2;
 
@@ -1382,47 +1367,17 @@ bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_
   fprintf(fp, "%s = ", node->get_name());
   switch (node->get_type()) {
     case BXT_PARAM_NUM:
-      value = ((bx_param_num_c*)node)->get64();
-      if (((bx_param_num_c*)node)->get_base() == BASE_DOUBLE) {
-        memcpy(&fvalue, &value, sizeof(double));
-        fprintf(fp, "%f\n", fvalue);
-      } else if (((bx_param_num_c*)node)->get_base() == BASE_DEC) {
-        if (((bx_param_num_c*)node)->get_min() >= BX_MIN_BIT64U) {
-          if ((Bit64u)((bx_param_num_c*)node)->get_max() > BX_MAX_BIT32U) {
-            fprintf(fp, FMT_LL"u\n", value);
-          } else {
-            fprintf(fp, "%u\n", (Bit32u) value);
-          }
-        } else {
-          fprintf(fp, "%d\n", (Bit32s) value);
-        }
-      } else {
-        if (node->get_format()) {
-          fprintf(fp, node->get_format(), value);
-        } else {
-          if ((Bit64u)((bx_param_num_c*)node)->get_max() > BX_MAX_BIT32U) {
-            fprintf(fp, "0x" FMT_LL "x", (Bit64u) value);
-          } else {
-            fprintf(fp, "0x%x", (Bit32u) value);
-          }
-        }
-        fprintf(fp, "\n");
-      }
-      break;
     case BXT_PARAM_BOOL:
-      fprintf(fp, "%s\n", ((bx_param_bool_c*)node)->get()?"true":"false");
-      break;
     case BXT_PARAM_ENUM:
-      fprintf(fp, "%s\n", ((bx_param_enum_c*)node)->get_selected());
-      break;
     case BXT_PARAM_STRING:
-      ((bx_param_string_c*)node)->sprint(tmpstr, BX_PATHNAME_LEN, 0);
-      fprintf(fp, "%s\n", tmpstr);
+    case BXT_PARAM_BYTESTRING:
+      node->dump_param(fp);
+      fprintf(fp, "\n");
       break;
     case BXT_PARAM_DATA:
       {
         bx_shadow_data_c *dparam = (bx_shadow_data_c*)node;
-        if (!dparam->get_format()) {
+        if (!dparam->is_text_format()) {
           node->get_param_path(pname, BX_PATHNAME_LEN);
           if (!strncmp(pname, "bochs.", 6)) {
             strcpy(pname, pname+6);
@@ -1438,7 +1393,7 @@ bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_
             fclose(fp2);
           }
         } else {
-          fprintf(fp, "{\n");
+          fprintf(fp, "[\n");
           for (i=0; i < (int)dparam->get_size(); i++) {
             if ((i % 16) == 0) {
               for (j=0; j<(level+1); j++)
@@ -1455,7 +1410,7 @@ bx_bool bx_real_sim_c::save_sr_param(FILE *fp, bx_param_c *node, const char *sr_
           }
           for (i=0; i<level; i++)
             fprintf(fp, "  ");
-          fprintf(fp, "}\n");
+          fprintf(fp, "]\n");
         }
       }
       break;

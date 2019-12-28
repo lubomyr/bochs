@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: hdimage.cc 13506 2018-05-11 07:44:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -231,10 +231,17 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
   sprintf(lockfn, "%s.lock", pathname);
   lockfd = ::open(lockfn, O_RDONLY);
   if (lockfd >= 0) {
-    // Opening image must fail if lock file exists.
     ::close(lockfd);
-    BX_ERROR(("image locked: '%s'", pathname));
-    return -1;
+    if (SIM->get_param_bool(BXPN_UNLOCK_IMAGES)->get()) {
+      // Remove lock file if requested
+      if (access(lockfn, F_OK) == 0) {
+        unlink(lockfn);
+      }
+    } else {
+      // Opening image must fail if lock file exists.
+      BX_ERROR(("image locked: '%s'", pathname));
+      return -1;
+    }
   }
 #endif
 
@@ -492,6 +499,7 @@ bx_bool hdimage_copy_file(const char *src, const char *dst)
 device_image_t::device_image_t()
 {
   hd_size = 0;
+  sect_size = 512;
 }
 
 int device_image_t::open(const char* _pathname)
@@ -527,7 +535,9 @@ int flat_image_t::open(const char* _pathname, int flags)
   }
   BX_INFO(("hd_size: " FMT_LL "u", hd_size));
   if (hd_size <= 0) BX_PANIC(("size of disk image not detected / invalid"));
-  if ((hd_size % 512) != 0) BX_PANIC(("size of disk image must be multiple of 512 bytes"));
+  if ((hd_size % sect_size) != 0) {
+    BX_PANIC(("size of disk image must be multiple of %d bytes", sect_size));
+  }
   return fd;
 }
 
@@ -641,8 +651,8 @@ int concat_image_t::open(const char* _pathname0, int flags)
       BX_PANIC(("block devices should REALLY NOT be used as concat images"));
     }
 #endif
-    if ((stat_buf.st_size % 512) != 0) {
-      BX_PANIC(("size of disk image must be multiple of 512 bytes"));
+    if ((stat_buf.st_size % sect_size) != 0) {
+      BX_PANIC(("size of disk image must be multiple of %d bytes", sect_size));
     }
     start_offset_table[i] = start_offset;
     start_offset += length_table[i];
@@ -676,8 +686,8 @@ void concat_image_t::close()
 
 Bit64s concat_image_t::lseek(Bit64s offset, int whence)
 {
-  if ((offset % 512) != 0)
-    BX_PANIC(("lseek HD with offset not multiple of 512"));
+  if ((offset % sect_size) != 0)
+    BX_PANIC(("lseek HD with offset not multiple of %d", sect_size));
   BX_DEBUG(("concat_image_t.lseek(%d)", whence));
   switch (whence) {
     case SEEK_SET:
@@ -928,6 +938,9 @@ int sparse_image_t::open(const char* pathname0, int flags)
   if ((underlying_filesize % pagesize) != 0)
     panic("size of sparse disk image is not multiple of page size");
 
+  if ((pagesize % sect_size) != 0)
+    panic("page size of sparse disk image is not multiple of sector size");
+
   underlying_current_filepos = 0;
   if (-1 == ::lseek(fd, 0, SEEK_SET))
     panic("error while seeking to start of file");
@@ -990,8 +1003,8 @@ void sparse_image_t::close()
 
 Bit64s sparse_image_t::lseek(Bit64s offset, int whence)
 {
-  if ((offset % 512) != 0)
-    BX_PANIC(("lseek HD with offset not multiple of 512"));
+  if ((offset % sect_size) != 0)
+    BX_PANIC(("lseek HD with offset not multiple of %d", sect_size));
   if (whence != SEEK_SET)
     BX_PANIC(("lseek HD with whence not SEEK_SET"));
 
@@ -1395,6 +1408,7 @@ int dll_image_t::open(const char* pathname, int flags)
     vunit = vdisk_open(pathname, flags);
     if (vunit >= 0) {
       hd_size = (Bit64u)vdisk_get_size(vunit) << 9;
+      sect_size = 512;
       vblk = 0;
     }
   } else {
@@ -2146,6 +2160,15 @@ int undoable_image_t::open(const char* pathname, int flags)
     return -1;
 
   hd_size = ro_disk->hd_size;
+  if (ro_disk->get_capabilities() & HDIMAGE_HAS_GEOMETRY) {
+    cylinders = ro_disk->cylinders;
+    heads = ro_disk->heads;
+    spt = ro_disk->spt;
+    caps = HDIMAGE_HAS_GEOMETRY;
+  } else if (cylinders == 0) {
+    caps = HDIMAGE_AUTO_GEOMETRY;
+  }
+  sect_size = ro_disk->sect_size;
 
   // If not set, we make up the redolog filename from the pathname
   if (redolog_name == NULL) {
@@ -2292,6 +2315,15 @@ int volatile_image_t::open(const char* pathname, int flags)
     return -1;
 
   hd_size = ro_disk->hd_size;
+  if (ro_disk->get_capabilities() & HDIMAGE_HAS_GEOMETRY) {
+    cylinders = ro_disk->cylinders;
+    heads = ro_disk->heads;
+    spt = ro_disk->spt;
+    caps = HDIMAGE_HAS_GEOMETRY;
+  } else if (cylinders == 0) {
+    caps = HDIMAGE_AUTO_GEOMETRY;
+  }
+  sect_size = ro_disk->sect_size;
 
   // If not set, use pathname as template
   if (redolog_name == NULL) {

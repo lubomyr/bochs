@@ -1,4 +1,4 @@
-$Id: PARAM_TREE.txt 13159 2017-03-28 21:13:05Z vruppert $
+$Id: PARAM_TREE.txt 13474 2018-03-13 20:35:56Z vruppert $
 
 Starting from Bochs 2.3 the parameters are organized in a tree structure
 instead of a huge flat list. The parameter tree was required for implementing
@@ -186,6 +186,7 @@ ata
       cylinders
       heads
       spt
+      sect_size
       status
       model
       biosdetect

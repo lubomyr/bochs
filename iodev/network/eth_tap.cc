@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_tap.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: eth_tap.cc 13257 2017-06-16 08:27:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2017  The Bochs Project
@@ -142,6 +142,7 @@ public:
   bx_tap_pktmover_c(const char *netif, const char *macaddr,
                     eth_rx_handler_t rxh, eth_rx_status_t rxstat,
                     bx_devmodel_c *dev, const char *script);
+  virtual ~bx_tap_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 private:
   int fd;
@@ -311,6 +312,16 @@ bx_tap_pktmover_c::bx_tap_pktmover_c(const char *netif,
   fprintf(rxlog_txt, "\n--\n");
   fflush(rxlog_txt);
 
+#endif
+}
+
+bx_tap_pktmover_c::~bx_tap_pktmover_c()
+{
+#if BX_ETH_TAP_LOGGING
+  fclose(txlog);
+  fclose(txlog_txt);
+  fclose(rxlog);
+  fclose(rxlog_txt);
 #endif
 }
 

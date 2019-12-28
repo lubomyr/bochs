@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pc_system.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: pc_system.cc 13188 2017-04-15 20:31:07Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -463,6 +463,11 @@ Bit64u bx_pc_system_c::time_usec()
   return (Bit64u) (((double)(Bit64s)time_ticks()) / m_ips);
 }
 
+Bit64u bx_pc_system_c::time_nsec()
+{
+  return (Bit64u) (((double)(Bit64s)time_ticks()) / m_ips * 1000.0);
+}
+
 void bx_pc_system_c::start_timers(void) { }
 
 void bx_pc_system_c::activate_timer_ticks(unsigned i, Bit64u ticks, bx_bool continuous)
@@ -521,8 +526,30 @@ void bx_pc_system_c::activate_timer(unsigned i, Bit32u useconds, bx_bool continu
     // If the timer frequency is rediculously low, make it more sane.
     // This happens when 'ips' is too low.
     if (ticks < MinAllowableTimerPeriod) {
-      //BX_INFO(("activate_timer: adjusting ticks of %llu to min of %u",
-      //          ticks, MinAllowableTimerPeriod));
+      ticks = MinAllowableTimerPeriod;
+    }
+
+    timer[i].period = ticks;
+  }
+
+  activate_timer_ticks(i, ticks, continuous);
+}
+
+void bx_pc_system_c::activate_timer_nsec(unsigned i, Bit64u nseconds, bx_bool continuous)
+{
+  Bit64u ticks;
+
+  // if nseconds = 0, use default stored in period field
+  // else set new period from useconds
+  if (nseconds==0) {
+    ticks = timer[i].period;
+  } else {
+    // convert nseconds to number of ticks
+    ticks = (Bit64u) (double(nseconds) * m_ips / 1000.0);
+
+    // If the timer frequency is rediculously low, make it more sane.
+    // This happens when 'ips' is too low.
+    if (ticks < MinAllowableTimerPeriod) {
       ticks = MinAllowableTimerPeriod;
     }
 

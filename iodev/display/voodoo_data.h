@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo_data.h 13138 2017-03-19 12:22:27Z vruppert $
+// $Id: voodoo_data.h 13516 2018-05-21 18:01:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  *  Portion of this software comes with the following license
@@ -642,7 +642,7 @@ static const Bit8u banshee_register_access[0x100] =
  *
  *************************************/
 
-static const char *const voodoo_reg_name[] =
+static const char *const voodoo_reg_name[0x100] =
 {
   /* 0x000 */
   "status",   "{intrCtrl}", "vertexAx",   "vertexAy",
@@ -804,7 +804,7 @@ static const char *const banshee_reg_name[] =
  *************************************/
 
 /* 0x000 */
-#define io_status           (0x000/4) /*  */
+#define io_status             (0x000/4) /*  */
 #define io_pciInit0           (0x004/4) /*  */
 #define io_sipMonitor         (0x008/4) /*  */
 #define io_lfbMemoryConfig    (0x00c/4) /*  */
@@ -816,8 +816,9 @@ static const char *const banshee_reg_name[] =
 #define io_tmuGbeInit         (0x024/4) /*  */
 #define io_vgaInit0           (0x028/4) /*  */
 #define io_vgaInit1           (0x02c/4) /*  */
-#define io_dramCommand          (0x030/4) /*  */
+#define io_dramCommand        (0x030/4) /*  */
 #define io_dramData           (0x034/4) /*  */
+#define io_strapInfo          (0x038/4) /*  */
 
 /* 0x040 */
 #define io_pllCtrl0           (0x040/4) /*  */
@@ -826,52 +827,52 @@ static const char *const banshee_reg_name[] =
 #define io_dacMode            (0x04c/4) /*  */
 #define io_dacAddr            (0x050/4) /*  */
 #define io_dacData            (0x054/4) /*  */
-#define io_rgbMaxDelta          (0x058/4) /*  */
+#define io_rgbMaxDelta        (0x058/4) /*  */
 #define io_vidProcCfg         (0x05c/4) /*  */
-#define io_hwCurPatAddr         (0x060/4) /*  */
+#define io_hwCurPatAddr       (0x060/4) /*  */
 #define io_hwCurLoc           (0x064/4) /*  */
 #define io_hwCurC0            (0x068/4) /*  */
 #define io_hwCurC1            (0x06c/4) /*  */
-#define io_vidInFormat          (0x070/4) /*  */
-#define io_vidInStatus          (0x074/4) /*  */
+#define io_vidInFormat        (0x070/4) /*  */
+#define io_vidInStatus        (0x074/4) /*  */
 #define io_vidSerialParallelPort    (0x078/4) /*  */
-#define io_vidInXDecimDeltas      (0x07c/4) /*  */
+#define io_vidInXDecimDeltas  (0x07c/4) /*  */
 
 /* 0x080 */
-#define io_vidInDecimInitErrs     (0x080/4) /*  */
-#define io_vidInYDecimDeltas      (0x084/4) /*  */
-#define io_vidPixelBufThold       (0x088/4) /*  */
-#define io_vidChromaMin         (0x08c/4) /*  */
-#define io_vidChromaMax         (0x090/4) /*  */
-#define io_vidCurrentLine       (0x094/4) /*  */
-#define io_vidScreenSize        (0x098/4) /*  */
-#define io_vidOverlayStartCoords    (0x09c/4) /*  */
-#define io_vidOverlayEndScreenCoord   (0x0a0/4) /*  */
-#define io_vidOverlayDudx       (0x0a4/4) /*  */
+#define io_vidInDecimInitErrs (0x080/4) /*  */
+#define io_vidInYDecimDeltas  (0x084/4) /*  */
+#define io_vidPixelBufThold   (0x088/4) /*  */
+#define io_vidChromaMin       (0x08c/4) /*  */
+#define io_vidChromaMax       (0x090/4) /*  */
+#define io_vidCurrentLine     (0x094/4) /*  */
+#define io_vidScreenSize      (0x098/4) /*  */
+#define io_vidOverlayStartCoords (0x09c/4) /*  */
+#define io_vidOverlayEndScreenCoord (0x0a0/4) /*  */
+#define io_vidOverlayDudx     (0x0a4/4) /*  */
 #define io_vidOverlayDudxOffsetSrcWidth (0x0a8/4) /*  */
-#define io_vidOverlayDvdy       (0x0ac/4) /*  */
-#define io_vgab0            (0x0b0/4) /*  */
-#define io_vgab4            (0x0b4/4) /*  */
-#define io_vgab8            (0x0b8/4) /*  */
-#define io_vgabc            (0x0bc/4) /*  */
+#define io_vidOverlayDvdy     (0x0ac/4) /*  */
+#define io_vgab0              (0x0b0/4) /*  */
+#define io_vgab4              (0x0b4/4) /*  */
+#define io_vgab8              (0x0b8/4) /*  */
+#define io_vgabc              (0x0bc/4) /*  */
 
 /* 0x0c0 */
-#define io_vgac0            (0x0c0/4) /*  */
-#define io_vgac4            (0x0c4/4) /*  */
-#define io_vgac8            (0x0c8/4) /*  */
-#define io_vgacc            (0x0cc/4) /*  */
-#define io_vgad0            (0x0d0/4) /*  */
-#define io_vgad4            (0x0d4/4) /*  */
-#define io_vgad8            (0x0d8/4) /*  */
-#define io_vgadc            (0x0dc/4) /*  */
-#define io_vidOverlayDvdyOffset     (0x0e0/4) /*  */
-#define io_vidDesktopStartAddr      (0x0e4/4) /*  */
-#define io_vidDesktopOverlayStride    (0x0e8/4) /*  */
+#define io_vgac0              (0x0c0/4) /*  */
+#define io_vgac4              (0x0c4/4) /*  */
+#define io_vgac8              (0x0c8/4) /*  */
+#define io_vgacc              (0x0cc/4) /*  */
+#define io_vgad0              (0x0d0/4) /*  */
+#define io_vgad4              (0x0d4/4) /*  */
+#define io_vgad8              (0x0d8/4) /*  */
+#define io_vgadc              (0x0dc/4) /*  */
+#define io_vidOverlayDvdyOffset (0x0e0/4) /*  */
+#define io_vidDesktopStartAddr (0x0e4/4) /*  */
+#define io_vidDesktopOverlayStride (0x0e8/4) /*  */
 #define io_vidInAddr0         (0x0ec/4) /*  */
 #define io_vidInAddr1         (0x0f0/4) /*  */
 #define io_vidInAddr2         (0x0f4/4) /*  */
-#define io_vidInStride          (0x0f8/4) /*  */
-#define io_vidCurrOverlayStartAddr    (0x0fc/4) /*  */
+#define io_vidInStride        (0x0f8/4) /*  */
+#define io_vidCurrOverlayStartAddr (0x0fc/4) /*  */
 
 
 
@@ -887,7 +888,7 @@ static const char *const banshee_io_reg_name[] =
   "status",   "pciInit0",   "sipMonitor", "lfbMemoryConfig",
   "miscInit0",  "miscInit1",  "dramInit0",  "dramInit1",
   "agpInit",    "tmuGbeInit", "vgaInit0",   "vgaInit1",
-  "dramCommand",  "dramData",   "reserved38", "reserved3c",
+  "dramCommand",  "dramData",   "strapInfo", "reserved3c",
 
   /* 0x040 */
   "pllCtrl0",   "pllCtrl1",   "pllCtrl2",   "dacMode",
@@ -932,15 +933,17 @@ static const char *const banshee_io_reg_name[] =
 #define cmdAMax0        (0x03c/4) /*  */
 
 /* 0x040 */
+#define cmdStatus0        (0x040/4) /*  */
 #define cmdFifoDepth0     (0x044/4) /*  */
 #define cmdHoleCnt0       (0x048/4) /*  */
 #define cmdBaseAddr1      (0x050/4) /*  */
 #define cmdBaseSize1      (0x054/4) /*  */
-#define cmdBump1        (0x058/4) /*  */
+#define cmdBump1          (0x058/4) /*  */
 #define cmdRdPtrL1        (0x05c/4) /*  */
 #define cmdRdPtrH1        (0x060/4) /*  */
-#define cmdAMin1        (0x064/4) /*  */
-#define cmdAMax1        (0x06c/4) /*  */
+#define cmdAMin1          (0x064/4) /*  */
+#define cmdAMax1          (0x06c/4) /*  */
+#define cmdStatus1        (0x070/4) /*  */
 #define cmdFifoDepth1     (0x074/4) /*  */
 #define cmdHoleCnt1       (0x078/4) /*  */
 
@@ -993,6 +996,70 @@ static const char *const banshee_agp_reg_name[] =
   "reserved110",  "reserved114",  "reserved118",  "reserved11c",
   "crc1",     "reserved124",  "reserved128",  "reserved12c",
   "crc2",     "reserved134",  "reserved138",  "reserved13c"
+};
+
+
+
+/*************************************
+ *
+ *  Voodoo Banshee 2D registers
+ *
+ *************************************/
+
+/* 0x000 */
+#define blt_status         (0x000/4) /*  */
+#define blt_intrCtrl       (0x004/4) /*  */
+#define blt_clip0Min       (0x008/4) /*  */
+#define blt_clip0Max       (0x00c/4) /*  */
+#define blt_dstBaseAddr    (0x010/4) /*  */
+#define blt_dstFormat      (0x014/4) /*  */
+#define blt_srcColorkeyMin (0x018/4) /*  */
+#define blt_srcColorkeyMax (0x01c/4) /*  */
+#define blt_dstColorkeyMin (0x020/4) /*  */
+#define blt_dstColorkeyMax (0x024/4) /*  */
+#define blt_bresError0     (0x028/4) /*  */
+#define blt_bresError1     (0x02c/4) /*  */
+#define blt_rop            (0x030/4) /*  */
+#define blt_srcBaseAddr    (0x034/4) /*  */
+#define blt_commandExtra   (0x038/4) /*  */
+#define blt_lineStipple    (0x03c/4) /*  */
+
+/* 0x040 */
+#define blt_lineStyle      (0x040/4) /*  */
+#define blt_pattern0Alias  (0x044/4) /*  */
+#define blt_pattern1Alias  (0x048/4) /*  */
+#define blt_clip1Min       (0x04c/4) /*  */
+#define blt_clip1Max       (0x050/4) /*  */
+#define blt_srcFormat      (0x054/4) /*  */
+#define blt_srcSize        (0x058/4) /*  */
+#define blt_srcXY          (0x05c/4) /*  */
+#define blt_colorBack      (0x060/4) /*  */
+#define blt_colorFore      (0x064/4) /*  */
+#define blt_dstSize        (0x068/4) /*  */
+#define blt_dstXY          (0x06c/4) /*  */
+#define blt_command        (0x070/4) /*  */
+
+
+
+/*************************************
+ *
+ *  Register string table for debug
+ *
+ *************************************/
+
+static const char *const banshee_blt_reg_name[] =
+{
+  /* 0x000 */
+  "status", "intrCtrl", "clip0Min", "clip0Max",
+  "dstBaseAddr", "dstFormat", "srcColorkeyMin", "srcColorkeyMax",
+  "dstColorkeyMin", "dstColorkeyMax", "bresError0", "bresError1",
+  "rop", "srcBaseAddr", "commandExtra", "lineStipple",
+
+  /* 0x040 */
+ "lineStyle", "pattern0Alias", "pattern1Alias", "clip1Min",
+ "clip1Max", "srcFormat", "srcSize", "srcXY",
+ "colorBack", "colorFore", "dstSize", "dstXY",
+ "command", "RESERVED", "RESERVED", "RESERVED"
 };
 
 
@@ -1401,32 +1468,6 @@ union _voodoo_reg
 typedef voodoo_reg rgb_union;
 
 
-typedef struct _voodoo_stats voodoo_stats;
-struct _voodoo_stats
-{
-  Bit8u   lastkey;            /* last key state */
-  Bit8u   display;            /* display stats? */
-  Bit32s  swaps;              /* total swaps */
-  Bit32s  stalls;             /* total stalls */
-  Bit32s  total_triangles;    /* total triangles */
-  Bit32s  total_pixels_in;    /* total pixels in */
-  Bit32s  total_pixels_out;   /* total pixels out */
-  Bit32s  total_chroma_fail;  /* total chroma fail */
-  Bit32s  total_zfunc_fail;   /* total z func fail */
-  Bit32s  total_afunc_fail;   /* total a func fail */
-  Bit32s  total_clipped;      /* total clipped */
-  Bit32s  total_stippled;     /* total stippled */
-  Bit32s  lfb_writes;         /* LFB writes */
-  Bit32s  lfb_reads;          /* LFB reads */
-  Bit32s  reg_writes;         /* register writes */
-  Bit32s  reg_reads;          /* register reads */
-  Bit32s  tex_writes;         /* texture writes */
-  Bit32s  texture_mode[16];   /* 16 different texture modes */
-  Bit8u   render_override;    /* render override */
-  char    buffer[1024];       /* string */
-};
-
-
 /* note that this structure is an even 64 bytes long */
 typedef struct _stats_block stats_block;
 struct _stats_block
@@ -1445,6 +1486,7 @@ struct _stats_block
 typedef struct _fifo_state fifo_state;
 struct _fifo_state
 {
+  bx_bool enabled; /* enabled? */
   Bit32u* base; /* base of the FIFO */
   Bit32s  size; /* size of the FIFO */
   Bit32s  in;   /* input pointer */
@@ -1455,15 +1497,17 @@ struct _fifo_state
 typedef struct _cmdfifo_info cmdfifo_info;
 struct _cmdfifo_info
 {
-  Bit8u   enable;       /* enabled? */
-  Bit8u   count_holes;  /* count holes? */
+  bx_bool enabled;      /* enabled? */
+  bx_bool count_holes;  /* count holes? */
   Bit32u  base;         /* base address in framebuffer RAM */
   Bit32u  end;          /* end address in framebuffer RAM */
   Bit32u  rdptr;        /* current read pointer */
   Bit32u  amin;         /* minimum address */
   Bit32u  amax;         /* maximum address */
   Bit32u  depth;        /* current depth */
+  Bit32u  depth_needed; /* depth needed for command */
   Bit32u  holes;        /* number of holes */
+  bx_bool cmd_ready;
 };
 
 
@@ -1473,10 +1517,7 @@ struct _pci_state
   fifo_state  fifo;           /* PCI FIFO */
   Bit32u      init_enable;    /* initEnable value */
   Bit8u       stall_state;    /* state of the system if we're stalled */
-//  voodoo_stall_func stall_callback; /* callback for stalling/unstalling */
-  Bit8u       op_pending;     /* true if an operation is pending */
-//  attotime    op_end_time;  /* time when the pending operation ends */
-//  emu_timer*  continue_timer; /* timer to use to continue processing */
+  Bit16u      op_pending;     /* number of operations pending */
   Bit32u      fifo_mem[64*2]; /* memory backing the PCI FIFO */
 };
 
@@ -1588,13 +1629,11 @@ struct _fbi_state
   Bit32u        tile_height;    /* height of video tiles */
   Bit32u        x_tiles;        /* number of tiles in the X direction */
 
-//  emu_timer *     vblank_timer  /* VBLANK timer */
   Bit8u         vblank;         /* VBLANK state */
   Bit8u         vblank_count;   /* number of VBLANKs since last swap */
   bx_bool       vblank_swap_pending; /* a swap is pending, waiting for a vblank */
   Bit8u         vblank_swap;    /* swap when we hit this count */
   Bit8u         vblank_dont_swap; /* don't actually swap when we hit this point */
-//  voodoo_vblank_func  vblank_client; /* client callback */
 
   /* triangle setup info */
   bx_bool       cheating_allowed; /* allow cheating? */
@@ -1639,32 +1678,12 @@ struct _dac_state
   Bit8u clk0_m;
   Bit8u clk0_n;
   Bit8u clk0_p;
-  Bit32u clk0_freq;
-};
-
-
-typedef struct _raster_info raster_info;
-struct _raster_info
-{
-  struct _raster_info *next;  /* pointer to next entry with the same hash */
-  poly_draw_scanline_func callback; /* callback pointer */
-  Bit8u   is_generic;     /* true if this is one of the generic rasterizers */
-  Bit8u   display;        /* display index */
-  Bit32u  hits;           /* how many hits (pixels) we've used this for */
-  Bit32u  polys;          /* how many polys we've used this for */
-  Bit32u  eff_color_path; /* effective fbzColorPath value */
-  Bit32u  eff_alpha_mode; /* effective alphaMode value */
-  Bit32u  eff_fog_mode;   /* effective fogMode value */
-  Bit32u  eff_fbz_mode;   /* effective fbzMode value */
-  Bit32u  eff_tex_mode_0; /* effective textureMode value for TMU #0 */
-  Bit32u  eff_tex_mode_1; /* effective textureMode value for TMU #1 */
 };
 
 
 struct _poly_extra_data
 {
   voodoo_state* state;        /* pointer back to the voodoo state */
-  raster_info*  info;         /* pointer to rasterizer information */
 
   Bit16s        ax, ay;       /* vertex A x,y (12.4) */
   Bit32s        startr, startg, startb, starta; /* starting R,G,B,A (12.12) */
@@ -1697,17 +1716,72 @@ struct _poly_extra_data
 };
 
 
+#define BX_ROP_PATTERN 0x01
+
 typedef struct _banshee_info banshee_info;
 struct _banshee_info
 {
-  Bit32u  io[0x40];   /* I/O registers */
-  Bit32u  agp[0x80];  /* AGP registers */
-  Bit8u   vga[0x20];  /* VGA registers */
-  Bit8u   crtc[0x27]; /* VGA CRTC registers */
-  Bit8u   seq[0x05];  /* VGA sequencer registers */
-  Bit8u   gc[0x05];   /* VGA graphics controller registers */
-  Bit8u   att[0x15];  /* VGA attribute registers */
-  Bit8u   attff;      /* VGA attribute flip-flop */
+  Bit32u io[0x40];   /* I/O registers */
+  Bit32u agp[0x80];  /* AGP registers */
+  Bit8u  crtc[0x27]; /* VGA CRTC registers */
+  Bit8u  disp_bpp;
+  bx_bool half_mode;
+  bx_bool dac_8bit;
+  bx_bool desktop_tiled;
+  struct {
+    bx_bool enabled;
+    bx_bool mode;
+    Bit32u addr;
+    Bit16u x;
+    Bit16u y;
+    Bit32u color[2];
+  } hwcursor;
+  struct {
+    Bit32u reg[0x20];  /* 2D registers */
+    Bit8u cpat[0x40][4];
+    bx_bool busy;
+    Bit8u   cmd;
+    bx_bool immed;
+    bx_bool x_dir;
+    bx_bool y_dir;
+    bx_bool transp;
+    Bit8u   patsx;
+    Bit8u   patsy;
+    bx_bool clip_sel;
+    Bit8u   rop0;
+    bx_bitblt_rop_t rop_fn;
+    bx_bitblt_rop_t rop_handler[2][0x100];
+    Bit8u rop_flags[0x100];
+    Bit32u src_base;
+    bx_bool src_tiled;
+    Bit8u src_fmt;
+    Bit16u src_pitch;
+    Bit8u src_wizzle;
+    Bit16u src_x;
+    Bit16u src_y;
+    Bit16u src_w;
+    Bit16u src_h;
+    Bit32u dst_base;
+    bx_bool dst_tiled;
+    Bit8u dst_fmt;
+    Bit16u dst_pitch;
+    Bit16u dst_x;
+    Bit16u dst_y;
+    Bit16u dst_w;
+    Bit16u dst_h;
+    Bit8u fgcolor[4];
+    Bit8u bgcolor[4];
+    Bit16u clipx0[2];
+    Bit16u clipy0[2];
+    Bit16u clipx1[2];
+    Bit16u clipy1[2];
+    Bit16u h2s_pitch;
+    Bit8u h2s_pxstart;
+    bx_bool h2s_alt_align;
+    Bit32u lacnt;
+    Bit32u laidx;
+    Bit8u *lamem;
+  } blt;
 };
 
 
@@ -1715,13 +1789,9 @@ struct _banshee_info
 struct _voodoo_state
 {
   Bit8u       index;         /* index of board */
-//  running_device *device;    /* pointer to our containing device */
-//  running_device *screen;    /* the screen we are acting on */
-//  running_device *cpu;       /* the CPU we interact with */
   Bit8u       type;         /* type of system */
   Bit8u       chipmask;     /* mask for which chips are available */
   Bit32u      freq;         /* operating frequency */
-//  attoseconds_t   attoseconds_per_cycle;  /* attoseconds per cycle */
   Bit32u      extra_cycles; /* extra cycles not yet accounted for */
   int         trigger;      /* trigger used for stalling */
 
@@ -1732,6 +1802,9 @@ struct _voodoo_state
 
   pci_state   pci;           /* PCI state */
   dac_state   dac;           /* DAC state */
+  float       vidclk;        /* video clock */
+  float       vertfreq;      /* vertical frequency */
+  bx_bool     vtimer_running; /* vertical timer running */
 
   fbi_state   fbi;           /* FBI states */
   tmu_state   tmu[MAX_TMU];  /* TMU states */
@@ -1741,19 +1814,19 @@ struct _voodoo_state
   Bit32u      send_config;
   Bit32u      tmu_config;
 
-//  poly_manager*   poly;         /* polygon manager */
   stats_block *   thread_stats; /* per-thread statistics */
-
-  voodoo_stats    stats;        /* internal statistics */
 
   Bit32u      last_status_pc;   /* PC of last status description (for logging) */
   Bit32u      last_status_value; /* value of last status read (for logging) */
 
-  int         next_rasterizer;  /* next rasterizer index */
-  raster_info     rasterizer[MAX_RASTERIZERS]; /* array of rasterizers */
-  raster_info *   raster_hash[RASTER_HASH_SIZE]; /* hash table of rasterizers */
 };
 
+
+// FIFO event handling
+
+extern BX_MUTEX(fifo_mutex);
+extern bx_thread_event_t fifo_wakeup;
+extern bx_thread_event_t fifo_not_full;
 
 
 /*************************************
@@ -1762,67 +1835,26 @@ struct _voodoo_state
  *
  *************************************/
 
+/* fifo content defines */
+#define FIFO_TYPES  (7 << 29)
+#define FIFO_WR_REG     (1 << 29)
+#define FIFO_WR_TEX     (2 << 29)
+#define FIFO_WR_FBI_32  (3 << 29)
+#define FIFO_WR_FBI_16L (4 << 29)
+#define FIFO_WR_FBI_16H (5 << 29)
+
 BX_CPP_INLINE void fifo_reset(fifo_state *f)
 {
+  BX_LOCK(fifo_mutex);
   f->in = f->out = 0;
+  bx_set_event(&fifo_not_full);
+  BX_UNLOCK(fifo_mutex);
 }
 
 
-BX_CPP_INLINE void fifo_add(fifo_state *f, Bit32u data)
+BX_CPP_INLINE bx_bool fifo_full(fifo_state *f)
 {
-  Bit32s next_in;
-
-  /* compute the value of 'in' after we add this item */
-  next_in = f->in + 1;
-  if (next_in >= f->size)
-    next_in = 0;
-
-  /* as long as it's not equal to the output pointer, we can do it */
-  if (next_in != f->out)
-  {
-    f->base[f->in] = data;
-    f->in = next_in;
-  }
-}
-
-
-BX_CPP_INLINE Bit32u fifo_remove(fifo_state *f)
-{
-  Bit32u data = 0xffffffff;
-
-  /* as long as we have data, we can do it */
-  if (f->out != f->in)
-  {
-    Bit32s next_out;
-
-    /* fetch the data */
-    data = f->base[f->out];
-
-    /* advance the output pointer */
-    next_out = f->out + 1;
-    if (next_out >= f->size)
-      next_out = 0;
-    f->out = next_out;
-  }
-  return data;
-}
-
-
-BX_CPP_INLINE Bit32u fifo_peek(fifo_state *f)
-{
-  return f->base[f->out];
-}
-
-
-BX_CPP_INLINE int fifo_empty(fifo_state *f)
-{
-  return (f->in == f->out);
-}
-
-
-BX_CPP_INLINE int fifo_full(fifo_state *f)
-{
-  return (f->in + 1 == f->out || (f->in == f->size - 1 && f->out == 0));
+  return (f->in + 2 == f->out || (f->in == f->size - 2 && f->out == 0));
 }
 
 
@@ -1840,7 +1872,96 @@ BX_CPP_INLINE Bit32s fifo_space(fifo_state *f)
   Bit32s items = f->in - f->out;
   if (items < 0)
     items += f->size;
-  return f->size - 1 - items;
+  Bit32s fspace = f->size - 1 - items;
+  return fspace;
+}
+
+
+BX_CPP_INLINE void fifo_add(fifo_state *f, Bit32u offset, Bit32u data)
+{
+  Bit32s next_in;
+
+  if (fifo_full(f)) {
+    bx_set_event(&fifo_wakeup);
+    BX_UNLOCK(fifo_mutex);
+    bx_wait_for_event(&fifo_not_full);
+    BX_LOCK(fifo_mutex);
+  }
+  /* compute the value of 'in' after we add this item */
+  next_in = f->in + 2;
+  if (next_in >= f->size)
+    next_in = 0;
+
+  /* as long as it's not equal to the output pointer, we can do it */
+  if (next_in != f->out)
+  {
+    f->base[f->in] = offset;
+    f->base[f->in + 1] = data;
+    f->in = next_in;
+  }
+}
+
+
+BX_CPP_INLINE Bit32u fifo_remove(fifo_state *f, Bit32u *offset, Bit32u *data)
+{
+  Bit32u type = 0;
+
+  /* as long as we have data, we can do it */
+  if (f->out != f->in)
+  {
+    Bit32s next_out;
+
+    /* fetch the data */
+    *offset = f->base[f->out];
+    type = *offset & FIFO_TYPES;
+    *offset &= 0xffffff;
+    *data = f->base[f->out + 1];
+
+    /* advance the output pointer */
+    next_out = f->out + 2;
+    if (next_out >= f->size)
+      next_out = 0;
+    f->out = next_out;
+  }
+  if (fifo_space(f) > 15) {
+    bx_set_event(&fifo_not_full);
+  }
+  return type;
+}
+
+
+BX_CPP_INLINE bx_bool fifo_empty(fifo_state *f)
+{
+  return (f->in == f->out);
+}
+
+
+BX_CPP_INLINE bx_bool fifo_empty_locked(fifo_state *f)
+{
+  BX_LOCK(fifo_mutex);
+  bx_bool ret = (f->in == f->out);
+  BX_UNLOCK(fifo_mutex);
+  return ret;
+}
+
+
+BX_CPP_INLINE void fifo_move(fifo_state *f1, fifo_state *f2)
+{
+  if (fifo_full(f2)) {
+    bx_set_event(&fifo_wakeup);
+    BX_UNLOCK(fifo_mutex);
+    bx_wait_for_event(&fifo_not_full);
+    BX_LOCK(fifo_mutex);
+  }
+  Bit32s items1 = fifo_items(f1);
+  Bit32s space2 = fifo_space(f2);
+  while ((items1 > 0) && (space2 > 0)) {
+    f2->base[f2->in++] = f1->base[f1->out++];
+    if (f2->in >= f2->size) f2->in = 0;
+    if (f1->out >= f1->size) f1->out = 0;
+    items1--;
+    space2--;
+  }
 }
 
 
@@ -2071,28 +2192,6 @@ BX_CPP_INLINE Bit32u normalize_tex_mode(Bit32u eff_tex_mode)
 
   return eff_tex_mode;
 }
-
-
-BX_CPP_INLINE Bit32u compute_raster_hash(const raster_info *info)
-{
-  Bit32u hash;
-
-  /* make a hash */
-  hash = info->eff_color_path;
-  hash = (hash << 1) | (hash >> 31);
-  hash ^= info->eff_fbz_mode;
-  hash = (hash << 1) | (hash >> 31);
-  hash ^= info->eff_alpha_mode;
-  hash = (hash << 1) | (hash >> 31);
-  hash ^= info->eff_fog_mode;
-  hash = (hash << 1) | (hash >> 31);
-  hash ^= info->eff_tex_mode_0;
-  hash = (hash << 1) | (hash >> 31);
-  hash ^= info->eff_tex_mode_1;
-
-  return hash % RASTER_HASH_SIZE;
-}
-
 
 
 /*************************************
@@ -3076,7 +3175,6 @@ do                                                                              
       (VV)->reg[stipple].u = ((VV)->reg[stipple].u << 1) | ((VV)->reg[stipple].u >> 31); \
       if (((VV)->reg[stipple].u & 0x80000000) == 0)                              \
       {                                                                          \
-        (VV)->stats.total_stippled++;                                            \
         goto skipdrawdepth;                                                      \
       }                                                                          \
     }                                                                            \
@@ -3087,7 +3185,6 @@ do                                                                              
       int stipple_index = (((YY) & 3) << 3) | (~(XX) & 7);                       \
       if ((((VV)->reg[stipple].u >> stipple_index) & 1) == 0)                    \
       {                                                                          \
-        (VV)->stats.total_stippled++;                                            \
         goto skipdrawdepth;                                                      \
       }                                                                          \
     }                                                                            \
@@ -3542,156 +3639,3 @@ do                                        \
 }                                                                                \
 while (0)
 
-
-
-/*************************************
- *
- *  Rasterizer generator macro
- *
- *************************************/
-
-#define RASTERIZER(name, TMUS, FBZCOLORPATH, FBZMODE, ALPHAMODE, FOGMODE, TEXMODE0, TEXMODE1) \
-                                        \
-void raster_##name(void *destbase, Bit32s y, const poly_extent *extent, const void *extradata, int threadid) \
-{                                                                                \
-  const poly_extra_data *extra = (const poly_extra_data *)extradata;             \
-  voodoo_state *v = extra->state;                                                \
-  stats_block *stats = &v->thread_stats[threadid];                               \
-  DECLARE_DITHER_POINTERS;                                                       \
-  Bit32s startx = extent->startx;                                                \
-  Bit32s stopx = extent->stopx;                                                  \
-  Bit32s iterr, iterg, iterb, itera;                                             \
-  Bit32s iterz;                                                                  \
-  Bit64s iterw, iterw0 = 0, iterw1 = 0;                                          \
-  Bit64s iters0 = 0, iters1 = 0;                                                 \
-  Bit64s itert0 = 0, itert1 = 0;                                                 \
-  Bit16u *depth;                                                                 \
-  Bit16u *dest;                                                                  \
-  Bit32s dx, dy;                                                                 \
-  Bit32s scry;                                                                   \
-  Bit32s x;                                                                      \
-                                                                                 \
-  /* determine the screen Y */                                                   \
-  scry = y;                                                                      \
-  if (FBZMODE_Y_ORIGIN(FBZMODE))                                                 \
-    scry = (v->fbi.yorigin - y) & 0x3ff;                                         \
-                                                                                 \
-  /* compute dithering */                                                        \
-  COMPUTE_DITHER_POINTERS(FBZMODE, y);                                           \
-                                                                                 \
-  /* apply clipping */                                                           \
-  if (FBZMODE_ENABLE_CLIPPING(FBZMODE))                                          \
-  {                                                                              \
-    Bit32s tempclip;                                                             \
-                                                                                 \
-    /* Y clipping buys us the whole scanline */                                  \
-    if (scry < (Bit32s)((v->reg[clipLowYHighY].u >> 16) & 0x3ff) ||              \
-      scry >= (Bit32s)(v->reg[clipLowYHighY].u & 0x3ff))                         \
-    {                                                                            \
-      stats->pixels_in += stopx - startx;                                        \
-      stats->clip_fail += stopx - startx;                                        \
-      return;                                                                    \
-    }                                                                            \
-                                                                                 \
-    /* X clipping */                                                             \
-    tempclip = (v->reg[clipLeftRight].u >> 16) & 0x3ff;                          \
-    if (startx < tempclip)                                                       \
-    {                                                                            \
-      stats->pixels_in += tempclip - startx;                                     \
-      v->stats.total_clipped += tempclip - startx;                               \
-      startx = tempclip;                                                         \
-    }                                                                            \
-    tempclip = v->reg[clipLeftRight].u & 0x3ff;                                  \
-    if (stopx >= tempclip)                                                       \
-    {                                                                            \
-      stats->pixels_in += stopx - tempclip;                                      \
-      v->stats.total_clipped += stopx - tempclip;                                \
-      stopx = tempclip - 1;                                                      \
-    }                                                                            \
-  }                                                                              \
-                                                                                 \
-  /* get pointers to the target buffer and depth buffer */                       \
-  dest = (Bit16u *)destbase + scry * v->fbi.rowpixels;                           \
-  depth = (v->fbi.auxoffs != (Bit32u)~0) ? ((Bit16u *)(v->fbi.ram + v->fbi.auxoffs) + scry * v->fbi.rowpixels) : NULL; \
-                                                                                 \
-  /* compute the starting parameters */                                          \
-  dx = startx - (extra->ax >> 4);                                                \
-  dy = y - (extra->ay >> 4);                                                     \
-  iterr = extra->startr + dy * extra->drdy + dx * extra->drdx;                   \
-  iterg = extra->startg + dy * extra->dgdy + dx * extra->dgdx;                   \
-  iterb = extra->startb + dy * extra->dbdy + dx * extra->dbdx;                   \
-  itera = extra->starta + dy * extra->dady + dx * extra->dadx;                   \
-  iterz = extra->startz + dy * extra->dzdy + dx * extra->dzdx;                   \
-  iterw = extra->startw + dy * extra->dwdy + dx * extra->dwdx;                   \
-  if (TMUS >= 1)                                                                 \
-  {                                                                              \
-    iterw0 = extra->startw0 + dy * extra->dw0dy + dx * extra->dw0dx;             \
-    iters0 = extra->starts0 + dy * extra->ds0dy + dx * extra->ds0dx;             \
-    itert0 = extra->startt0 + dy * extra->dt0dy + dx * extra->dt0dx;             \
-  }                                                                              \
-  if (TMUS >= 2)                                                                 \
-  {                                                                              \
-    iterw1 = extra->startw1 + dy * extra->dw1dy + dx * extra->dw1dx;             \
-    iters1 = extra->starts1 + dy * extra->ds1dy + dx * extra->ds1dx;             \
-    itert1 = extra->startt1 + dy * extra->dt1dy + dx * extra->dt1dx;             \
-  }                                                                              \
-                                                                                 \
-  /* loop in X */                                                                \
-  for (x = startx; x < stopx; x++)                                               \
-  {                                                                              \
-    rgb_union iterargb = { 0 };                                                  \
-    rgb_union texel = { 0 };                                                     \
-                                                                                 \
-    /* pixel pipeline part 1 handles depth testing and stippling */              \
-    PIXEL_PIPELINE_BEGIN(v, stats, x, y, FBZCOLORPATH, FBZMODE,                  \
-                iterz, iterw);                                                   \
-                                                                                 \
-    /* run the texture pipeline on TMU1 to produce a value in texel */           \
-    /* note that they set LOD min to 8 to "disable" a TMU */                     \
-    if (TMUS >= 2 && v->tmu[1].lodmin < (8 << 8))                                \
-      TEXTURE_PIPELINE(&v->tmu[1], x, dither4, TEXMODE1, texel,                  \
-                v->tmu[1].lookup, extra->lodbase1,                               \
-                iters1, itert1, iterw1, texel);                                  \
-                                                                                 \
-    /* run the texture pipeline on TMU0 to produce a final */                    \
-    /* result in texel */                                                        \
-    /* note that they set LOD min to 8 to "disable" a TMU */                     \
-    if (TMUS >= 1 && v->tmu[0].lodmin < (8 << 8)) {                              \
-      if (v->send_config==0)                                                     \
-      TEXTURE_PIPELINE(&v->tmu[0], x, dither4, TEXMODE0, texel,                  \
-                v->tmu[0].lookup, extra->lodbase0,                               \
-                iters0, itert0, iterw0, texel);                                  \
-      /* send config data to the frame buffer */                                 \
-      else texel.u=v->tmu_config;                                                \
-    }                                                                            \
-    /* colorpath pipeline selects source colors and does blending */             \
-    CLAMPED_ARGB(iterr, iterg, iterb, itera, FBZCOLORPATH, iterargb);            \
-    COLORPATH_PIPELINE(v, stats, FBZCOLORPATH, FBZMODE, ALPHAMODE, texel,        \
-              iterz, iterw, iterargb);                                           \
-                                                                                 \
-    /* pixel pipeline part 2 handles fog, alpha, and final output */             \
-    PIXEL_PIPELINE_END(v, stats, dither, dither4, dither_lookup, x, dest, depth, \
-              FBZMODE, FBZCOLORPATH, ALPHAMODE, FOGMODE,                         \
-              iterz, iterw, iterargb);                                           \
-                                                                                 \
-    /* update the iterated parameters */                                         \
-    iterr += extra->drdx;                                                        \
-    iterg += extra->dgdx;                                                        \
-    iterb += extra->dbdx;                                                        \
-    itera += extra->dadx;                                                        \
-    iterz += extra->dzdx;                                                        \
-    iterw += extra->dwdx;                                                        \
-    if (TMUS >= 1)                                                               \
-    {                                                                            \
-      iterw0 += extra->dw0dx;                                                    \
-      iters0 += extra->ds0dx;                                                    \
-      itert0 += extra->dt0dx;                                                    \
-    }                                                                            \
-    if (TMUS >= 2)                                                               \
-    {                                                                            \
-      iterw1 += extra->dw1dx;                                                    \
-      iters1 += extra->ds1dx;                                                    \
-      itert1 += extra->dt1dx;                                                    \
-    }                                                                            \
-  }                                                                              \
-}

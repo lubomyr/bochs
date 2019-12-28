@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.cc 13076 2017-02-18 16:28:04Z vruppert $
+// $Id: wxmain.cc 13606 2019-11-14 10:34:39Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -496,7 +496,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size, 
   bxToolBar->SetToolBitmapSize(wxSize(32, 32));
 
 #define BX_ADD_TOOL(id, xpm_name, tooltip) do { \
-    bxToolBar->AddTool(id, wxBitmap(xpm_name), tooltip); \
+    bxToolBar->AddTool(id, wxT(""), wxBitmap(xpm_name), tooltip); \
   } while (0)
 
   BX_ADD_TOOL(ID_Edit_FD_0, floppya_xpm, wxT("Change Floppy A"));
@@ -808,7 +808,7 @@ void MyFrame::OnQuit(wxCommandEvent& event)
 void MyFrame::OnAbout(wxCommandEvent& WXUNUSED(event))
 {
   wxString str(wxT("Bochs x86 Emulator version "));
-  str += wxString(VER_STRING, wxConvUTF8);
+  str += wxString(VERSION, wxConvUTF8);
   str += wxT(" (wxWidgets port)");
   wxMessageBox(str, wxT("About Bochs"), wxOK | wxICON_INFORMATION, this);
 }
@@ -1029,7 +1029,7 @@ int MyFrame::HandleAskParamString(bx_param_string_c *param)
 
     if (ddialog->ShowModal() == wxID_OK)
       strncpy(newval, ddialog->GetPath().mb_str(wxConvUTF8), sizeof(newval));
-      newval[sizeof(newval) - 1] = '\0';
+    newval[sizeof(newval) - 1] = '\0';
     dialog = ddialog; // so I can delete it
   } else if (n_opt & param->IS_FILENAME) {
     // use file open dialog
@@ -1038,7 +1038,7 @@ int MyFrame::HandleAskParamString(bx_param_string_c *param)
     wxFileDialog *fdialog = new wxFileDialog(this, wxString(msg, wxConvUTF8), wxT(""), wxString(param->getptr(), wxConvUTF8), wxT("*.*"), style);
     if (fdialog->ShowModal() == wxID_OK)
       strncpy(newval, fdialog->GetPath().mb_str(wxConvUTF8), sizeof(newval));
-      newval[sizeof(newval) - 1] = '\0';
+    newval[sizeof(newval) - 1] = '\0';
     dialog = fdialog; // so I can delete it
   } else {
     // use simple string dialog
@@ -1046,7 +1046,7 @@ int MyFrame::HandleAskParamString(bx_param_string_c *param)
     wxTextEntryDialog *tdialog = new wxTextEntryDialog(this, wxString(msg, wxConvUTF8), wxT("Enter new value"), wxString(param->getptr(), wxConvUTF8), style);
     if (tdialog->ShowModal() == wxID_OK)
       strncpy(newval, tdialog->GetValue().mb_str(wxConvUTF8), sizeof(newval));
-      newval[sizeof(newval) - 1] = '\0';
+    newval[sizeof(newval) - 1] = '\0';
     dialog = tdialog; // so I can delete it
   }
   if (strlen(newval) > 0) {

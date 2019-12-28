@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci_ide.cc 13154 2017-03-27 19:38:37Z vruppert $
+// $Id: pci_ide.cc 13497 2018-05-01 15:54:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2017  The Bochs Project
+//  Copyright (C) 2004-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@
 // PCI IDE controller
 // i430FX - PIIX
 // i440FX - PIIX3
+// i440BX - PIIX4
 
 // Define BX_PLUGGABLE in files that can be compiled into plugins.  For
 // platforms that require a special tag on exported symbols, BX_PLUGGABLE
@@ -77,8 +78,14 @@ bx_pci_ide_c::~bx_pci_ide_c()
 void bx_pci_ide_c::init(void)
 {
   unsigned i;
+  Bit8u devfunc;
 
-  Bit8u devfunc = BX_PCI_DEVICE(1,1);
+  BX_PIDE_THIS s.chipset = SIM->get_param_enum(BXPN_PCI_CHIPSET)->get();
+  if (BX_PIDE_THIS s.chipset == BX_PCI_CHIPSET_I440BX) {
+    devfunc = BX_PCI_DEVICE(7, 1);
+  } else {
+    devfunc = BX_PCI_DEVICE(1, 1);
+  }
   DEV_register_pci_handlers(this, &devfunc,
       BX_PLUGIN_PCI_IDE, "PIIX3 PCI IDE controller");
 
@@ -94,15 +101,15 @@ void bx_pci_ide_c::init(void)
   BX_PIDE_THIS s.bmdma[0].buffer = new Bit8u[0x20000];
   BX_PIDE_THIS s.bmdma[1].buffer = new Bit8u[0x20000];
 
-  BX_PIDE_THIS s.chipset = SIM->get_param_enum(BXPN_PCI_CHIPSET)->get();
   // initialize readonly registers
-  if (BX_PIDE_THIS s.chipset == BX_PCI_CHIPSET_I440FX) {
-    init_pci_conf(0x8086, 0x7010, 0x00, 0x010180, 0x00);
+  if (BX_PIDE_THIS s.chipset == BX_PCI_CHIPSET_I430FX) {
+    init_pci_conf(0x8086, 0x1230, 0x00, 0x010180, 0x00, 0);
+  } else if (BX_PIDE_THIS s.chipset == BX_PCI_CHIPSET_I440BX) {
+    init_pci_conf(0x8086, 0x7111, 0x00, 0x010180, 0x00, 0);
   } else {
-    init_pci_conf(0x8086, 0x1230, 0x00, 0x010180, 0x00);
+    init_pci_conf(0x8086, 0x7010, 0x00, 0x010180, 0x00, 0);
   }
-  BX_PIDE_THIS pci_conf[0x20] = 0x01;
-  BX_PIDE_THIS pci_base_address[4] = 0;
+  BX_PIDE_THIS init_bar_io(4, 16, read_handler, write_handler, &bmdma_iomask[0]);
 }
 
 void bx_pci_ide_c::reset(unsigned type)
@@ -161,12 +168,7 @@ void bx_pci_ide_c::register_state(void)
 
 void bx_pci_ide_c::after_restore_state(void)
 {
-  if (DEV_pci_set_base_io(BX_PIDE_THIS_PTR, read_handler, write_handler,
-                          &BX_PIDE_THIS pci_base_address[4], &BX_PIDE_THIS pci_conf[0x20],
-                          16, &bmdma_iomask[0], "PIIX3 PCI IDE controller"))
-  {
-    BX_INFO(("new BM-DMA address: 0x%04x", BX_PIDE_THIS pci_base_address[4]));
-  }
+  bx_pci_device_c::after_restore_pci_state(NULL);
 }
 
 Bit64s bx_pci_ide_c::param_save_handler(void *devptr, bx_param_c *param)
@@ -214,7 +216,7 @@ void bx_pci_ide_c::param_restore(bx_param_c *param, Bit64s val)
 
 bx_bool bx_pci_ide_c::bmdma_present(void)
 {
-  return (BX_PIDE_THIS pci_base_address[4] > 0);
+  return (BX_PIDE_THIS pci_bar[4].addr > 0);
 }
 
 void bx_pci_ide_c::bmdma_start_transfer(Bit8u channel)
@@ -275,8 +277,7 @@ void bx_pci_ide_c::timer()
       }
     };
     if (count > 0) {
-      BX_PIDE_THIS s.bmdma[channel].status &= ~0x01;
-      BX_PIDE_THIS s.bmdma[channel].status |= 0x06;
+      DEV_hd_bmdma_complete(channel);
       return;
     } else {
       DEV_MEM_WRITE_PHYSICAL_DMA(prd.addr, size, BX_PIDE_THIS s.bmdma[channel].buffer_idx);
@@ -295,9 +296,8 @@ void bx_pci_ide_c::timer()
         break;
       }
     };
-    if (count > 511) {
-      BX_PIDE_THIS s.bmdma[channel].status &= ~0x01;
-      BX_PIDE_THIS s.bmdma[channel].status |= 0x06;
+    if (count >= 512) {
+      DEV_hd_bmdma_complete(channel);
       return;
     }
   }
@@ -345,7 +345,7 @@ Bit32u bx_pci_ide_c::read(Bit32u address, unsigned io_len)
   Bit8u offset, channel;
   Bit32u value = 0xffffffff;
 
-  offset = address - BX_PIDE_THIS pci_base_address[4];
+  offset = address - BX_PIDE_THIS pci_bar[4].addr;
   channel = (offset >> 3);
   offset &= 0x07;
   switch (offset) {
@@ -386,7 +386,7 @@ void bx_pci_ide_c::write(Bit32u address, Bit32u value, unsigned io_len)
 #endif // !BX_USE_PIDE_SMF
   Bit8u offset, channel;
 
-  offset = address - BX_PIDE_THIS pci_base_address[4];
+  offset = address - BX_PIDE_THIS pci_bar[4].addr;
   channel = (offset >> 3);
   offset &= 0x07;
   switch (offset) {
@@ -423,15 +423,14 @@ void bx_pci_ide_c::write(Bit32u address, Bit32u value, unsigned io_len)
 // pci configuration space write callback handler
 void bx_pci_ide_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {
-  Bit8u value8, oldval;
-  bx_bool bmdma_change = 0;
-
   if (((address >= 0x10) && (address < 0x20)) ||
       ((address > 0x23) && (address < 0x40)))
     return;
+
+  BX_DEBUG_PCI_WRITE(address, value, io_len);
   for (unsigned i=0; i<io_len; i++) {
-    oldval = BX_PIDE_THIS pci_conf[address+i];
-    value8 = (value >> (i*8)) & 0xFF;
+//  Bit8u oldval = BX_PIDE_THIS pci_conf[address+i];
+    Bit8u value8 = (value >> (i*8)) & 0xFF;
     switch (address+i) {
       case 0x05:
       case 0x06:
@@ -439,23 +438,10 @@ void bx_pci_ide_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_le
       case 0x04:
         BX_PIDE_THIS pci_conf[address+i] = value8 & 0x05;
         break;
-      case 0x20:
-        value8 = (value8 & 0xfc) | 0x01;
-      case 0x21:
-      case 0x22:
-      case 0x23:
-        bmdma_change |= (value8 != oldval);
       default:
         BX_PIDE_THIS pci_conf[address+i] = value8;
         BX_DEBUG(("PIIX3 PCI IDE write register 0x%02x value 0x%02x", address+i,
                   value8));
-    }
-  }
-  if (bmdma_change) {
-    if (DEV_pci_set_base_io(BX_PIDE_THIS_PTR, read_handler, write_handler,
-                            &BX_PIDE_THIS pci_base_address[4], &BX_PIDE_THIS pci_conf[0x20],
-                            16, &bmdma_iomask[0], "PIIX3 PCI IDE controller")) {
-      BX_INFO(("new BM-DMA address: 0x%04x", BX_PIDE_THIS pci_base_address[4]));
     }
   }
 }

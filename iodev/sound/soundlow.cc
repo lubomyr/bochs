@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlow.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: soundlow.cc 13539 2019-01-02 17:13:36Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2011-2017  The Bochs Project
@@ -191,16 +191,13 @@ Bit32u pcm_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len)
 
 // resampler & mixer thread support
 
-int resampler_control = 0;
-int mixer_control = 0;
 BX_MUTEX(resampler_mutex);
 BX_MUTEX(mixer_mutex);
 
 BX_THREAD_FUNC(resampler_thread, indata)
 {
   bx_soundlow_waveout_c *waveout = (bx_soundlow_waveout_c*)indata;
-  resampler_control = 1;
-  while (resampler_control > 0) {
+  while (waveout->resampler_running()) {
     BX_LOCK(resampler_mutex);
     audio_buffer_t *curbuffer = audio_buffers[0]->get_buffer();
     BX_UNLOCK(resampler_mutex);
@@ -213,7 +210,6 @@ BX_THREAD_FUNC(resampler_thread, indata)
       BX_MSLEEP(20);
     }
   }
-  resampler_control = -1;
   BX_THREAD_EXIT;
 }
 
@@ -223,8 +219,7 @@ BX_THREAD_FUNC(mixer_thread, indata)
 
   bx_soundlow_waveout_c *waveout = (bx_soundlow_waveout_c*)indata;
   Bit8u *mixbuffer = new Bit8u[BX_SOUNDLOW_WAVEPACKETSIZE];
-  mixer_control = 1;
-  while (mixer_control > 0) {
+  while (waveout->mixer_running()) {
     len = waveout->get_packetsize();
     memset(mixbuffer, 0, len);
     if (waveout->mixer_common(mixbuffer, len)) {
@@ -234,7 +229,7 @@ BX_THREAD_FUNC(mixer_thread, indata)
     }
   }
   delete [] mixbuffer;
-  mixer_control = -1;
+  waveout->closewaveoutput();
   BX_THREAD_EXIT;
 }
 
@@ -251,6 +246,8 @@ bx_soundlow_waveout_c::bx_soundlow_waveout_c()
   real_pcm_param = default_pcm_param;
   cb_count = 0;
   pcm_callback_id = -1;
+  res_thread_start = 0;
+  mix_thread_start = 0;
 #if BX_HAVE_LIBSAMPLERATE || BX_HAVE_SOXR_LSR
   int ret = 0;
   src_state = src_new(SRC_SINC_MEDIUM_QUALITY, 2, &ret);
@@ -264,18 +261,14 @@ bx_soundlow_waveout_c::~bx_soundlow_waveout_c()
     src_delete(src_state);
 #endif
     unregister_wave_callback(pcm_callback_id);
-    if (resampler_control > 0) {
-      resampler_control = 0;
-      while (resampler_control >= 0) {
-        BX_MSLEEP(1);
-      }
+    if (res_thread_start) {
+      res_thread_start = 0;
+      BX_MSLEEP(20);
       BX_FINI_MUTEX(resampler_mutex);
     }
-    if (mixer_control > 0) {
-      mixer_control = 0;
-      while (mixer_control >= 0) {
-        BX_MSLEEP(1);
-      }
+    if (mix_thread_start) {
+      mix_thread_start = 0;
+      BX_MSLEEP(25);
       BX_FINI_MUTEX(mixer_mutex);
     }
     if (audio_buffers[0] != NULL) {
@@ -301,27 +294,26 @@ int bx_soundlow_waveout_c::set_pcm_params(bx_pcm_param_t *param)
 int bx_soundlow_waveout_c::sendwavepacket(int length, Bit8u data[], bx_pcm_param_t *src_param)
 {
   unsigned len1 = length;
-  audio_buffer_t *inbuffer, *outbuffer;
 
   if (src_param->bits == 16) len1 >>= 1;
   if (pcm_callback_id >= 0) {
     BX_LOCK(resampler_mutex);
-    inbuffer = audio_buffers[0]->new_buffer(len1);
+    audio_buffer_t *inbuffer = audio_buffers[0]->new_buffer(len1);
     memcpy(&inbuffer->param, src_param, sizeof(bx_pcm_param_t));
     convert_to_float(data, length, inbuffer);
     BX_UNLOCK(resampler_mutex);
   } else {
-    inbuffer = new audio_buffer_t;
+    audio_buffer_t *inbuffer = new audio_buffer_t;
     inbuffer->fdata = new float[len1];
     inbuffer->size = len1;
     memcpy(&inbuffer->param, src_param, sizeof(bx_pcm_param_t));
-    outbuffer = new audio_buffer_t;
+    audio_buffer_t *outbuffer = new audio_buffer_t;
     memset(outbuffer, 0, sizeof(audio_buffer_t));
     convert_to_float(data, length, inbuffer);
     resampler(inbuffer, outbuffer);
     output(outbuffer->size, outbuffer->data);
-    delete [] outbuffer;
-    delete [] inbuffer;
+    delete outbuffer;
+    delete inbuffer;
   }
   return BX_SOUNDLOW_OK;
 }
@@ -485,18 +477,16 @@ Bit32u bx_soundlow_waveout_c::resampler_common(audio_buffer_t *inbuffer, float *
 
 void bx_soundlow_waveout_c::start_resampler_thread()
 {
-  BX_THREAD_ID(threadID);
-
   BX_INIT_MUTEX(resampler_mutex);
-  BX_THREAD_CREATE(resampler_thread, this, threadID);
+  res_thread_start = 1;
+  BX_THREAD_CREATE(resampler_thread, this, res_thread_var);
 }
 
 void bx_soundlow_waveout_c::start_mixer_thread()
 {
-  BX_THREAD_ID(threadID);
-
   BX_INIT_MUTEX(mixer_mutex);
-  BX_THREAD_CREATE(mixer_thread, this, threadID);
+  mix_thread_start = 1;
+  BX_THREAD_CREATE(mixer_thread, this, mix_thread_var);
 }
 
 // bx_soundlow_wavein_c class implementation

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bxcompat.h 13087 2017-02-27 22:26:43Z vruppert $
+// $Id: bxcompat.h 13258 2017-06-17 12:40:13Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2013       Volker Ruppert
@@ -69,15 +69,16 @@ extern const char *hdimage_mode_names[];
 #  define UNUSED(x) ((void)x)
 #endif
 
-#define BX_DEBUG(x)
 #ifdef BXIMAGE
+#define BX_DEBUG(x)
 #define BX_INFO(x)  { if (bx_interactive) { (printf) x ; printf("\n"); } }
 #define BX_ERROR(x) { (printf) x ; printf("\n"); }
 #define BX_PANIC(x) { (printf) x ; printf("\n"); myexit(1); }
 #define BX_FATAL(x) { (printf) x ; printf("\n"); myexit(1); }
 #else
-#define BX_INFO(x)
-#define BX_ERROR(x)  { (printf) x ; printf("\n"); }
+#define BX_DEBUG(x) { if (bx_loglev == 3) { (printf) x ; printf("\n"); } }
+#define BX_INFO(x)  { if (bx_loglev >= 2) { (printf) x ; printf("\n"); } }
+#define BX_ERROR(x) { if (bx_loglev >= 1) { (printf) x ; printf("\n"); } }
 #endif
 #define BX_ASSERT(x)
 
@@ -94,6 +95,8 @@ device_image_t* init_image(Bit8u image_mode);
 #else
 
 #define BX_PATHNAME_LEN 512
+
+extern int bx_loglev;
 
 #endif
 

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: logio.cc 13017 2016-12-30 10:04:06Z vruppert $
+// $Id: logio.cc 13293 2017-09-10 15:55:13Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2016  The Bochs Project
+//  Copyright (C) 2001-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,12 +21,9 @@
 /////////////////////////////////////////////////////////////////////////
 
 #include "bochs.h"
+#include "bxthread.h"
 #include "cpu/cpu.h"
 #include <assert.h>
-
-#ifndef WIN32
-#include <pthread.h>
-#endif
 
 #if BX_WITH_CARBON
 #include <Carbon/Carbon.h>

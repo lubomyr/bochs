@@ -17,5 +17,5 @@ fi
 
 cd BochsLauncher
 ./gradlew assembleDebug
-mv app/build/outputs/apk/app-debug.apk ../bochs-debug.apk
+mv app/build/outputs/apk/debug/app-debug.apk ../bochs-debug.apk
 cd ..

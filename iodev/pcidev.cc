@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcidev.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: pcidev.cc 13497 2018-05-01 15:54:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
  *  PCIDEV: PCI host device mapping
  *  Copyright (C) 2003       Frank Cornelis
- *  Copyright (C) 2003-2017  The Bochs Project
+ *  Copyright (C) 2003-2018  The Bochs Project
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -384,6 +384,7 @@ void bx_pcidev_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
   if (fd == -1)
     return;
 
+  BX_DEBUG_PCI_WRITE(address, value, io_len);
   // we do a host 2 guest irq line mapping
   if (address == PCI_INTERRUPT_LINE) {
     value &= 0xff;

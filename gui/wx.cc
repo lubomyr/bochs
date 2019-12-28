@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wx.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: wx.cc 13593 2019-11-11 19:40:09Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,6 +34,11 @@
 // platforms that require a special tag on exported symbols, BX_PLUGGABLE
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
+
+#include "config.h"
+#if WX_MSW_UNICODE
+#define UNICODE
+#endif
 
 #include "bochs.h"
 #include "param_names.h"
@@ -151,14 +156,11 @@ MyPanel::MyPanel(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSi
   refreshTimer.SetOwner (this);
   refreshTimer.Start (100);
   needRefresh = true;
-  const char bits[1] = { 0 };
-  blankCursor = new wxCursor (bits, 1, 1, -1, -1, bits);
   thePanel = this;
 }
 
 MyPanel::~MyPanel()
 {
-  delete blankCursor;
   thePanel = NULL;
 }
 
@@ -234,7 +236,7 @@ void MyPanel::ToggleMouse(bool fromToolbar)
 #if defined(__WXMSW__)
     ShowCursor(0);
 #else
-    SetCursor(*blankCursor);
+    SetCursor(wxCURSOR_BLANK);
 #endif
   } else {
 #if defined(__WXMSW__)
@@ -620,7 +622,12 @@ bx_bool MyPanel::fillBxKeyEvent_MSW (wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool
 
 #if defined (wxHAS_RAW_KEY_CODES) && defined(__WXGTK__)
 // get those keysym definitions
+#if WX_GDK_VERSION == 3
+#include <gdk/gdkkeysyms-compat.h>
+#else
 #include <gdk/gdkkeysyms.h>
+#endif
+
 #endif
 
 // GTK specific key mapping, which uses wxKeyEvent::m_rawCode.

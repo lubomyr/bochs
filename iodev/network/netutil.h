@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netutil.h 13109 2017-03-12 07:48:08Z vruppert $
+// $Id: netutil.h 13258 2017-06-17 12:40:13Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2004-2017  The Bochs Project
@@ -129,6 +129,7 @@ typedef struct {
   Bit8u default_guest_ipv4addr[4];
   Bit8u guest_ipv4addr[4];
   Bit8u dns_ipv4addr[4];
+  char *hostname;
 } dhcp_cfg_t;
 
 // vnet functions shared with bxhub

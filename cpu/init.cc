@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: init.cc 13165 2017-03-31 07:34:08Z sshwarts $
+// $Id: init.cc 13587 2019-10-26 20:17:41Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2017  The Bochs Project
@@ -392,6 +392,11 @@ void BX_CPU_C::register_state(void)
     BXRS_HEX_PARAM_FIELD(MSR, msr_xss, msr.msr_xss);
   }
 #endif
+
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_SCA_MITIGATIONS)) {
+    BXRS_HEX_PARAM_FIELD(MSR, ia32_spec_ctrl, msr.ia32_spec_ctrl);
+  }
+
 #if BX_CONFIGURE_MSRS
   bx_list_c *MSRS = new bx_list_c(cpu, "USER_MSR");
   for(n=0; n < BX_MSR_MAX_INDEX; n++) {
@@ -839,6 +844,8 @@ void BX_CPU_C::reset(unsigned source)
   BX_CPU_THIS_PTR msr.msr_xss = 0;
 #endif // BX_CPU_LEVEL >= 6
 
+  BX_CPU_THIS_PTR msr.ia32_spec_ctrl = 0;
+
 /* initialise MSR registers to defaults */
 #if BX_CPU_LEVEL >= 5
 #if BX_SUPPORT_APIC
@@ -1049,6 +1056,8 @@ void BX_CPU_C::reset(unsigned source)
 #if BX_CPU_LEVEL >= 4
   BX_CPU_THIS_PTR cpuid->dump_cpuid();
 #endif
+
+  BX_CPU_THIS_PTR cpuid->dump_features();
 
   BX_INSTR_RESET(BX_CPU_ID, source);
 }

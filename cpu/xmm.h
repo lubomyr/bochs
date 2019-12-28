@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: xmm.h 12384 2014-06-25 19:12:14Z sshwarts $
+// $Id: xmm.h 13486 2018-04-04 19:31:56Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2003-2014 Stanislav Shwartsman
+//   Copyright (c) 2003-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -65,38 +65,6 @@ union bx_xmm_reg_t {
 
 /* AVX REGISTER */
 
-enum bx_avx_vector_length {
-  BX_NO_VL,
-  BX_VL128  = 1,
-  BX_VL256  = 2,
-  BX_VL512  = 4,
-  BX_VL1024 = 8 // defined in EVEX but currently #UD in all implementations
-};
-
-#if BX_SUPPORT_EVEX
-#  define BX_VLMAX BX_VL512
-#else
-#  if BX_SUPPORT_AVX
-#    define BX_VLMAX BX_VL256
-#  else
-#    define BX_VLMAX BX_VL128
-#  endif
-#endif
-
-#if BX_SUPPORT_EVEX
-#  define BX_XMM_REGISTERS 32
-#else
-#  if BX_SUPPORT_X86_64
-#    define BX_XMM_REGISTERS 16
-#  else
-#    define BX_XMM_REGISTERS 8
-#  endif
-#endif
-
-#define BX_VECTOR_TMP_REGISTER (BX_XMM_REGISTERS)
-
-#if BX_SUPPORT_AVX
-
 typedef
 #if defined(_MSC_VER) && (_MSC_VER>=1300)
 __declspec(align(32))
@@ -139,10 +107,6 @@ union bx_ymm_reg_t {
 #define ymm64u(i)   ymm_u64[(i)]
 #define ymm128(i)   ymm_v128[(i)]
 #endif
-
-#endif
-
-#if BX_SUPPORT_EVEX
 
 typedef
 #if defined(_MSC_VER) && (_MSC_VER>=1300)
@@ -188,8 +152,6 @@ union bx_zmm_reg_t {
 #define zmm64u(i)   zmm_u64[(i)]
 #define zmm128(i)   zmm_v128[(i)]
 #define zmm256(i)   zmm_v256[(i)]
-#endif
-
 #endif
 
 #if BX_SUPPORT_EVEX

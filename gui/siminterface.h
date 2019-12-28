@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: siminterface.h 13073 2017-02-16 21:43:52Z vruppert $
+// $Id: siminterface.h 13474 2018-03-13 20:35:56Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -535,6 +535,12 @@ enum {
 #define BX_ATA_BIOSDETECT_NONE   2
 
 enum {
+  BX_SECT_SIZE_512,
+  BX_SECT_SIZE_1024,
+  BX_SECT_SIZE_4096
+};
+
+enum {
   BX_ATA_TRANSLATION_NONE,
   BX_ATA_TRANSLATION_LBA,
   BX_ATA_TRANSLATION_LARGE,
@@ -571,7 +577,8 @@ enum {
 
 enum {
   BX_PCI_CHIPSET_I430FX,
-  BX_PCI_CHIPSET_I440FX
+  BX_PCI_CHIPSET_I440FX,
+  BX_PCI_CHIPSET_I440BX
 };
 
 enum {
@@ -764,6 +771,8 @@ public:
   virtual bx_param_c *get_first_hd() {return NULL;}
   // return 1 if device is connected to a PCI slot
   virtual bx_bool is_pci_device(const char *name) {return 0;}
+  // return 1 if device is connected to the AGP slot
+  virtual bx_bool is_agp_device(const char *name) {return 0;}
 #if BX_DEBUGGER
   // for debugger: same behavior as pressing control-C
   virtual void debug_break() {}

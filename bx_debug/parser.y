@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parser.y 12553 2014-11-15 22:03:52Z sshwarts $
+// $Id: parser.y 13281 2017-08-22 21:03:58Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 %{
@@ -8,6 +8,7 @@
 #include "debug.h"
 
 #if BX_DEBUGGER
+Bit64u eval_value;
 %}
 
 %union {
@@ -17,7 +18,6 @@
 }
 
 // Common registers
-%type <uval> BX_TOKEN_NONSEG_REG
 %type <uval> BX_TOKEN_SEGREG
 %type <bval> BX_TOKEN_TOGGLE_ON_OFF
 %type <sval> BX_TOKEN_REGISTERS
@@ -38,6 +38,7 @@
 %token <bval> BX_TOKEN_ON
 %token <bval> BX_TOKEN_OFF
 %token <sval> BX_TOKEN_CONTINUE
+%token <sval> BX_TOKEN_IF
 %token <sval> BX_TOKEN_STEPN
 %token <sval> BX_TOKEN_STEP_OVER
 %token <sval> BX_TOKEN_SET
@@ -102,6 +103,7 @@
 %token <sval> BX_TOKEN_MODEBP
 %token <sval> BX_TOKEN_VMEXITBP
 %token <sval> BX_TOKEN_PRINT_STACK
+%token <sval> BX_TOKEN_BT
 %token <sval> BX_TOKEN_WATCH
 %token <sval> BX_TOKEN_UNWATCH
 %token <sval> BX_TOKEN_READ
@@ -122,6 +124,10 @@
 %token <sval> BX_TOKEN_GENERIC
 %token BX_TOKEN_RSHIFT
 %token BX_TOKEN_LSHIFT
+%token BX_TOKEN_EQ
+%token BX_TOKEN_NE
+%token BX_TOKEN_LE
+%token BX_TOKEN_GE
 %token BX_TOKEN_REG_IP
 %token BX_TOKEN_REG_EIP
 %token BX_TOKEN_REG_RIP
@@ -129,8 +135,9 @@
 %type <uval> vexpression
 %type <uval> expression
 
-%left '+' '-' '|' '^'
+%left '+' '-' '|' '^' '<' '>'
 %left '*' '/' '&' BX_TOKEN_LSHIFT BX_TOKEN_RSHIFT
+%left BX_TOKEN_EQ BX_TOKEN_NE BX_TOKEN_LE BX_TOKEN_GE
 %left NOT NEG INDIRECT
 
 %start commands
@@ -181,6 +188,7 @@ command:
     | modebp_command
     | vmexitbp_command
     | print_stack_command
+    | backtrace_command
     | watch_point_command
     | page_command
     | tlb_command
@@ -190,6 +198,8 @@ command:
     | print_string_command
     | help_command
     | calc_command
+    | if_command
+    | expression { eval_value = $1; }
     | 
     | '\n'
       {
@@ -341,6 +351,19 @@ print_stack_command:
       }
     ;
 
+backtrace_command:
+      BX_TOKEN_BT '\n'
+      {
+        bx_dbg_bt_command(16);
+        free($1);
+      }
+    | BX_TOKEN_BT BX_TOKEN_NUMERIC '\n'
+      {
+        bx_dbg_bt_command($2);
+        free($1);
+      }
+    ;
+
 watch_point_command:
       BX_TOKEN_WATCH BX_TOKEN_STOP '\n'
       {
@@ -441,8 +464,13 @@ print_string_command:
 continue_command:
       BX_TOKEN_CONTINUE '\n'
       {
-        bx_dbg_continue_command();
+        bx_dbg_continue_command(1);
         free($1);
+      }
+    | BX_TOKEN_CONTINUE BX_TOKEN_IF expression '\n'
+      {
+        bx_dbg_continue_command($3);
+        free($1); free($2);
       }
     ;
 
@@ -525,43 +553,68 @@ set_command:
 breakpoint_command:
       BX_TOKEN_VBREAKPOINT '\n'
       {
-        bx_dbg_vbreakpoint_command(bkAtIP, 0, 0);
+        bx_dbg_vbreakpoint_command(bkAtIP, 0, 0, NULL);
         free($1);
       }
     | BX_TOKEN_VBREAKPOINT vexpression ':' vexpression '\n'
       {
-        bx_dbg_vbreakpoint_command(bkRegular, $2, $4);
+        bx_dbg_vbreakpoint_command(bkRegular, $2, $4, NULL);
         free($1);
+      }
+    | BX_TOKEN_VBREAKPOINT vexpression ':' vexpression BX_TOKEN_IF BX_TOKEN_STRING '\n'
+      {
+        bx_dbg_vbreakpoint_command(bkRegular, $2, $4, $6);
+        free($1); free($5); free($6);
       }
     | BX_TOKEN_LBREAKPOINT '\n'
       {
-        bx_dbg_lbreakpoint_command(bkAtIP, 0);
+        bx_dbg_lbreakpoint_command(bkAtIP, 0, NULL);
         free($1);
       }
     | BX_TOKEN_LBREAKPOINT expression '\n'
       {
-        bx_dbg_lbreakpoint_command(bkRegular, $2);
+        bx_dbg_lbreakpoint_command(bkRegular, $2, NULL);
         free($1);
+      }
+    | BX_TOKEN_LBREAKPOINT expression BX_TOKEN_IF BX_TOKEN_STRING '\n'
+      {
+        bx_dbg_lbreakpoint_command(bkRegular, $2, $4);
+        free($1); free($3); free($4);
       }
     | BX_TOKEN_LBREAKPOINT BX_TOKEN_STRING '\n'
       {
-        bx_dbg_lbreakpoint_symbol_command($2);
-        free($1);free($2);
+        bx_dbg_lbreakpoint_symbol_command($2, NULL);
+        free($1); free($2);
+      }
+    | BX_TOKEN_LBREAKPOINT BX_TOKEN_STRING BX_TOKEN_IF BX_TOKEN_STRING '\n'
+      {
+        bx_dbg_lbreakpoint_symbol_command($2, $4);
+        free($1); free($2); free($3); free($4);
       }
     | BX_TOKEN_PBREAKPOINT '\n'
       {
-        bx_dbg_pbreakpoint_command(bkAtIP, 0);
+        bx_dbg_pbreakpoint_command(bkAtIP, 0, NULL);
         free($1);
       }
     | BX_TOKEN_PBREAKPOINT expression '\n'
       {
-        bx_dbg_pbreakpoint_command(bkRegular, $2);
+        bx_dbg_pbreakpoint_command(bkRegular, $2, NULL);
         free($1);
+      }
+    | BX_TOKEN_PBREAKPOINT expression BX_TOKEN_IF BX_TOKEN_STRING '\n'
+      {
+        bx_dbg_pbreakpoint_command(bkRegular, $2, $4);
+        free($1); free($3); free($4);
       }
     | BX_TOKEN_PBREAKPOINT '*' expression '\n'
       {
-        bx_dbg_pbreakpoint_command(bkRegular, $3);
+        bx_dbg_pbreakpoint_command(bkRegular, $3, NULL);
         free($1);
+      }
+    | BX_TOKEN_PBREAKPOINT '*' expression BX_TOKEN_IF BX_TOKEN_STRING '\n'
+      {
+        bx_dbg_pbreakpoint_command(bkRegular, $3, $5);
+        free($1); free($4); free($5);
       }
     ;
 
@@ -940,6 +993,7 @@ help_command:
      | BX_TOKEN_HELP BX_TOKEN_CONTINUE '\n'
        {
          dbg_printf("c|cont|continue - continue executing\n");
+         dbg_printf("c|cont|continue if \"expression\" - continue executing only if expression is true\n");
          free($1);free($2);
        }
      | BX_TOKEN_HELP BX_TOKEN_STEPN '\n'
@@ -957,16 +1011,19 @@ help_command:
      | BX_TOKEN_HELP BX_TOKEN_VBREAKPOINT '\n'
        {
          dbg_printf("vb|vbreak <seg:offset> - set a virtual address instruction breakpoint\n");
+         dbg_printf("vb|vbreak <seg:offset> if \"expression\" - set a conditional virtual address instruction breakpoint\n");
          free($1);free($2);
        }
      | BX_TOKEN_HELP BX_TOKEN_LBREAKPOINT '\n'
        {
          dbg_printf("lb|lbreak <addr> - set a linear address instruction breakpoint\n");
+         dbg_printf("lb|lbreak <addr> if \"expression\" - set a conditional linear address instruction breakpoint\n");
          free($1);free($2);
        }
      | BX_TOKEN_HELP BX_TOKEN_PBREAKPOINT '\n'
        {
          dbg_printf("p|pb|break|pbreak <addr> - set a physical address instruction breakpoint\n");
+         dbg_printf("p|pb|break|pbreak <addr> if \"expression\" - set a conditional physical address instruction breakpoint\n");
          free($1);free($2);
        }
      | BX_TOKEN_HELP BX_TOKEN_DEL_BREAKPOINT '\n'
@@ -1233,19 +1290,19 @@ help_command:
 calc_command:
    BX_TOKEN_CALC expression '\n'
    {
+     eval_value = $2;
      bx_dbg_calc_command($2);
      free($1);
    }
 ;
 
-BX_TOKEN_NONSEG_REG:
-     BX_TOKEN_8BL_REG
-   | BX_TOKEN_8BH_REG
-   | BX_TOKEN_16B_REG
-   | BX_TOKEN_32B_REG
-   | BX_TOKEN_64B_REG
-   | BX_TOKEN_OPMASK_REG
-   { $$=$1; }
+if_command:
+   BX_TOKEN_IF expression '\n'
+   {
+     eval_value = $2 != 0;
+     bx_dbg_calc_command($2);
+     free($1);
+   }
 ;
 
 /* Arithmetic expression for vbreak command */
@@ -1261,7 +1318,7 @@ vexpression:
    | BX_TOKEN_SEGREG                 { $$ = bx_dbg_get_selector_value($1); }
    | BX_TOKEN_REG_IP                 { $$ = bx_dbg_get_ip (); }
    | BX_TOKEN_REG_EIP                { $$ = bx_dbg_get_eip(); }
-   | BX_TOKEN_REG_RIP                { $$ = bx_dbg_get_instruction_pointer(); }
+   | BX_TOKEN_REG_RIP                { $$ = bx_dbg_get_rip(); }
    | vexpression '+' vexpression     { $$ = $1 + $3; }
    | vexpression '-' vexpression     { $$ = $1 - $3; }
    | vexpression '*' vexpression     { $$ = $1 * $3; }
@@ -1290,7 +1347,7 @@ expression:
    | BX_TOKEN_SEGREG                 { $$ = bx_dbg_get_selector_value($1); }
    | BX_TOKEN_REG_IP                 { $$ = bx_dbg_get_ip (); }
    | BX_TOKEN_REG_EIP                { $$ = bx_dbg_get_eip(); }
-   | BX_TOKEN_REG_RIP                { $$ = bx_dbg_get_instruction_pointer(); }
+   | BX_TOKEN_REG_RIP                { $$ = bx_dbg_get_rip(); }
    | expression ':' expression       { $$ = bx_dbg_get_laddr ($1, $3); }
    | expression '+' expression       { $$ = $1 + $3; }
    | expression '-' expression       { $$ = $1 - $3; }
@@ -1301,6 +1358,12 @@ expression:
    | expression '|' expression       { $$ = $1 | $3; }
    | expression '^' expression       { $$ = $1 ^ $3; }
    | expression '&' expression       { $$ = $1 & $3; }
+   | expression '>' expression       { $$ = $1 > $3; }
+   | expression '<' expression       { $$ = $1 < $3; }
+   | expression BX_TOKEN_EQ expression { $$ = $1 == $3; }
+   | expression BX_TOKEN_NE expression { $$ = $1 != $3; }
+   | expression BX_TOKEN_LE expression { $$ = $1 <= $3; }
+   | expression BX_TOKEN_GE expression { $$ = $1 >= $3; }
    | '!' expression %prec NOT        { $$ = !$2; }
    | '-' expression %prec NEG        { $$ = -$2; }
    | '*' expression %prec INDIRECT   { $$ = bx_dbg_lin_indirect($2); }

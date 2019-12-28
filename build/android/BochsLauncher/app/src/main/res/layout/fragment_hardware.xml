@@ -74,7 +74,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="5dp"
-                    android:layout_marginRight="5dp"
                     android:text="@string/i430fx" />
 
                 <RadioButton
@@ -82,7 +81,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="5dp"
-                    android:layout_marginRight="5dp"
                     android:text="@string/i440fx" />
 
             </RadioGroup>
@@ -253,7 +251,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -275,7 +272,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -297,7 +293,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -319,7 +314,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -341,7 +335,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
-                    android:layout_marginLeft="5dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -362,10 +355,6 @@
             </LinearLayout>
 
         </LinearLayout>
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/bottom_margin"/>
 
     </LinearLayout>
 

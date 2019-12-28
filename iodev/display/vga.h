@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vga.h 13147 2017-03-24 19:57:25Z vruppert $
+// $Id: vga.h 13457 2018-02-04 09:41:50Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2018  The Bochs Project
 //  PCI VGA dummy adapter Copyright (C) 2002,2003  Mike Nordell
 //
 //  This library is free software; you can redistribute it and/or
@@ -50,6 +50,7 @@
 #define VBE_DISPI_INDEX_X_OFFSET         0x8
 #define VBE_DISPI_INDEX_Y_OFFSET         0x9
 #define VBE_DISPI_INDEX_VIDEO_MEMORY_64K 0xa
+#define VBE_DISPI_INDEX_DDC              0xb
 
 #define VBE_DISPI_ID0                    0xB0C0
 #define VBE_DISPI_ID1                    0xB0C1
@@ -104,22 +105,15 @@ public:
   virtual void   redraw_area(unsigned x0, unsigned y0,
                              unsigned width, unsigned height);
 
-  virtual void   init_vga_extension(void);
-  virtual void   refresh_display(void *this_ptr, bx_bool redraw);
-
-  static void     timer_handler(void *);
-#if BX_USE_VGA_SMF == 0
-  BX_VGA_SMF void timer(void);
-#endif
+  virtual bx_bool init_vga_extension(void);
 
 #if BX_SUPPORT_PCI
   virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
+  virtual void pci_bar_change_notify(void);
 #endif
 #if BX_DEBUGGER
   virtual void debug_dump(int argc, char **argv);
 #endif
-
-  static Bit64s   vga_param_handler(bx_param_c *param, int set, Bit64s val);
 
 protected:
   static void   write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);
@@ -128,13 +122,9 @@ protected:
 #endif
   void  write(Bit32u address, Bit32u value, unsigned io_len, bx_bool no_log);
 
-  BX_VGA_SMF void update(void);
+  virtual void update(void);
 
   // Bochs VBE section
-#if BX_SUPPORT_PCI
-  virtual bx_bool vbe_set_base_addr(Bit32u *addr, Bit8u *pci_conf);
-#endif
-
   BX_VGA_SMF Bit8u vbe_mem_read(bx_phy_address addr) BX_CPP_AttrRegparmN(1);
   BX_VGA_SMF void  vbe_mem_write(bx_phy_address addr, Bit8u value) BX_CPP_AttrRegparmN(2);
 
@@ -170,7 +160,10 @@ private:
     bx_bool lfb_enabled;
     bx_bool get_capabilities;
     bx_bool dac_8bit;
+    bx_bool ddc_enabled;
   } vbe;  // VBE state information
+
+  bx_ddc_c ddc;
 };
 
 #endif

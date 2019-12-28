@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32_enh_dbg_osdep.cc 12543 2014-11-06 19:02:34Z vruppert $
+// $Id: win32_enh_dbg_osdep.cc 13438 2018-01-19 20:27:04Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -1867,28 +1867,21 @@ void MakeBL(HTREEITEM *h_P, bx_param_c *p)
     int j = strlen (tmpcb);
     switch (p->get_type())
     {
-        case BXT_PARAM_NUM:
-            if (((bx_param_num_c*)p)->get_base() == BASE_DEC)
-                sprintf (tmpcb + j,": " FMT_LL "d",((bx_param_num_c*)p)->get64());
-            else
-                sprintf (tmpcb + j,": 0x" FMT_LL "X",((bx_param_num_c*)p)->get64());
-            break;
         case BXT_LIST:
             as_list = (bx_list_c *)p;
             i = as_list->get_size();
             break;
+        case BXT_PARAM_NUM:
         case BXT_PARAM_BOOL:
-            sprintf (tmpcb + j,": %s",((bx_param_bool_c*)p)->get()?"true":"false");
-            break;
         case BXT_PARAM_ENUM:
-            sprintf (tmpcb + j,": %s",((bx_param_enum_c*)p)->get_selected());
-            break;
         case BXT_PARAM_STRING:
-            ((bx_param_string_c*)p)->sprint(tmpstr, BX_PATHNAME_LEN, 0);
+        case BXT_PARAM_BYTESTRING:
+            p->dump_param(tmpstr, BX_PATHNAME_LEN);
             sprintf(tmpcb + j,": %s", tmpstr);
             break;
         case BXT_PARAM_DATA:
             sprintf (tmpcb + j,": binary data, size=%d",((bx_shadow_data_c*)p)->get_size());
+            break;
     }
     MakeTreeChild (h_P, i, &h_new);
     if (i > 0)

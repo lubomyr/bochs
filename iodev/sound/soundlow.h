@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlow.h 13116 2017-03-14 18:21:05Z vruppert $
+// $Id: soundlow.h 13293 2017-09-10 15:55:13Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2011-2017  The Bochs Project
@@ -20,9 +20,7 @@
 
 // Common code for sound lowlevel modules
 
-#ifndef WIN32
-#include <pthread.h>
-#endif
+#include "bxthread.h"
 
 #if BX_HAVE_LIBSAMPLERATE
 #include <samplerate.h>
@@ -86,8 +84,6 @@ extern bx_audio_buffer_c *audio_buffers[2];
 void convert_float_to_s16le(float *src, unsigned srcsize, Bit8u *dst);
 BOCHSAPI_MSVCONLY Bit32u pcm_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len);
 
-BOCHSAPI_MSVCONLY extern int resampler_control;
-BOCHSAPI_MSVCONLY extern int mixer_control;
 extern BX_MUTEX(resampler_mutex);
 #ifndef ANDROID
 extern BX_MUTEX(mixer_mutex);
@@ -114,12 +110,19 @@ public:
 
   virtual bx_bool mixer_common(Bit8u *buffer, int len);
 
+  bx_bool resampler_running() {return res_thread_start;}
+  bx_bool mixer_running() {return mix_thread_start;}
+
 protected:
   void start_resampler_thread(void);
   void start_mixer_thread(void);
   Bit32u resampler_common(audio_buffer_t *inbuffer, float **fbuffer);
 
   bx_pcm_param_t real_pcm_param;
+  bx_bool res_thread_start;
+  bx_bool mix_thread_start;
+  BX_THREAD_VAR(res_thread_var);
+  BX_THREAD_VAR(mix_thread_var);
 #if BX_HAVE_LIBSAMPLERATE || BX_HAVE_SOXR_LSR
   SRC_STATE *src_state;
 #endif

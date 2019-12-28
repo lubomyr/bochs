@@ -1,0 +1,9 @@
+.gradle
+bin-*
+*.so
+*.apk
+build/android/BochsLauncher/app/src/main/jniLibs
+build/android/BochsLauncher/bochsApp/build/
+build/android/BochsLauncher/bochsApp/res
+build/android/BochsLauncher/bochsApp/src
+build/android/bochs/bochs

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxmain.h 13014 2016-12-29 09:47:07Z vruppert $
+// $Id: wxmain.h 13250 2017-06-03 14:32:56Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2016  The Bochs Project
+//  Copyright (C) 2002-2017  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -157,7 +157,6 @@ public:
   static void OnPluginInit();
   void ToggleMouse(bool fromToolbar);
 private:
-  wxCursor *blankCursor;
   bool needRefresh;
   wxTimer refreshTimer;
   Bit16s mouseSavedX, mouseSavedY;

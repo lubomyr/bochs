@@ -1,3 +1,85 @@
+Changes in 2.6.10 (December 1, 2019):
+
+Brief summary :
+  - CPU: Bugfixes for CPU emulation correctness (critical bugfixes for PCID, ADCX/ADOX, MOVBE, AVX/AVX-512 and VMX emulation)
+  - CPU: implemented AVX-512 VBMI2/VNNI/BITALG, VAES, VPCLMULQDQ / GFNI instructions emulation
+  - VMX: Implement EPT-Based Sub-Page Protection
+  - CPUID: Added new CPU models Skylake-X, Cannonlake and Icelake-U
+  - CPUID: Implemented side-channel attack prevention reporting and corresponding MSR registers, enabled for Icelake-U
+  - Added basic support for the i440BX PCI/AGP chipset.
+  - Added basic Voodoo Banshee / Voodoo3 emulation support.
+  - Added basic DDC support for the VGA-compatible adapters.
+  - Implemented HPET emulation (ported from Qemu).
+
+Detailed change log :
+
+- General
+  - Disabled legacy "load32bitOShack" feature.
+  - Improved NSIS win32 installer script.
+
+- CPU / CPUDB
+  - Significant speedup to simulation of milti-threaded guest (patch by Luigu.B)
+  - Bugfixes for CPU emulation correctness (critical bugfixes for PCID, ADCX/ADOX, MOVBE, AVX/AVX-512 and VMX emulation)
+  ! x87: implemented FOPCODE and FDP deprecation features
+  ! AVX-512: implemented AVX-512 VBMI2/VNNI/BITALG instructions
+  ! Crypto: Implemented VAES instructions / VPCLMULQDQ / GFNI instruction
+  ! VMX: Implement EPT-Based Sub-Page Protection
+  ! CPUID: Added Skylake-X CPU definition (features AVX-512 support)
+  ! CPUID: Added Cannonlake CPU definition (features more AVX-512 levels, UMIP, SHA, PKU support)
+  ! CPUID: Added Icelake-U CPU definition (features more AVX-512 levels, UMIP, SHA, GFNI, VAES, PKU support)
+  ! CPUID: Implemented SCA (Side-Channel-Attack) Prevention reporting and corresponding MSR registers, enabled for Icelake-U CPU definition
+
+- Bochs Debugger and Instrumentation
+  - Added support for conditional breakpoints and conditional step/continue to Bochs debugger
+  - Support 'info tab' command for 64-bit mode as well
+  - Bochs debugger improvements patch by Doug Gale
+    - better handling of 64-bit addresses in the debugger, added support for 64 bit symbols,
+      added more symbol lookups.
+
+- I/O Devices
+  - PCI
+    - Added basic support for the i440BX PCI/AGP chipset.
+  - Timers
+    - Implemented HPET emulation (ported from Qemu).
+  - Hard drive / HD image
+    - Added support for unlocking disk images (locks leftover from previous
+      Bochs session) with the new command line argument '-unlock'.
+    - Added ATAPI command "get event status notification".
+    - Bugfix: undoable/volatile mode images now inherit the base image geometry
+      if present.
+  - Voodoo
+    - Voodoo1 emulation speedup with combined PCI / memory FIFO implementation
+      and multi-threading support (separate FIFO thread).
+    - Voodoo2 model now working after some fixes and implementation of the
+      CMDFIFO (using FIFO thread) and one of the bitBLT functions.
+    - Added Voodoo Banshee / Voodoo3 emulation support (still under construction,
+      but basicly usable). The AGP models are available if chipset is i440BX.
+  - Display (general)
+    - Added basic DDC support for Bochs VBE, Cirrus and Voodoo Banshee / Voodoo3
+      adapters (reporting plug&play monitor "Bochs Screen").
+  - USB
+    - Now creating separate plugins for each USB device implementation.
+    - Added sector size option for USB disks (size 1024 and 4096 supported).
+  - Networking
+    - bxhub: Added DNS service support for the server "vnet" and connected
+      clients.
+  - Sound
+    - PC speaker now can play digitized sound by driving speaker gate.
+
+- GUI and display libraries
+  - Added new win32 gui option "traphotkeys" for fullscreen mode.
+  - wx: Fixes and updates for wxWidgets 3.0 support.
+  - Removed legacy guis "macos" and "svga" from display library auto-
+    detection (still available using --with-XXX option).
+
+- LGPL'd VGABIOS updated from CVS (VESA extension 'read EDID' for Bochs VBE
+  and Cirrus added).
+
+- Misc
+  - Added sector size option to bximage for creating flat, sparse and growing
+    mode images with big sectors (size 1024 and 4096 currently supported).
+
+-------------------------------------------------------------------------
 Changes in 2.6.9 (April 9, 2017):
 
 Brief summary :

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc_mem.cc 13071 2017-02-14 20:11:58Z vruppert $
+// $Id: misc_mem.cc 13515 2018-05-21 16:11:46Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2018  The Bochs Project
 //
 //  I/O memory handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -36,6 +36,16 @@
 Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #endif
 
+#ifdef ANDROID_32BIT
+#    define ftello64 ftell
+#    define fseeko64 fseek
+#endif
+
+#ifdef ANDROID_ARM64
+#    define ftello64 ftello
+#    define fseeko64 fseeko
+#endif
+
 BX_MEM_C::BX_MEM_C()
 {
   put("memory", "MEM0");
@@ -54,7 +64,7 @@ BX_MEM_C::BX_MEM_C()
 #endif
 }
 
-Bit8u* BX_MEM_C::alloc_vector_aligned(Bit32u bytes, Bit32u alignment)
+Bit8u* BX_MEM_C::alloc_vector_aligned(Bit64u bytes, Bit64u alignment)
 {
   Bit64u test_mask = alignment - 1;
   BX_MEM_THIS actual_vector = new Bit8u [(Bit32u)(bytes + test_mask)];
@@ -87,7 +97,7 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 {
   unsigned i, idx;
 
-  BX_DEBUG(("Init $Id: misc_mem.cc 13071 2017-02-14 20:11:58Z vruppert $"));
+  BX_DEBUG(("Init $Id: misc_mem.cc 13515 2018-05-21 16:11:46Z vruppert $"));
 
   // accept only memory size which is multiply of 1M
   BX_ASSERT((host & 0xfffff) == 0);
@@ -169,7 +179,7 @@ void BX_MEM_C::read_block(Bit32u block)
 
 void BX_MEM_C::allocate_block(Bit32u block)
 {
-  const Bit32u max_blocks = BX_MEM_THIS allocated / BX_MEM_BLOCK_LEN;
+  const Bit32u max_blocks = (Bit32u)(BX_MEM_THIS allocated / BX_MEM_BLOCK_LEN);
 
 #if BX_LARGE_RAMFILE
   /* 
@@ -300,7 +310,7 @@ void BX_MEM_C::register_state()
   char param_name[15];
 
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "memory", "Memory State");
-  Bit32u num_blocks = BX_MEM_THIS len / BX_MEM_BLOCK_LEN;
+  Bit32u num_blocks = (Bit32u)(BX_MEM_THIS len / BX_MEM_BLOCK_LEN);
 #if BX_LARGE_RAMFILE
   bx_shadow_filedata_c *ramfile = new bx_shadow_filedata_c(list, "ram", &(BX_MEM_THIS overflow_file));
   ramfile->set_sr_handlers(this, ramfile_save_handler, (filedata_restore_handler)NULL);
@@ -429,7 +439,7 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
         return;
       }
     } else {
-      romaddress = -size;
+      romaddress = ~(size - 1);
     }
     offset = romaddress & BIOS_MASK;
     if ((romaddress & 0xf0000) < 0xf0000) {
@@ -506,7 +516,7 @@ void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress)
 {
   struct stat stat_buf;
   int fd, ret;
-  Bit32u size, offset;
+  unsigned long size, offset;
 
   if (*path == '\0') {
     BX_PANIC(("RAM: Optional RAM image undefined"));
@@ -531,7 +541,7 @@ void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress)
 
   size = (unsigned long)stat_buf.st_size;
 
-  offset = ramaddress;
+  offset = (unsigned long)ramaddress;
   while (size > 0) {
     ret = read(fd, (bx_ptr_t) BX_MEM_THIS get_vector(offset), size);
     if (ret <= 0) {
@@ -824,7 +834,7 @@ BX_MEM_C::registerMemoryHandlers(void *param, memory_handler_t read_handler,
 {
   if (end_addr < begin_addr)
     return 0;
-  if (!read_handler || !write_handler) // allow NULL fetch handler
+  if (!read_handler) // allow NULL write and fetch handler
     return 0;
   BX_INFO(("Register memory access handlers: 0x" FMT_PHY_ADDRX " - 0x" FMT_PHY_ADDRX, begin_addr, end_addr));
   for (Bit32u page_idx = (Bit32u)(begin_addr >> 20); page_idx <= (Bit32u)(end_addr >> 20); page_idx++) {

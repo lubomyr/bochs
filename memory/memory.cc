@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: memory.cc 12569 2014-12-18 17:52:40Z vruppert $
+// $Id: memory.cc 13580 2019-10-16 20:46:00Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2014  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -71,11 +71,13 @@ void BX_MEM_C::writePhysicalPage(BX_CPU_C *cpu, bx_phy_address addr, unsigned le
 
   memory_handler = BX_MEM_THIS memory_handlers[a20addr >> 20];
   while (memory_handler) {
-    if (memory_handler->begin <= a20addr &&
+    if (memory_handler->write_handler != NULL) {
+      if (memory_handler->begin <= a20addr &&
           memory_handler->end >= a20addr &&
           memory_handler->write_handler(a20addr, len, data, memory_handler->param))
-    {
-      return;
+      {
+        return;
+      }
     }
     memory_handler = memory_handler->next;
   }
@@ -89,17 +91,17 @@ mem_write:
     {
       if (len == 8) {
         pageWriteStampTable.decWriteStamp(a20addr, 8);
-        WriteHostQWordToLittleEndian(BX_MEM_THIS get_vector(a20addr), *(Bit64u*)data);
+        WriteHostQWordToLittleEndian((Bit64u*) BX_MEM_THIS get_vector(a20addr), *(Bit64u*)data);
         return;
       }
       if (len == 4) {
         pageWriteStampTable.decWriteStamp(a20addr, 4);
-        WriteHostDWordToLittleEndian(BX_MEM_THIS get_vector(a20addr), *(Bit32u*)data);
+        WriteHostDWordToLittleEndian((Bit32u*) BX_MEM_THIS get_vector(a20addr), *(Bit32u*)data);
         return;
       }
       if (len == 2) {
         pageWriteStampTable.decWriteStamp(a20addr, 2);
-        WriteHostWordToLittleEndian(BX_MEM_THIS get_vector(a20addr), *(Bit16u*)data);
+        WriteHostWordToLittleEndian((Bit16u*) BX_MEM_THIS get_vector(a20addr), *(Bit16u*)data);
         return;
       }
       if (len == 1) {
@@ -160,6 +162,22 @@ mem_write:
           // Writes to ShadowRAM
           BX_DEBUG(("Writing to ShadowRAM: address 0x" FMT_PHY_ADDRX ", data %02x", a20addr, *data_ptr));
           *(BX_MEM_THIS get_vector(a20addr)) = *data_ptr;
+        } else if ((area >= BX_MEM_AREA_E0000) && BX_MEM_THIS bios_write_enabled) {
+          // volatile BIOS write support
+#ifdef BX_LITTLE_ENDIAN
+          data_ptr = (Bit8u *) data;
+#else // BX_BIG_ENDIAN
+          data_ptr = (Bit8u *) data + (len - 1);
+#endif
+          for (unsigned i = 0; i < len; i++) {
+            BX_MEM_THIS rom[BIOS_MAP_LAST128K(a20addr)] = *data_ptr;
+            a20addr++;
+#ifdef BX_LITTLE_ENDIAN
+            data_ptr++;
+#else // BX_BIG_ENDIAN
+            data_ptr--;
+#endif
+          }
         } else {
           // Writes to ROM, Inhibit
           BX_DEBUG(("Write to ROM ignored: address 0x" FMT_PHY_ADDRX ", data %02x", a20addr, *data_ptr));
@@ -245,15 +263,15 @@ mem_read:
     if (a20addr < 0x000a0000 || a20addr >= 0x00100000)
     {
       if (len == 8) {
-        ReadHostQWordFromLittleEndian(BX_MEM_THIS get_vector(a20addr), * (Bit64u*) data);
+        * (Bit64u*) data = ReadHostQWordFromLittleEndian((Bit64u*) BX_MEM_THIS get_vector(a20addr));
         return;
       }
       if (len == 4) {
-        ReadHostDWordFromLittleEndian(BX_MEM_THIS get_vector(a20addr), * (Bit32u*) data);
+        * (Bit32u*) data = ReadHostDWordFromLittleEndian((Bit32u*) BX_MEM_THIS get_vector(a20addr));
         return;
       }
       if (len == 2) {
-        ReadHostWordFromLittleEndian(BX_MEM_THIS get_vector(a20addr), * (Bit16u*) data);
+        * (Bit16u*) data = ReadHostWordFromLittleEndian((Bit16u*) BX_MEM_THIS get_vector(a20addr));
         return;
       }
       if (len == 1) {

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.h 13055 2017-01-30 19:08:37Z vruppert $
+// $Id: hdimage.h 13482 2018-03-31 17:07:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2005-2017  The Bochs Project
+//  Copyright (C) 2005-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -207,6 +207,7 @@ class device_image_t
       unsigned cylinders;
       unsigned heads;
       unsigned spt;
+      unsigned sect_size;
       Bit64u   hd_size;
   protected:
 #ifndef WIN32
@@ -538,6 +539,9 @@ class undoable_image_t : public device_image_t
       // written (count).
       ssize_t write(const void* buf, size_t count);
 
+      // Get image capabilities
+      virtual Bit32u get_capabilities() {return caps;}
+
 #ifndef BXIMAGE
       // Save/restore support
       bx_bool save_state(const char *backup_fname);
@@ -548,6 +552,7 @@ class undoable_image_t : public device_image_t
       redolog_t       *redolog;       // Redolog instance
       device_image_t  *ro_disk;       // Read-only base disk instance
       char            *redolog_name;  // Redolog name
+      Bit32u          caps;
 };
 
 
@@ -577,6 +582,9 @@ class volatile_image_t : public device_image_t
       // written (count).
       ssize_t write(const void* buf, size_t count);
 
+      // Get image capabilities
+      virtual Bit32u get_capabilities() {return caps;}
+
 #ifndef BXIMAGE
       // Save/restore support
       bx_bool save_state(const char *backup_fname);
@@ -588,6 +596,7 @@ class volatile_image_t : public device_image_t
       device_image_t  *ro_disk;       // Read-only base disk instance
       char            *redolog_name;  // Redolog name
       char            *redolog_temp;  // Redolog temporary file name
+      Bit32u          caps;
 };
 
 

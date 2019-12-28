@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: slirp.cc 12935 2016-08-12 17:06:14Z vruppert $
+// $Id: slirp.cc 13589 2019-11-03 12:48:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * libslirp glue
@@ -26,8 +26,8 @@
  */
 #define BX_PLUGGABLE
 
-#include "iodev.h"
 #include "slirp.h"
+#include "iodev.h"
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP
 
@@ -61,9 +61,10 @@ static u_int dns_addr_time;
 /* for the aging of certain requests like DNS */
 #define TIMEOUT_DEFAULT 1000  /* milliseconds */
 
-#ifdef WIN32
+#if defined(_WIN32) || defined(__CYGWIN__)
 
 #include <iphlpapi.h>
+#include <winerror.h>
 
 int get_dns_addr(struct in_addr *pdns_addr)
 {
@@ -110,13 +111,6 @@ int get_dns_addr(struct in_addr *pdns_addr)
     return 0;
 }
 
-static void CDECL winsock_cleanup(void)
-{
-#ifndef __CYGWIN__
-    WSACleanup();
-#endif
-}
-
 #else
 
 static struct stat dns_addr_stat;
@@ -152,7 +146,7 @@ int get_dns_addr(struct in_addr *pdns_addr)
         return -1;
 
 #ifdef DEBUG
-    lprint("IP address of your DNS(s): ");
+    printf("IP address of your DNS(s): ");
 #endif
     while (fgets(buff, 512, f) != NULL) {
         if (sscanf(buff, "nameserver%*[ \t]%256s", buff2) == 1) {
@@ -166,17 +160,17 @@ int get_dns_addr(struct in_addr *pdns_addr)
             }
 #ifdef DEBUG
             else
-                lprint(", ");
+                printf(", ");
 #endif
             if (++found > 3) {
 #ifdef DEBUG
-                lprint("(more)");
+                printf("(more)");
 #endif
                 break;
             }
 #ifdef DEBUG
             else
-                lprint("%s", inet_ntoa(tmp_addr));
+                printf("%s", inet_ntoa(tmp_addr));
 #endif
         }
     }
@@ -186,6 +180,13 @@ int get_dns_addr(struct in_addr *pdns_addr)
     return 0;
 }
 
+#endif
+
+#ifdef _WIN32
+static void CDECL winsock_cleanup(void)
+{
+    WSACleanup();
+}
 #endif
 
 static void slirp_init_once(void)

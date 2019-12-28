@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_socket.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: eth_socket.cc 13261 2017-06-28 15:34:34Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  by Mariusz Matuszek [NOmrmmSPAM @ users.sourceforge.net]
@@ -52,6 +52,10 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
+#ifdef __CYGWIN__
+#define __USE_W32_SOCKETS
+#endif
+
 #include "iodev.h"
 #include "netmod.h"
 
@@ -77,13 +81,17 @@ void CDECL libsocket_net_plugin_fini(void)
 extern "C" {
 #ifdef WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
+#if defined(__CYGWIN__) && defined(_WIN64)
+#undef FIONBIO
+#define FIONBIO 0x8004667e
+#endif
 #else
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <netpacket/packet.h>
 #include <netinet/in.h>
 #include <net/ethernet.h>
 #include <net/if.h>
@@ -159,7 +167,7 @@ bx_socket_pktmover_c::bx_socket_pktmover_c(const char *netif,
   struct hostent *hp;
   int port;
 #ifdef WIN32
-  unsigned long nbl = 1;
+  ULONG nbl = 1;
 #endif
 
   this->netdev = dev;
@@ -320,8 +328,13 @@ void bx_socket_pktmover_c::rx_timer(void)
                     (struct sockaddr*) &sin, &slen);
 
   if (nbytes == -1) {
+#ifdef WIN32
+    if (WSAGetLastError() != WSAEWOULDBLOCK)
+      BX_INFO(("eth_socket: error receiving packet: %d", WSAGetLastError()));
+#else
     if (errno != EAGAIN)
-      BX_INFO(("eth_socket: error receiving packet: %s\n", strerror(errno)));
+      BX_INFO(("eth_socket: error receiving packet: %s", strerror(errno)));
+#endif
     return;
   }
 
@@ -332,7 +345,7 @@ void bx_socket_pktmover_c::rx_timer(void)
   }
 
   if (this->rxstat(this->netdev) & BX_NETDEV_RXREADY) {
-    BX_DEBUG(("eth_socket: got packet: %d bytes, dst=%x:%x:%x:%x:%x:%x, src=%x:%x:%x:%x:%x:%x\n", nbytes, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3], rxbuf[4], rxbuf[5], rxbuf[6], rxbuf[7], rxbuf[8], rxbuf[9], rxbuf[10], rxbuf[11]));
+    BX_DEBUG(("eth_socket: got packet: %d bytes, dst=%x:%x:%x:%x:%x:%x, src=%x:%x:%x:%x:%x:%x", nbytes, rxbuf[0], rxbuf[1], rxbuf[2], rxbuf[3], rxbuf[4], rxbuf[5], rxbuf[6], rxbuf[7], rxbuf[8], rxbuf[9], rxbuf[10], rxbuf[11]));
     this->rxh(this->netdev, rxbuf, nbytes);
   }
 }

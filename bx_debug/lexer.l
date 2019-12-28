@@ -1,6 +1,6 @@
 %{
 /////////////////////////////////////////////////////////////////////////
-// $Id: lexer.l 12908 2016-04-29 21:01:28Z sshwarts $
+// $Id: lexer.l 13281 2017-08-22 21:03:58Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
@@ -65,6 +65,7 @@ crc             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_CRC); }
 c               |
 cont            |
 continue        { bxlval.sval = strdup(bxtext); return(BX_TOKEN_CONTINUE); }
+if              { bxlval.sval = strdup(bxtext); return(BX_TOKEN_IF); }
 step            |
 s               { bxlval.sval = strdup(bxtext); return(BX_TOKEN_STEPN); }
 next            |
@@ -135,6 +136,7 @@ sba             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_TIMEBP_ABSOLUTE)
 modebp          { bxlval.sval = strdup(bxtext); return(BX_TOKEN_MODEBP); }
 vmexitbp        { bxlval.sval = strdup(bxtext); return(BX_TOKEN_VMEXITBP); }
 print-stack     { bxlval.sval = strdup(bxtext); return(BX_TOKEN_PRINT_STACK); }
+bt              { bxlval.sval = strdup(bxtext); return(BX_TOKEN_BT); }
 watch           { bxlval.sval = strdup(bxtext); return(BX_TOKEN_WATCH); }
 unwatch         { bxlval.sval = strdup(bxtext); return(BX_TOKEN_UNWATCH); }
 read            { bxlval.sval = strdup(bxtext); return(BX_TOKEN_READ); }
@@ -241,6 +243,12 @@ calc            { bxlval.sval = strdup(bxtext); return(BX_TOKEN_CALC); }
 "/"             { return ('/'); }
 ">>"            { return (BX_TOKEN_RSHIFT); }
 "<<"            { return (BX_TOKEN_LSHIFT); }
+"=="            { return (BX_TOKEN_EQ); }
+"!="            { return (BX_TOKEN_NE); }
+"<="            { return (BX_TOKEN_LE); }
+">="            { return (BX_TOKEN_GE); }
+">"             { return ('>'); }
+"<"             { return ('<'); }
 "&"             { return ('&'); }
 "|"             { return ('|'); }
 "^"             { return ('^'); }

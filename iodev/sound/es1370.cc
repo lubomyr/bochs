@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: es1370.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: es1370.cc 13497 2018-05-01 15:54:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // ES1370 soundcard support (ported from QEMU)
 //
 // Copyright (c) 2005  Vassili Karpov (malc)
-// Copyright (C) 2011-2017  The Bochs Project
+// Copyright (C) 2011-2018  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -253,10 +253,9 @@ void bx_es1370_c::init(void)
                             "ES1370 soundcard");
 
   // initialize readonly registers
-  init_pci_conf(0x1274, 0x5000, 0x00, 0x040100, 0x00);
-  BX_ES1370_THIS pci_conf[0x3d] = BX_PCI_INTA;
+  init_pci_conf(0x1274, 0x5000, 0x00, 0x040100, 0x00, BX_PCI_INTA);
 
-  BX_ES1370_THIS pci_base_address[0] = 0;
+  BX_ES1370_THIS init_bar_io(0, 64, read_handler, write_handler, &es1370_iomask[0]);
 
   BX_ES1370_THIS wavemode = SIM->get_param_enum("wavemode", base)->get();
   BX_ES1370_THIS midimode = SIM->get_param_enum("midimode", base)->get();
@@ -420,12 +419,7 @@ void bx_es1370_c::register_state(void)
 
 void bx_es1370_c::after_restore_state(void)
 {
-  if (DEV_pci_set_base_io(BX_ES1370_THIS_PTR, read_handler, write_handler,
-                          &BX_ES1370_THIS pci_base_address[0],
-                          &BX_ES1370_THIS pci_conf[0x10],
-                          64, &es1370_iomask[0], "ES1370")) {
-    BX_INFO(("new base address: 0x%04x", BX_ES1370_THIS pci_base_address[0]));
-  }
+  bx_pci_device_c::after_restore_pci_state(NULL);
   BX_ES1370_THIS check_lower_irq(BX_ES1370_THIS s.sctl);
   BX_ES1370_THIS s.adc_inputinit = 0;
   BX_ES1370_THIS s.dac_nr_active = -1;
@@ -496,7 +490,7 @@ Bit32u bx_es1370_c::read(Bit32u address, unsigned io_len)
 
   BX_DEBUG(("register read from address 0x%04x - ", address));
 
-  offset = address - BX_ES1370_THIS pci_base_address[0];
+  offset = address - BX_ES1370_THIS pci_bar[0].addr;
   if (offset >= 0x30) {
     offset |= (BX_ES1370_THIS s.mempage << 8);
   }
@@ -608,7 +602,7 @@ void bx_es1370_c::write(Bit32u address, Bit32u value, unsigned io_len)
 
   BX_DEBUG(("register write to address 0x%04x - value = 0x%08x", address, value));
 
-  offset = address - BX_ES1370_THIS pci_base_address[0];
+  offset = address - BX_ES1370_THIS pci_bar[0].addr;
   if (offset >= 0x30) {
     offset |= (BX_ES1370_THIS s.mempage << 8);
   }
@@ -1091,15 +1085,13 @@ void bx_es1370_c::closemidioutput()
 // pci configuration space write callback handler
 void bx_es1370_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {
-  Bit8u value8, oldval;
-  bx_bool baseaddr_change = 0;
-
   if ((address >= 0x14) && (address < 0x34))
     return;
 
+  BX_DEBUG_PCI_WRITE(address, value, io_len);
   for (unsigned i=0; i<io_len; i++) {
-    value8 = (value >> (i*8)) & 0xFF;
-    oldval = BX_ES1370_THIS pci_conf[address+i];
+    Bit8u value8 = (value >> (i*8)) & 0xFF;
+//    Bit8u oldval = BX_ES1370_THIS pci_conf[address+i];
     switch (address+i) {
       case 0x04:
         value8 &= 0x05;
@@ -1112,37 +1104,10 @@ void bx_es1370_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
       case 0x3d: //
       case 0x06: // disallowing write to status lo-byte (is that expected?)
         break;
-      case 0x3c:
-        if (value8 != oldval) {
-          BX_INFO(("new irq line = %d", value8));
-          BX_ES1370_THIS pci_conf[address+i] = value8;
-        }
-        break;
-      case 0x10:
-        value8 = (value8 & 0xfc) | 0x01;
-      case 0x11:
-      case 0x12:
-      case 0x13:
-        baseaddr_change |= (value8 != oldval);
       default:
         BX_ES1370_THIS pci_conf[address+i] = value8;
     }
   }
-  if (baseaddr_change) {
-    if (DEV_pci_set_base_io(BX_ES1370_THIS_PTR, read_handler, write_handler,
-                            &BX_ES1370_THIS pci_base_address[0],
-                            &BX_ES1370_THIS pci_conf[0x10],
-                            64, &es1370_iomask[0], "ES1370")) {
-      BX_INFO(("new base address: 0x%04x", BX_ES1370_THIS pci_base_address[0]));
-    }
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%02x", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%04x", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("write PCI register 0x%02x value 0x%08x", address, value));
 }
 
 // runtime parameter handlers

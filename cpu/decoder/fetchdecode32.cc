@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode32.cc 13158 2017-03-28 19:13:20Z sshwarts $
+// $Id: fetchdecode32.cc 13571 2019-10-14 06:40:19Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,12 @@
 /////////////////////////////////////////////////////////////////////////
 
 #include "bochs.h"
+#ifndef BX_STANDALONE_DECODER
 #include "../cpu.h"
+#endif
+
+#include "decoder.h"
+#include "instr.h"
 
 #define LOG_THIS genlog->
 
@@ -39,33 +44,46 @@
 #include "fetchdecode_opmap_0f38.h"
 #include "fetchdecode_opmap_0f3a.h"
 
-extern int decoder32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_simple32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_creg32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_modrm32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_sse(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_sse_osize(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_fp_escape(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_ud32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_nop(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder_lzcnt_tzcnt32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group_nnn(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group_nnn_osize(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_sse_group_nnn(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group7(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group9(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group15(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
-extern int decoder32_group17a(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
+#include "fetchdecode_x87.h"
 
-typedef int (*BxFetchDecode32Ptr)(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table);
+#if BX_SUPPORT_AVX
+#include "fetchdecode_avx.h"
+#include "fetchdecode_xop.h"
+#endif
+
+#if BX_SUPPORT_EVEX
+#include "fetchdecode_evex.h"
+#endif
+
+extern int decoder_simple32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder_creg32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder32_fp_escape(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder32_3dnow(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder_ud32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder32_nop(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+extern int decoder32_modrm(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
+
+typedef int (*BxFetchDecode32Ptr)(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table);
 
 struct BxOpcodeDecodeDescriptor32 {
   BxFetchDecode32Ptr decode_method;
-  const BxOpcodeInfo_t *opcode_table;
+  const void *opcode_table;
 };
+
+// table of all Bochs opcodes
+bxIAOpcodeTable BxOpcodesTable[] = {
+#ifndef BX_STANDALONE_DECODER
+#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) { b, c, { s1, s2, s3, s4 }, e },
+#else
+#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) {       { s1, s2, s3, s4 }, e },
+#endif
+#include "ia_opcodes.def"
+};
+#undef  bx_define_opcode
 
 // Some info on the opcodes at {0F A6} and {0F A7}
 //
@@ -83,114 +101,114 @@ struct BxOpcodeDecodeDescriptor32 {
 
 static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
 {
-   /*       00 */ { &decoder_modrm32, BxOpcodeTable00 },
-   /*       01 */ { &decoder_modrm32, BxOpcodeTable01 },
-   /*       02 */ { &decoder_modrm32, BxOpcodeTable02 },
-   /*       03 */ { &decoder_modrm32, BxOpcodeTable03 },
+   /*       00 */ { &decoder32_modrm, BxOpcodeTable00 },
+   /*       01 */ { &decoder32_modrm, BxOpcodeTable01 },
+   /*       02 */ { &decoder32_modrm, BxOpcodeTable02 },
+   /*       03 */ { &decoder32_modrm, BxOpcodeTable03 },
    /*       04 */ { &decoder32, BxOpcodeTable04 },
    /*       05 */ { &decoder32, BxOpcodeTable05 },
-   /*       06 */ { &decoder32, BxOpcodeTable06_32 },
-   /*       07 */ { &decoder32, BxOpcodeTable07_32 },
-   /*       08 */ { &decoder_modrm32, BxOpcodeTable08 },
-   /*       09 */ { &decoder_modrm32, BxOpcodeTable09 },
-   /*       0A */ { &decoder_modrm32, BxOpcodeTable0A },
-   /*       0B */ { &decoder_modrm32, BxOpcodeTable0B },
+   /*       06 */ { &decoder32, BxOpcodeTable06 },
+   /*       07 */ { &decoder32, BxOpcodeTable07 },
+   /*       08 */ { &decoder32_modrm, BxOpcodeTable08 },
+   /*       09 */ { &decoder32_modrm, BxOpcodeTable09 },
+   /*       0A */ { &decoder32_modrm, BxOpcodeTable0A },
+   /*       0B */ { &decoder32_modrm, BxOpcodeTable0B },
    /*       0C */ { &decoder32, BxOpcodeTable0C },
    /*       0D */ { &decoder32, BxOpcodeTable0D },
-   /*       0E */ { &decoder32, BxOpcodeTable0E_32 },
+   /*       0E */ { &decoder32, BxOpcodeTable0E },
    /*       0F */ { &decoder_ud32, NULL },           // 2-byte escape
-   /*       10 */ { &decoder_modrm32, BxOpcodeTable10 },
-   /*       11 */ { &decoder_modrm32, BxOpcodeTable11 },
-   /*       12 */ { &decoder_modrm32, BxOpcodeTable12 },
-   /*       13 */ { &decoder_modrm32, BxOpcodeTable13 },
+   /*       10 */ { &decoder32_modrm, BxOpcodeTable10 },
+   /*       11 */ { &decoder32_modrm, BxOpcodeTable11 },
+   /*       12 */ { &decoder32_modrm, BxOpcodeTable12 },
+   /*       13 */ { &decoder32_modrm, BxOpcodeTable13 },
    /*       14 */ { &decoder32, BxOpcodeTable14 },
    /*       15 */ { &decoder32, BxOpcodeTable15 },
-   /*       16 */ { &decoder32, BxOpcodeTable16_32 },
-   /*       17 */ { &decoder32, BxOpcodeTable17_32 },
-   /*       18 */ { &decoder_modrm32, BxOpcodeTable18 },
-   /*       19 */ { &decoder_modrm32, BxOpcodeTable19 },
-   /*       1A */ { &decoder_modrm32, BxOpcodeTable1A },
-   /*       1B */ { &decoder_modrm32, BxOpcodeTable1B },
+   /*       16 */ { &decoder32, BxOpcodeTable16 },
+   /*       17 */ { &decoder32, BxOpcodeTable17 },
+   /*       18 */ { &decoder32_modrm, BxOpcodeTable18 },
+   /*       19 */ { &decoder32_modrm, BxOpcodeTable19 },
+   /*       1A */ { &decoder32_modrm, BxOpcodeTable1A },
+   /*       1B */ { &decoder32_modrm, BxOpcodeTable1B },
    /*       1C */ { &decoder32, BxOpcodeTable1C },
    /*       1D */ { &decoder32, BxOpcodeTable1D },
-   /*       1E */ { &decoder32, BxOpcodeTable1E_32 },
-   /*       1F */ { &decoder32, BxOpcodeTable1F_32 },
-   /*       20 */ { &decoder_modrm32, BxOpcodeTable20 },
-   /*       21 */ { &decoder_modrm32, BxOpcodeTable21 },
-   /*       22 */ { &decoder_modrm32, BxOpcodeTable22 },
-   /*       23 */ { &decoder_modrm32, BxOpcodeTable23 },
+   /*       1E */ { &decoder32, BxOpcodeTable1E },
+   /*       1F */ { &decoder32, BxOpcodeTable1F },
+   /*       20 */ { &decoder32_modrm, BxOpcodeTable20 },
+   /*       21 */ { &decoder32_modrm, BxOpcodeTable21 },
+   /*       22 */ { &decoder32_modrm, BxOpcodeTable22 },
+   /*       23 */ { &decoder32_modrm, BxOpcodeTable23 },
    /*       24 */ { &decoder32, BxOpcodeTable24 },
    /*       25 */ { &decoder32, BxOpcodeTable25 },
    /*       26 */ { &decoder_ud32, NULL },           // ES:
-   /*       27 */ { &decoder_simple32, BxOpcodeTable27_32 },
-   /*       28 */ { &decoder_modrm32, BxOpcodeTable28 },
-   /*       29 */ { &decoder_modrm32, BxOpcodeTable29 },
-   /*       2A */ { &decoder_modrm32, BxOpcodeTable2A },
-   /*       2B */ { &decoder_modrm32, BxOpcodeTable2B },
+   /*       27 */ { &decoder_simple32, BxOpcodeTable27 },
+   /*       28 */ { &decoder32_modrm, BxOpcodeTable28 },
+   /*       29 */ { &decoder32_modrm, BxOpcodeTable29 },
+   /*       2A */ { &decoder32_modrm, BxOpcodeTable2A },
+   /*       2B */ { &decoder32_modrm, BxOpcodeTable2B },
    /*       2C */ { &decoder32, BxOpcodeTable2C },
    /*       2D */ { &decoder32, BxOpcodeTable2D },
    /*       2E */ { &decoder_ud32, NULL },           // CS:
-   /*       2F */ { &decoder_simple32, BxOpcodeTable2F_32 },
-   /*       30 */ { &decoder_modrm32, BxOpcodeTable30 },
-   /*       31 */ { &decoder_modrm32, BxOpcodeTable31 },
-   /*       32 */ { &decoder_modrm32, BxOpcodeTable32 },
-   /*       33 */ { &decoder_modrm32, BxOpcodeTable33 },
+   /*       2F */ { &decoder_simple32, BxOpcodeTable2F },
+   /*       30 */ { &decoder32_modrm, BxOpcodeTable30 },
+   /*       31 */ { &decoder32_modrm, BxOpcodeTable31 },
+   /*       32 */ { &decoder32_modrm, BxOpcodeTable32 },
+   /*       33 */ { &decoder32_modrm, BxOpcodeTable33 },
    /*       34 */ { &decoder32, BxOpcodeTable34 },
    /*       35 */ { &decoder32, BxOpcodeTable35 },
    /*       36 */ { &decoder_ud32, NULL },           // SS:
-   /*       37 */ { &decoder_simple32, BxOpcodeTable37_32 },
-   /*       38 */ { &decoder_modrm32, BxOpcodeTable38 },
-   /*       39 */ { &decoder_modrm32, BxOpcodeTable39 },
-   /*       3A */ { &decoder_modrm32, BxOpcodeTable3A },
-   /*       3B */ { &decoder_modrm32, BxOpcodeTable3B },
+   /*       37 */ { &decoder_simple32, BxOpcodeTable37 },
+   /*       38 */ { &decoder32_modrm, BxOpcodeTable38 },
+   /*       39 */ { &decoder32_modrm, BxOpcodeTable39 },
+   /*       3A */ { &decoder32_modrm, BxOpcodeTable3A },
+   /*       3B */ { &decoder32_modrm, BxOpcodeTable3B },
    /*       3C */ { &decoder32, BxOpcodeTable3C },
    /*       3D */ { &decoder32, BxOpcodeTable3D },
    /*       3E */ { &decoder_ud32, NULL },           // DS:
-   /*       3F */ { &decoder_simple32, BxOpcodeTable3F_32 },
-   /*       40 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       41 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       42 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       43 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       44 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       45 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       46 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       47 */ { &decoder32, BxOpcodeTable40x47_32 },
-   /*       48 */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       49 */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4A */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4B */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4C */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4D */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4E */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       4F */ { &decoder32, BxOpcodeTable48x4F_32 },
-   /*       50 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       51 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       52 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       53 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       54 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       55 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       56 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       57 */ { &decoder32, BxOpcodeTable50x57_32 },
-   /*       58 */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       59 */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5A */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5B */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5C */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5D */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5E */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       5F */ { &decoder32, BxOpcodeTable58x5F_32 },
-   /*       60 */ { &decoder32, BxOpcodeTable60_32 },
-   /*       61 */ { &decoder32, BxOpcodeTable61_32 },
-   /*       62 */ { &decoder_evex32, BxOpcodeTable62_32 },     // EVEX prefix
-   /*       63 */ { &decoder_modrm32, BxOpcodeTable63_32 },
+   /*       3F */ { &decoder_simple32, BxOpcodeTable3F },
+   /*       40 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       41 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       42 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       43 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       44 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       45 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       46 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       47 */ { &decoder32, BxOpcodeTable40x47 },
+   /*       48 */ { &decoder32, BxOpcodeTable48x4F },
+   /*       49 */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4A */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4B */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4C */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4D */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4E */ { &decoder32, BxOpcodeTable48x4F },
+   /*       4F */ { &decoder32, BxOpcodeTable48x4F },
+   /*       50 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       51 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       52 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       53 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       54 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       55 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       56 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       57 */ { &decoder32, BxOpcodeTable50x57 },
+   /*       58 */ { &decoder32, BxOpcodeTable58x5F },
+   /*       59 */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5A */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5B */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5C */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5D */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5E */ { &decoder32, BxOpcodeTable58x5F },
+   /*       5F */ { &decoder32, BxOpcodeTable58x5F },
+   /*       60 */ { &decoder32, BxOpcodeTable60 },
+   /*       61 */ { &decoder32, BxOpcodeTable61 },
+   /*       62 */ { &decoder_evex32, BxOpcodeTable62 },     // EVEX prefix
+   /*       63 */ { &decoder32_modrm, BxOpcodeTable63_32 },
    /*       64 */ { &decoder_ud32, NULL },                     // FS:
    /*       65 */ { &decoder_ud32, NULL },                     // GS:
    /*       66 */ { &decoder_ud32, NULL },                     // OSIZE:
    /*       67 */ { &decoder_ud32, NULL },                     // ASIZE:
-   /*       68 */ { &decoder32, BxOpcodeTable68_32 },
-   /*       69 */ { &decoder_modrm32, BxOpcodeTable69 },
-   /*       6A */ { &decoder32, BxOpcodeTable6A_32 },
-   /*       6B */ { &decoder_modrm32, BxOpcodeTable6B },
+   /*       68 */ { &decoder32, BxOpcodeTable68 },
+   /*       69 */ { &decoder32_modrm, BxOpcodeTable69 },
+   /*       6A */ { &decoder32, BxOpcodeTable6A },
+   /*       6B */ { &decoder32_modrm, BxOpcodeTable6B },
    /*       6C */ { &decoder32, BxOpcodeTable6C },
    /*       6D */ { &decoder32, BxOpcodeTable6D },
    /*       6E */ { &decoder32, BxOpcodeTable6E },
@@ -211,21 +229,21 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*       7D */ { &decoder32, BxOpcodeTable7D_32 },
    /*       7E */ { &decoder32, BxOpcodeTable7E_32 },
    /*       7F */ { &decoder32, BxOpcodeTable7F_32 },
-   /*       80 */ { &decoder32_group_nnn,       BxOpcodeTable80_G1Eb },
-   /*       81 */ { &decoder32_group_nnn_osize, BxOpcodeTable81_G1Ev },
-   /*       82 */ { &decoder32_group_nnn,       BxOpcodeTable80_G1Eb },  // opcode 0x82 is copy of the 0x80
-   /*       83 */ { &decoder32_group_nnn_osize, BxOpcodeTable83_G1Ev },
-   /*       84 */ { &decoder_modrm32, BxOpcodeTable84 },
-   /*       85 */ { &decoder_modrm32, BxOpcodeTable85 },
-   /*       86 */ { &decoder_modrm32, BxOpcodeTable86 },
-   /*       87 */ { &decoder_modrm32, BxOpcodeTable87 },
-   /*       88 */ { &decoder_modrm32, BxOpcodeTable88 },
-   /*       89 */ { &decoder_modrm32, BxOpcodeTable89_32 },
-   /*       8A */ { &decoder_modrm32, BxOpcodeTable8A },
-   /*       8B */ { &decoder_modrm32, BxOpcodeTable8B_32 },
-   /*       8C */ { &decoder_modrm32, BxOpcodeTable8C },
-   /*       8D */ { &decoder_modrm32, BxOpcodeTable8D },
-   /*       8E */ { &decoder_modrm32, BxOpcodeTable8E },
+   /*       80 */ { &decoder32_modrm, BxOpcodeTable80 },
+   /*       81 */ { &decoder32_modrm, BxOpcodeTable81 },
+   /*       82 */ { &decoder32_modrm, BxOpcodeTable80 },  // opcode 0x82 is copy of the 0x80
+   /*       83 */ { &decoder32_modrm, BxOpcodeTable83 },
+   /*       84 */ { &decoder32_modrm, BxOpcodeTable84 },
+   /*       85 */ { &decoder32_modrm, BxOpcodeTable85 },
+   /*       86 */ { &decoder32_modrm, BxOpcodeTable86 },
+   /*       87 */ { &decoder32_modrm, BxOpcodeTable87 },
+   /*       88 */ { &decoder32_modrm, BxOpcodeTable88 },
+   /*       89 */ { &decoder32_modrm, BxOpcodeTable89 },
+   /*       8A */ { &decoder32_modrm, BxOpcodeTable8A },
+   /*       8B */ { &decoder32_modrm, BxOpcodeTable8B },
+   /*       8C */ { &decoder32_modrm, BxOpcodeTable8C },
+   /*       8D */ { &decoder32_modrm, BxOpcodeTable8D },
+   /*       8E */ { &decoder32_modrm, BxOpcodeTable8E },
    /*       8F */ { &decoder_xop32, BxOpcodeTable8F },      // XOP prefix
    /*       90 */ { &decoder32_nop, NULL },
    /*       91 */ { &decoder32, BxOpcodeTable90x97 },
@@ -237,10 +255,10 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*       97 */ { &decoder32, BxOpcodeTable90x97 },
    /*       98 */ { &decoder32, BxOpcodeTable98 },
    /*       99 */ { &decoder32, BxOpcodeTable99 },
-   /*       9A */ { &decoder32, BxOpcodeTable9A_32 },
+   /*       9A */ { &decoder32, BxOpcodeTable9A },
    /*       9B */ { &decoder_simple32, BxOpcodeTable9B },
-   /*       9C */ { &decoder32, BxOpcodeTable9C_32 },
-   /*       9D */ { &decoder32, BxOpcodeTable9D_32 },
+   /*       9C */ { &decoder32, BxOpcodeTable9C },
+   /*       9D */ { &decoder32, BxOpcodeTable9D },
    /*       9E */ { &decoder_simple32, BxOpcodeTable9E_32 },
    /*       9F */ { &decoder_simple32, BxOpcodeTable9F_32 },
    /*       A0 */ { &decoder32, BxOpcodeTableA0_32 },
@@ -275,29 +293,29 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*       BD */ { &decoder32, BxOpcodeTableB8xBF },
    /*       BE */ { &decoder32, BxOpcodeTableB8xBF },
    /*       BF */ { &decoder32, BxOpcodeTableB8xBF },
-   /*       C0 */ { &decoder32_group_nnn,       BxOpcodeTableC0_G2EbIb },
-   /*       C1 */ { &decoder32_group_nnn_osize, BxOpcodeTableC1_G2EvIb },
+   /*       C0 */ { &decoder32_modrm, BxOpcodeTableC0 },
+   /*       C1 */ { &decoder32_modrm, BxOpcodeTableC1 },
    /*       C2 */ { &decoder32, BxOpcodeTableC2_32 },
    /*       C3 */ { &decoder32, BxOpcodeTableC3_32 },
    /*       C4 */ { &decoder_vex32, BxOpcodeTableC4_32 },        // VEX prefix
    /*       C5 */ { &decoder_vex32, BxOpcodeTableC5_32 },        // VEX prefix
-   /*       C6 */ { &decoder32_group_nnn,       BxOpcodeTableC6_G11EbIb },
-   /*       C7 */ { &decoder32_group_nnn_osize, BxOpcodeTableC7_G11EvIv },
+   /*       C6 */ { &decoder32_modrm, BxOpcodeTableC6 },
+   /*       C7 */ { &decoder32_modrm, BxOpcodeTableC7 },
    /*       C8 */ { &decoder32, BxOpcodeTableC8_32 },
    /*       C9 */ { &decoder32, BxOpcodeTableC9_32 },
    /*       CA */ { &decoder32, BxOpcodeTableCA },
    /*       CB */ { &decoder32, BxOpcodeTableCB },
    /*       CC */ { &decoder_simple32, BxOpcodeTableCC },
    /*       CD */ { &decoder32, BxOpcodeTableCD },
-   /*       CE */ { &decoder_simple32, BxOpcodeTableCE_32 },
+   /*       CE */ { &decoder_simple32, BxOpcodeTableCE },
    /*       CF */ { &decoder32, BxOpcodeTableCF_32 },
-   /*       D0 */ { &decoder32_group_nnn,       BxOpcodeTableD0_G2EbI1 },
-   /*       D1 */ { &decoder32_group_nnn_osize, BxOpcodeTableD1_G2EvI1 },
-   /*       D2 */ { &decoder32_group_nnn,       BxOpcodeTableD2_G2Eb },
-   /*       D3 */ { &decoder32_group_nnn_osize, BxOpcodeTableD3_G2Ev },
-   /*       D4 */ { &decoder32, BxOpcodeTableD4_32 },
-   /*       D5 */ { &decoder32, BxOpcodeTableD5_32 },
-   /*       D6 */ { &decoder_simple32, BxOpcodeTableD6_32 },
+   /*       D0 */ { &decoder32_modrm, BxOpcodeTableD0 },
+   /*       D1 */ { &decoder32_modrm, BxOpcodeTableD1 },
+   /*       D2 */ { &decoder32_modrm, BxOpcodeTableD2 },
+   /*       D3 */ { &decoder32_modrm, BxOpcodeTableD3 },
+   /*       D4 */ { &decoder32, BxOpcodeTableD4 },
+   /*       D5 */ { &decoder32, BxOpcodeTableD5 },
+   /*       D6 */ { &decoder_simple32, BxOpcodeTableD6 },
    /*       D7 */ { &decoder_simple32, BxOpcodeTableD7 },
    /*       D8 */ { &decoder32_fp_escape, NULL },
    /*       D9 */ { &decoder32_fp_escape, NULL },
@@ -329,20 +347,20 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*       F3 */ { &decoder_ud32, NULL },           // REP, REPE/REPZ
    /*       F4 */ { &decoder_simple32, BxOpcodeTableF4 },
    /*       F5 */ { &decoder_simple32, BxOpcodeTableF5 },
-   /*       F6 */ { &decoder32_group_nnn,       BxOpcodeTableF6_G3Eb },
-   /*       F7 */ { &decoder32_group_nnn_osize, BxOpcodeTableF7_G3Ev },
+   /*       F6 */ { &decoder32_modrm, BxOpcodeTableF6 },
+   /*       F7 */ { &decoder32_modrm, BxOpcodeTableF7 },
    /*       F8 */ { &decoder_simple32, BxOpcodeTableF8 },
    /*       F9 */ { &decoder_simple32, BxOpcodeTableF9 },
    /*       FA */ { &decoder_simple32, BxOpcodeTableFA },
    /*       FB */ { &decoder_simple32, BxOpcodeTableFB },
    /*       FC */ { &decoder_simple32, BxOpcodeTableFC },
    /*       FD */ { &decoder_simple32, BxOpcodeTableFD },
-   /*       FE */ { &decoder32_group_nnn, BxOpcodeTableG4 },
-   /*       FF */ { &decoder32_group_nnn_osize, BxOpcodeTableFF_32G5v },
-   /*    0F 00 */ { &decoder32_group_nnn, BxOpcodeTableG6 },
-   /*    0F 01 */ { &decoder32_group7, BxOpcodeTable0F01_32 },
-   /*    0F 02 */ { &decoder_modrm32, BxOpcodeTable0F02 },
-   /*    0F 03 */ { &decoder_modrm32, BxOpcodeTable0F03 },
+   /*       FE */ { &decoder32_modrm, BxOpcodeTableFE },
+   /*       FF */ { &decoder32_modrm, BxOpcodeTableFF },
+   /*    0F 00 */ { &decoder32_modrm, BxOpcodeTable0F00 },
+   /*    0F 01 */ { &decoder32_modrm, BxOpcodeTable0F01 },
+   /*    0F 02 */ { &decoder32_modrm, BxOpcodeTable0F02 },
+   /*    0F 03 */ { &decoder32_modrm, BxOpcodeTable0F03 },
    /*    0F 04 */ { &decoder_ud32, NULL },
    /*    0F 05 */ { &decoder_simple32, BxOpcodeTable0F05_32 },
    /*    0F 06 */ { &decoder_simple32, BxOpcodeTable0F06 },
@@ -352,26 +370,26 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 0A */ { &decoder_ud32, NULL },
    /*    0F 0B */ { &decoder_simple32, BxOpcodeTable0F0B },
    /*    0F 0C */ { &decoder_ud32, NULL },
-   /*    0F 0D */ { &decoder_modrm32, BxOpcodeTable0F0D },
+   /*    0F 0D */ { &decoder32_modrm, BxOpcodeTable0F0D },
    /*    0F 0E */ { &decoder_simple32, BxOpcodeTable0F0E },
-   /*    0F 0F */ { &decoder_modrm32, BxOpcodeTable0F0F },          // 3dnow! escape
-   /*    0F 10 */ { &decoder32_sse, BxOpcodeGroupSSE_0F10 },
-   /*    0F 11 */ { &decoder32_sse, BxOpcodeGroupSSE_0F11 },
-   /*    0F 12 */ { &decoder32_sse, BxOpcodeGroupSSE_0F12 },
-   /*    0F 13 */ { &decoder32_sse, BxOpcodeGroupSSE_0F13 },
-   /*    0F 14 */ { &decoder32_sse, BxOpcodeGroupSSE_0F14 },
-   /*    0F 15 */ { &decoder32_sse, BxOpcodeGroupSSE_0F15 },
-   /*    0F 16 */ { &decoder32_sse, BxOpcodeGroupSSE_0F16 },
-   /*    0F 17 */ { &decoder32_sse, BxOpcodeGroupSSE_0F17 },
+   /*    0F 0F */ { &decoder32_3dnow, NULL },
+   /*    0F 10 */ { &decoder32_modrm, BxOpcodeTable0F10 },
+   /*    0F 11 */ { &decoder32_modrm, BxOpcodeTable0F11 },
+   /*    0F 12 */ { &decoder32_modrm, BxOpcodeTable0F12 },
+   /*    0F 13 */ { &decoder32_modrm, BxOpcodeTable0F13 },
+   /*    0F 14 */ { &decoder32_modrm, BxOpcodeTable0F14 },
+   /*    0F 15 */ { &decoder32_modrm, BxOpcodeTable0F15 },
+   /*    0F 16 */ { &decoder32_modrm, BxOpcodeTable0F16 },
+   /*    0F 17 */ { &decoder32_modrm, BxOpcodeTable0F17 },
 #if BX_CPU_LEVEL >= 6
-   /*    0F 18 */ { &decoder32_group_nnn, BxOpcodeTable0F18_G16 },
-   /*    0F 19 */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1A */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1B */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1C */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1D */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1E */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
-   /*    0F 1F */ { &decoder_modrm32, BxOpcodeTableMultiByteNOP },
+   /*    0F 18 */ { &decoder32_modrm, BxOpcodeTable0F18 },
+   /*    0F 19 */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1A */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1B */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1C */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1D */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1E */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+   /*    0F 1F */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
 #else
    /*    0F 18 */ { &decoder_ud32, NULL },
    /*    0F 19 */ { &decoder_ud32, NULL },
@@ -382,22 +400,22 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 1E */ { &decoder_ud32, NULL },
    /*    0F 1F */ { &decoder_ud32, NULL },
 #endif
-   /*    0F 20 */ { &decoder_creg32, BxOpcodeTableMOV_RdCd },
+   /*    0F 20 */ { &decoder_creg32, BxOpcodeTable0F20_32 },
    /*    0F 21 */ { &decoder_creg32, BxOpcodeTable0F21_32 },
-   /*    0F 22 */ { &decoder_creg32, BxOpcodeTableMOV_CdRd },
+   /*    0F 22 */ { &decoder_creg32, BxOpcodeTable0F22_32 },
    /*    0F 23 */ { &decoder_creg32, BxOpcodeTable0F23_32 },
-   /*    0F 24 */ { &decoder_creg32, BxOpcodeTable0F24_32 },
+   /*    0F 24 */ { &decoder_creg32, BxOpcodeTable0F24 },
    /*    0F 25 */ { &decoder_ud32, NULL },
-   /*    0F 26 */ { &decoder_creg32, BxOpcodeTable0F26_32 },
+   /*    0F 26 */ { &decoder_creg32, BxOpcodeTable0F26 },
    /*    0F 27 */ { &decoder_ud32, NULL },
-   /*    0F 28 */ { &decoder32_sse, BxOpcodeGroupSSE_0F28 },
-   /*    0F 29 */ { &decoder32_sse, BxOpcodeGroupSSE_0F29 },
-   /*    0F 2A */ { &decoder32_sse, BxOpcodeGroupSSE_0F2A },
-   /*    0F 2B */ { &decoder32_sse, BxOpcodeGroupSSE_0F2B },
-   /*    0F 2C */ { &decoder32_sse, BxOpcodeGroupSSE_0F2C },
-   /*    0F 2D */ { &decoder32_sse, BxOpcodeGroupSSE_0F2D },
-   /*    0F 2E */ { &decoder32_sse, BxOpcodeGroupSSE_0F2E },
-   /*    0F 2F */ { &decoder32_sse, BxOpcodeGroupSSE_0F2F },
+   /*    0F 28 */ { &decoder32_modrm, BxOpcodeTable0F28 },
+   /*    0F 29 */ { &decoder32_modrm, BxOpcodeTable0F29 },
+   /*    0F 2A */ { &decoder32_modrm, BxOpcodeTable0F2A },
+   /*    0F 2B */ { &decoder32_modrm, BxOpcodeTable0F2B },
+   /*    0F 2C */ { &decoder32_modrm, BxOpcodeTable0F2C },
+   /*    0F 2D */ { &decoder32_modrm, BxOpcodeTable0F2D },
+   /*    0F 2E */ { &decoder32_modrm, BxOpcodeTable0F2E },
+   /*    0F 2F */ { &decoder32_modrm, BxOpcodeTable0F2F },
    /*    0F 30 */ { &decoder_simple32, BxOpcodeTable0F30 },
    /*    0F 31 */ { &decoder_simple32, BxOpcodeTable0F31 },
    /*    0F 32 */ { &decoder_simple32, BxOpcodeTable0F32 },
@@ -405,7 +423,7 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 34 */ { &decoder_simple32, BxOpcodeTable0F34 },
    /*    0F 35 */ { &decoder_simple32, BxOpcodeTable0F35 },
    /*    0F 36 */ { &decoder_ud32, NULL },
-   /*    0F 37 */ { &decoder_simple32, BxOpcodeTable0F37 },
+   /*    0F 37 */ { &decoder32, BxOpcodeTable0F37 },
    /*    0F 38 */ { &decoder_ud32, NULL },          // 3-byte escape
    /*    0F 39 */ { &decoder_ud32, NULL },
    /*    0F 3A */ { &decoder_ud32, NULL },          // 3-byte escape
@@ -414,70 +432,70 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 3D */ { &decoder_ud32, NULL },
    /*    0F 3E */ { &decoder_ud32, NULL },
    /*    0F 3F */ { &decoder_ud32, NULL },
-   /*    0F 40 */ { &decoder_modrm32, BxOpcodeTable0F40 },
-   /*    0F 41 */ { &decoder_modrm32, BxOpcodeTable0F41 },
-   /*    0F 42 */ { &decoder_modrm32, BxOpcodeTable0F42 },
-   /*    0F 43 */ { &decoder_modrm32, BxOpcodeTable0F43 },
-   /*    0F 44 */ { &decoder_modrm32, BxOpcodeTable0F44 },
-   /*    0F 45 */ { &decoder_modrm32, BxOpcodeTable0F45 },
-   /*    0F 46 */ { &decoder_modrm32, BxOpcodeTable0F46 },
-   /*    0F 47 */ { &decoder_modrm32, BxOpcodeTable0F47 },
-   /*    0F 48 */ { &decoder_modrm32, BxOpcodeTable0F48 },
-   /*    0F 49 */ { &decoder_modrm32, BxOpcodeTable0F49 },
-   /*    0F 4A */ { &decoder_modrm32, BxOpcodeTable0F4A },
-   /*    0F 4B */ { &decoder_modrm32, BxOpcodeTable0F4B },
-   /*    0F 4C */ { &decoder_modrm32, BxOpcodeTable0F4C },
-   /*    0F 4D */ { &decoder_modrm32, BxOpcodeTable0F4D },
-   /*    0F 4E */ { &decoder_modrm32, BxOpcodeTable0F4E },
-   /*    0F 4F */ { &decoder_modrm32, BxOpcodeTable0F4F },
-   /*    0F 50 */ { &decoder32_sse, BxOpcodeGroupSSE_0F50 },
-   /*    0F 51 */ { &decoder32_sse, BxOpcodeGroupSSE_0F51 },
-   /*    0F 52 */ { &decoder32_sse, BxOpcodeGroupSSE_0F52 },
-   /*    0F 53 */ { &decoder32_sse, BxOpcodeGroupSSE_0F53 },
-   /*    0F 54 */ { &decoder32_sse, BxOpcodeGroupSSE_0F54 },
-   /*    0F 55 */ { &decoder32_sse, BxOpcodeGroupSSE_0F55 },
-   /*    0F 56 */ { &decoder32_sse, BxOpcodeGroupSSE_0F56 },
-   /*    0F 57 */ { &decoder32_sse, BxOpcodeGroupSSE_0F57 },
-   /*    0F 58 */ { &decoder32_sse, BxOpcodeGroupSSE_0F58 },
-   /*    0F 59 */ { &decoder32_sse, BxOpcodeGroupSSE_0F59 },
-   /*    0F 5A */ { &decoder32_sse, BxOpcodeGroupSSE_0F5A },
-   /*    0F 5B */ { &decoder32_sse, BxOpcodeGroupSSE_0F5B },
-   /*    0F 5C */ { &decoder32_sse, BxOpcodeGroupSSE_0F5C },
-   /*    0F 5D */ { &decoder32_sse, BxOpcodeGroupSSE_0F5D },
-   /*    0F 5E */ { &decoder32_sse, BxOpcodeGroupSSE_0F5E },
-   /*    0F 5F */ { &decoder32_sse, BxOpcodeGroupSSE_0F5F },
-   /*    0F 60 */ { &decoder32_sse, BxOpcodeGroupSSE_0F60 },
-   /*    0F 61 */ { &decoder32_sse, BxOpcodeGroupSSE_0F61 },
-   /*    0F 62 */ { &decoder32_sse, BxOpcodeGroupSSE_0F62 },
-   /*    0F 63 */ { &decoder32_sse, BxOpcodeGroupSSE_0F63 },
-   /*    0F 64 */ { &decoder32_sse, BxOpcodeGroupSSE_0F64 },
-   /*    0F 65 */ { &decoder32_sse, BxOpcodeGroupSSE_0F65 },
-   /*    0F 66 */ { &decoder32_sse, BxOpcodeGroupSSE_0F66 },
-   /*    0F 67 */ { &decoder32_sse, BxOpcodeGroupSSE_0F67 },
-   /*    0F 68 */ { &decoder32_sse, BxOpcodeGroupSSE_0F68 },
-   /*    0F 69 */ { &decoder32_sse, BxOpcodeGroupSSE_0F69 },
-   /*    0F 6A */ { &decoder32_sse, BxOpcodeGroupSSE_0F6A },
-   /*    0F 6B */ { &decoder32_sse, BxOpcodeGroupSSE_0F6B },
-   /*    0F 6C */ { &decoder32_sse, BxOpcodeGroupSSE_0F6C },
-   /*    0F 6D */ { &decoder32_sse, BxOpcodeGroupSSE_0F6D },
-   /*    0F 6E */ { &decoder32_sse, BxOpcodeGroupSSE_0F6E },
-   /*    0F 6F */ { &decoder32_sse, BxOpcodeGroupSSE_0F6F },
-   /*    0F 70 */ { &decoder32_sse, BxOpcodeGroupSSE_0F70 },
-   /*    0F 71 */ { &decoder32_sse_group_nnn, BxOpcodeTable0F71_G12 },
-   /*    0F 72 */ { &decoder32_sse_group_nnn, BxOpcodeTable0F72_G13 },
-   /*    0F 73 */ { &decoder32_sse_group_nnn, BxOpcodeTable0F73_G14 },
-   /*    0F 74 */ { &decoder32_sse, BxOpcodeGroupSSE_0F74 },
-   /*    0F 75 */ { &decoder32_sse, BxOpcodeGroupSSE_0F75 },
-   /*    0F 76 */ { &decoder32_sse, BxOpcodeGroupSSE_0F76 },
+   /*    0F 40 */ { &decoder32_modrm, BxOpcodeTable0F40 },
+   /*    0F 41 */ { &decoder32_modrm, BxOpcodeTable0F41 },
+   /*    0F 42 */ { &decoder32_modrm, BxOpcodeTable0F42 },
+   /*    0F 43 */ { &decoder32_modrm, BxOpcodeTable0F43 },
+   /*    0F 44 */ { &decoder32_modrm, BxOpcodeTable0F44 },
+   /*    0F 45 */ { &decoder32_modrm, BxOpcodeTable0F45 },
+   /*    0F 46 */ { &decoder32_modrm, BxOpcodeTable0F46 },
+   /*    0F 47 */ { &decoder32_modrm, BxOpcodeTable0F47 },
+   /*    0F 48 */ { &decoder32_modrm, BxOpcodeTable0F48 },
+   /*    0F 49 */ { &decoder32_modrm, BxOpcodeTable0F49 },
+   /*    0F 4A */ { &decoder32_modrm, BxOpcodeTable0F4A },
+   /*    0F 4B */ { &decoder32_modrm, BxOpcodeTable0F4B },
+   /*    0F 4C */ { &decoder32_modrm, BxOpcodeTable0F4C },
+   /*    0F 4D */ { &decoder32_modrm, BxOpcodeTable0F4D },
+   /*    0F 4E */ { &decoder32_modrm, BxOpcodeTable0F4E },
+   /*    0F 4F */ { &decoder32_modrm, BxOpcodeTable0F4F },
+   /*    0F 50 */ { &decoder32_modrm, BxOpcodeTable0F50 },
+   /*    0F 51 */ { &decoder32_modrm, BxOpcodeTable0F51 },
+   /*    0F 52 */ { &decoder32_modrm, BxOpcodeTable0F52 },
+   /*    0F 53 */ { &decoder32_modrm, BxOpcodeTable0F53 },
+   /*    0F 54 */ { &decoder32_modrm, BxOpcodeTable0F54 },
+   /*    0F 55 */ { &decoder32_modrm, BxOpcodeTable0F55 },
+   /*    0F 56 */ { &decoder32_modrm, BxOpcodeTable0F56 },
+   /*    0F 57 */ { &decoder32_modrm, BxOpcodeTable0F57 },
+   /*    0F 58 */ { &decoder32_modrm, BxOpcodeTable0F58 },
+   /*    0F 59 */ { &decoder32_modrm, BxOpcodeTable0F59 },
+   /*    0F 5A */ { &decoder32_modrm, BxOpcodeTable0F5A },
+   /*    0F 5B */ { &decoder32_modrm, BxOpcodeTable0F5B },
+   /*    0F 5C */ { &decoder32_modrm, BxOpcodeTable0F5C },
+   /*    0F 5D */ { &decoder32_modrm, BxOpcodeTable0F5D },
+   /*    0F 5E */ { &decoder32_modrm, BxOpcodeTable0F5E },
+   /*    0F 5F */ { &decoder32_modrm, BxOpcodeTable0F5F },
+   /*    0F 60 */ { &decoder32_modrm, BxOpcodeTable0F60 },
+   /*    0F 61 */ { &decoder32_modrm, BxOpcodeTable0F61 },
+   /*    0F 62 */ { &decoder32_modrm, BxOpcodeTable0F62 },
+   /*    0F 63 */ { &decoder32_modrm, BxOpcodeTable0F63 },
+   /*    0F 64 */ { &decoder32_modrm, BxOpcodeTable0F64 },
+   /*    0F 65 */ { &decoder32_modrm, BxOpcodeTable0F65 },
+   /*    0F 66 */ { &decoder32_modrm, BxOpcodeTable0F66 },
+   /*    0F 67 */ { &decoder32_modrm, BxOpcodeTable0F67 },
+   /*    0F 68 */ { &decoder32_modrm, BxOpcodeTable0F68 },
+   /*    0F 69 */ { &decoder32_modrm, BxOpcodeTable0F69 },
+   /*    0F 6A */ { &decoder32_modrm, BxOpcodeTable0F6A },
+   /*    0F 6B */ { &decoder32_modrm, BxOpcodeTable0F6B },
+   /*    0F 6C */ { &decoder32_modrm, BxOpcodeTable0F6C },
+   /*    0F 6D */ { &decoder32_modrm, BxOpcodeTable0F6D },
+   /*    0F 6E */ { &decoder32_modrm, BxOpcodeTable0F6E },
+   /*    0F 6F */ { &decoder32_modrm, BxOpcodeTable0F6F },
+   /*    0F 70 */ { &decoder32_modrm, BxOpcodeTable0F70 },
+   /*    0F 71 */ { &decoder32_modrm, BxOpcodeTable0F71 },
+   /*    0F 72 */ { &decoder32_modrm, BxOpcodeTable0F72 },
+   /*    0F 73 */ { &decoder32_modrm, BxOpcodeTable0F73 },
+   /*    0F 74 */ { &decoder32_modrm, BxOpcodeTable0F74 },
+   /*    0F 75 */ { &decoder32_modrm, BxOpcodeTable0F75 },
+   /*    0F 76 */ { &decoder32_modrm, BxOpcodeTable0F76 },
    /*    0F 77 */ { &decoder32, BxOpcodeTable0F77 },
-   /*    0F 78 */ { &decoder32_group17a, BxOpcodeTable0F78 },
-   /*    0F 79 */ { &decoder32_sse, BxOpcodeGroupSSE_0F79_32 },
+   /*    0F 78 */ { &decoder32_modrm, BxOpcodeTable0F78 },
+   /*    0F 79 */ { &decoder32_modrm, BxOpcodeTable0F79 },
    /*    0F 7A */ { &decoder_ud32, NULL },
    /*    0F 7B */ { &decoder_ud32, NULL },
-   /*    0F 7C */ { &decoder32_sse, BxOpcodeGroupSSE_0F7C },
-   /*    0F 7D */ { &decoder32_sse, BxOpcodeGroupSSE_0F7D },
-   /*    0F 7E */ { &decoder32_sse, BxOpcodeGroupSSE_0F7E },
-   /*    0F 7F */ { &decoder32_sse, BxOpcodeGroupSSE_0F7F },
+   /*    0F 7C */ { &decoder32_modrm, BxOpcodeTable0F7C },
+   /*    0F 7D */ { &decoder32_modrm, BxOpcodeTable0F7D },
+   /*    0F 7E */ { &decoder32_modrm, BxOpcodeTable0F7E },
+   /*    0F 7F */ { &decoder32_modrm, BxOpcodeTable0F7F },
    /*    0F 80 */ { &decoder32, BxOpcodeTable0F80_32 },
    /*    0F 81 */ { &decoder32, BxOpcodeTable0F81_32 },
    /*    0F 82 */ { &decoder32, BxOpcodeTable0F82_32 },
@@ -494,62 +512,62 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 8D */ { &decoder32, BxOpcodeTable0F8D_32 },
    /*    0F 8E */ { &decoder32, BxOpcodeTable0F8E_32 },
    /*    0F 8F */ { &decoder32, BxOpcodeTable0F8F_32 },
-   /*    0F 90 */ { &decoder_modrm32, BxOpcodeTable0F90 },
-   /*    0F 91 */ { &decoder_modrm32, BxOpcodeTable0F91 },
-   /*    0F 92 */ { &decoder_modrm32, BxOpcodeTable0F92 },
-   /*    0F 93 */ { &decoder_modrm32, BxOpcodeTable0F93 },
-   /*    0F 94 */ { &decoder_modrm32, BxOpcodeTable0F94 },
-   /*    0F 95 */ { &decoder_modrm32, BxOpcodeTable0F95 },
-   /*    0F 96 */ { &decoder_modrm32, BxOpcodeTable0F96 },
-   /*    0F 97 */ { &decoder_modrm32, BxOpcodeTable0F97 },
-   /*    0F 98 */ { &decoder_modrm32, BxOpcodeTable0F98 },
-   /*    0F 99 */ { &decoder_modrm32, BxOpcodeTable0F99 },
-   /*    0F 9A */ { &decoder_modrm32, BxOpcodeTable0F9A },
-   /*    0F 9B */ { &decoder_modrm32, BxOpcodeTable0F9B },
-   /*    0F 9C */ { &decoder_modrm32, BxOpcodeTable0F9C },
-   /*    0F 9D */ { &decoder_modrm32, BxOpcodeTable0F9D },
-   /*    0F 9E */ { &decoder_modrm32, BxOpcodeTable0F9E },
-   /*    0F 9F */ { &decoder_modrm32, BxOpcodeTable0F9F },
-   /*    0F A0 */ { &decoder32, BxOpcodeTable0FA0_32 },
-   /*    0F A1 */ { &decoder32, BxOpcodeTable0FA1_32 },
+   /*    0F 90 */ { &decoder32_modrm, BxOpcodeTable0F90 },
+   /*    0F 91 */ { &decoder32_modrm, BxOpcodeTable0F91 },
+   /*    0F 92 */ { &decoder32_modrm, BxOpcodeTable0F92 },
+   /*    0F 93 */ { &decoder32_modrm, BxOpcodeTable0F93 },
+   /*    0F 94 */ { &decoder32_modrm, BxOpcodeTable0F94 },
+   /*    0F 95 */ { &decoder32_modrm, BxOpcodeTable0F95 },
+   /*    0F 96 */ { &decoder32_modrm, BxOpcodeTable0F96 },
+   /*    0F 97 */ { &decoder32_modrm, BxOpcodeTable0F97 },
+   /*    0F 98 */ { &decoder32_modrm, BxOpcodeTable0F98 },
+   /*    0F 99 */ { &decoder32_modrm, BxOpcodeTable0F99 },
+   /*    0F 9A */ { &decoder32_modrm, BxOpcodeTable0F9A },
+   /*    0F 9B */ { &decoder32_modrm, BxOpcodeTable0F9B },
+   /*    0F 9C */ { &decoder32_modrm, BxOpcodeTable0F9C },
+   /*    0F 9D */ { &decoder32_modrm, BxOpcodeTable0F9D },
+   /*    0F 9E */ { &decoder32_modrm, BxOpcodeTable0F9E },
+   /*    0F 9F */ { &decoder32_modrm, BxOpcodeTable0F9F },
+   /*    0F A0 */ { &decoder32, BxOpcodeTable0FA0 },
+   /*    0F A1 */ { &decoder32, BxOpcodeTable0FA1 },
    /*    0F A2 */ { &decoder_simple32, BxOpcodeTable0FA2 },
-   /*    0F A3 */ { &decoder_modrm32, BxOpcodeTable0FA3 },
-   /*    0F A4 */ { &decoder_modrm32, BxOpcodeTable0FA4 },
-   /*    0F A5 */ { &decoder_modrm32, BxOpcodeTable0FA5 },
+   /*    0F A3 */ { &decoder32_modrm, BxOpcodeTable0FA3 },
+   /*    0F A4 */ { &decoder32_modrm, BxOpcodeTable0FA4 },
+   /*    0F A5 */ { &decoder32_modrm, BxOpcodeTable0FA5 },
    /*    0F A6 */ { &decoder_ud32, NULL },
    /*    0F A7 */ { &decoder_ud32, NULL },
-   /*    0F A8 */ { &decoder32, BxOpcodeTable0FA8_32 },
-   /*    0F A9 */ { &decoder32, BxOpcodeTable0FA9_32 },
+   /*    0F A8 */ { &decoder32, BxOpcodeTable0FA8 },
+   /*    0F A9 */ { &decoder32, BxOpcodeTable0FA9 },
    /*    0F AA */ { &decoder_simple32, BxOpcodeTable0FAA },
-   /*    0F AB */ { &decoder_modrm32, BxOpcodeTable0FAB },
-   /*    0F AC */ { &decoder_modrm32, BxOpcodeTable0FAC },
-   /*    0F AD */ { &decoder_modrm32, BxOpcodeTable0FAD },
-   /*    0F AE */ { &decoder32_group15, NULL },
-   /*    0F AF */ { &decoder_modrm32, BxOpcodeTable0FAF },
-   /*    0F B0 */ { &decoder_modrm32, BxOpcodeTable0FB0 },
-   /*    0F B1 */ { &decoder_modrm32, BxOpcodeTable0FB1 },
-   /*    0F B2 */ { &decoder_modrm32, BxOpcodeTable0FB2 },
-   /*    0F B3 */ { &decoder_modrm32, BxOpcodeTable0FB3 },
-   /*    0F B4 */ { &decoder_modrm32, BxOpcodeTable0FB4 },
-   /*    0F B5 */ { &decoder_modrm32, BxOpcodeTable0FB5 },
-   /*    0F B6 */ { &decoder_modrm32, BxOpcodeTable0FB6 },
-   /*    0F B7 */ { &decoder_modrm32, BxOpcodeTable0FB7 },
-   /*    0F B8 */ { &decoder_modrm32, BxOpcodeTable0FB8 },
-   /*    0F B9 */ { &decoder_modrm32, BxOpcodeTable0FB9 },
-   /*    0F BA */ { &decoder32_group_nnn_osize, BxOpcodeTable0FBA_G8EvIv },
-   /*    0F BB */ { &decoder_modrm32, BxOpcodeTable0FBB },
-   /*    0F BC */ { &decoder_lzcnt_tzcnt32, BxOpcodeTable0FBC },
-   /*    0F BD */ { &decoder_lzcnt_tzcnt32, BxOpcodeTable0FBD },
-   /*    0F BE */ { &decoder_modrm32, BxOpcodeTable0FBE },
-   /*    0F BF */ { &decoder_modrm32, BxOpcodeTable0FBF },
-   /*    0F C0 */ { &decoder_modrm32, BxOpcodeTable0FC0 },
-   /*    0F C1 */ { &decoder_modrm32, BxOpcodeTable0FC1 },
-   /*    0F C2 */ { &decoder32_sse, BxOpcodeGroupSSE_0FC2 },
-   /*    0F C3 */ { &decoder_modrm32, BxOpcodeTable0FC3_32 },
-   /*    0F C4 */ { &decoder32_sse, BxOpcodeGroupSSE_0FC4 },
-   /*    0F C5 */ { &decoder32_sse, BxOpcodeGroupSSE_0FC5 },
-   /*    0F C6 */ { &decoder32_sse, BxOpcodeGroupSSE_0FC6 },
-   /*    0F C7 */ { &decoder32_group9, NULL },
+   /*    0F AB */ { &decoder32_modrm, BxOpcodeTable0FAB },
+   /*    0F AC */ { &decoder32_modrm, BxOpcodeTable0FAC },
+   /*    0F AD */ { &decoder32_modrm, BxOpcodeTable0FAD },
+   /*    0F AE */ { &decoder32_modrm, BxOpcodeTable0FAE },
+   /*    0F AF */ { &decoder32_modrm, BxOpcodeTable0FAF },
+   /*    0F B0 */ { &decoder32_modrm, BxOpcodeTable0FB0 },
+   /*    0F B1 */ { &decoder32_modrm, BxOpcodeTable0FB1 },
+   /*    0F B2 */ { &decoder32_modrm, BxOpcodeTable0FB2 },
+   /*    0F B3 */ { &decoder32_modrm, BxOpcodeTable0FB3 },
+   /*    0F B4 */ { &decoder32_modrm, BxOpcodeTable0FB4 },
+   /*    0F B5 */ { &decoder32_modrm, BxOpcodeTable0FB5 },
+   /*    0F B6 */ { &decoder32_modrm, BxOpcodeTable0FB6 },
+   /*    0F B7 */ { &decoder32_modrm, BxOpcodeTable0FB7 },
+   /*    0F B8 */ { &decoder32_modrm, BxOpcodeTable0FB8 },
+   /*    0F B9 */ { &decoder32_modrm, BxOpcodeTable0FB9 },
+   /*    0F BA */ { &decoder32_modrm, BxOpcodeTable0FBA },
+   /*    0F BB */ { &decoder32_modrm, BxOpcodeTable0FBB },
+   /*    0F BC */ { &decoder32_modrm, BxOpcodeTable0FBC },
+   /*    0F BD */ { &decoder32_modrm, BxOpcodeTable0FBD },
+   /*    0F BE */ { &decoder32_modrm, BxOpcodeTable0FBE },
+   /*    0F BF */ { &decoder32_modrm, BxOpcodeTable0FBF },
+   /*    0F C0 */ { &decoder32_modrm, BxOpcodeTable0FC0 },
+   /*    0F C1 */ { &decoder32_modrm, BxOpcodeTable0FC1 },
+   /*    0F C2 */ { &decoder32_modrm, BxOpcodeTable0FC2 },
+   /*    0F C3 */ { &decoder32_modrm, BxOpcodeTable0FC3 },
+   /*    0F C4 */ { &decoder32_modrm, BxOpcodeTable0FC4 },
+   /*    0F C5 */ { &decoder32_modrm, BxOpcodeTable0FC5 },
+   /*    0F C6 */ { &decoder32_modrm, BxOpcodeTable0FC6 },
+   /*    0F C7 */ { &decoder32_modrm, BxOpcodeTable0FC7 },
    /*    0F C8 */ { &decoder32, BxOpcodeTable0FC8x0FCF },
    /*    0F C9 */ { &decoder32, BxOpcodeTable0FC8x0FCF },
    /*    0F CA */ { &decoder32, BxOpcodeTable0FC8x0FCF },
@@ -558,122 +576,122 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F CD */ { &decoder32, BxOpcodeTable0FC8x0FCF },
    /*    0F CE */ { &decoder32, BxOpcodeTable0FC8x0FCF },
    /*    0F CF */ { &decoder32, BxOpcodeTable0FC8x0FCF },
-   /*    0F D0 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD0 },
-   /*    0F D1 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD1 },
-   /*    0F D2 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD2 },
-   /*    0F D3 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD3 },
-   /*    0F D4 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD4 },
-   /*    0F D5 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD5 },
-   /*    0F D6 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD6 },
-   /*    0F D7 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD7 },
-   /*    0F D8 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD8 },
-   /*    0F D9 */ { &decoder32_sse, BxOpcodeGroupSSE_0FD9 },
-   /*    0F DA */ { &decoder32_sse, BxOpcodeGroupSSE_0FDA },
-   /*    0F DB */ { &decoder32_sse, BxOpcodeGroupSSE_0FDB },
-   /*    0F DC */ { &decoder32_sse, BxOpcodeGroupSSE_0FDC },
-   /*    0F DD */ { &decoder32_sse, BxOpcodeGroupSSE_0FDD },
-   /*    0F DE */ { &decoder32_sse, BxOpcodeGroupSSE_0FDE },
-   /*    0F DF */ { &decoder32_sse, BxOpcodeGroupSSE_0FDF },
-   /*    0F E0 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE0 },
-   /*    0F E1 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE1 },
-   /*    0F E2 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE2 },
-   /*    0F E3 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE3 },
-   /*    0F E4 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE4 },
-   /*    0F E5 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE5 },
-   /*    0F E6 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE6 },
-   /*    0F E7 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE7 },
-   /*    0F E8 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE8 },
-   /*    0F E9 */ { &decoder32_sse, BxOpcodeGroupSSE_0FE9 },
-   /*    0F EA */ { &decoder32_sse, BxOpcodeGroupSSE_0FEA },
-   /*    0F EB */ { &decoder32_sse, BxOpcodeGroupSSE_0FEB },
-   /*    0F EC */ { &decoder32_sse, BxOpcodeGroupSSE_0FEC },
-   /*    0F ED */ { &decoder32_sse, BxOpcodeGroupSSE_0FED },
-   /*    0F EE */ { &decoder32_sse, BxOpcodeGroupSSE_0FEE },
-   /*    0F EF */ { &decoder32_sse, BxOpcodeGroupSSE_0FEF },
-   /*    0F F0 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF0 },
-   /*    0F F1 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF1 },
-   /*    0F F2 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF2 },
-   /*    0F F3 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF3 },
-   /*    0F F4 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF4 },
-   /*    0F F5 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF5 },
-   /*    0F F6 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF6 },
-   /*    0F F7 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF7 },
-   /*    0F F8 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF8 },
-   /*    0F F9 */ { &decoder32_sse, BxOpcodeGroupSSE_0FF9 },
-   /*    0F FA */ { &decoder32_sse, BxOpcodeGroupSSE_0FFA },
-   /*    0F FB */ { &decoder32_sse, BxOpcodeGroupSSE_0FFB },
-   /*    0F FC */ { &decoder32_sse, BxOpcodeGroupSSE_0FFC },
-   /*    0F FD */ { &decoder32_sse, BxOpcodeGroupSSE_0FFD },
-   /*    0F FE */ { &decoder32_sse, BxOpcodeGroupSSE_0FFE },
+   /*    0F D0 */ { &decoder32_modrm, BxOpcodeTable0FD0 },
+   /*    0F D1 */ { &decoder32_modrm, BxOpcodeTable0FD1 },
+   /*    0F D2 */ { &decoder32_modrm, BxOpcodeTable0FD2 },
+   /*    0F D3 */ { &decoder32_modrm, BxOpcodeTable0FD3 },
+   /*    0F D4 */ { &decoder32_modrm, BxOpcodeTable0FD4 },
+   /*    0F D5 */ { &decoder32_modrm, BxOpcodeTable0FD5 },
+   /*    0F D6 */ { &decoder32_modrm, BxOpcodeTable0FD6 },
+   /*    0F D7 */ { &decoder32_modrm, BxOpcodeTable0FD7 },
+   /*    0F D8 */ { &decoder32_modrm, BxOpcodeTable0FD8 },
+   /*    0F D9 */ { &decoder32_modrm, BxOpcodeTable0FD9 },
+   /*    0F DA */ { &decoder32_modrm, BxOpcodeTable0FDA },
+   /*    0F DB */ { &decoder32_modrm, BxOpcodeTable0FDB },
+   /*    0F DC */ { &decoder32_modrm, BxOpcodeTable0FDC },
+   /*    0F DD */ { &decoder32_modrm, BxOpcodeTable0FDD },
+   /*    0F DE */ { &decoder32_modrm, BxOpcodeTable0FDE },
+   /*    0F DF */ { &decoder32_modrm, BxOpcodeTable0FDF },
+   /*    0F E0 */ { &decoder32_modrm, BxOpcodeTable0FE0 },
+   /*    0F E1 */ { &decoder32_modrm, BxOpcodeTable0FE1 },
+   /*    0F E2 */ { &decoder32_modrm, BxOpcodeTable0FE2 },
+   /*    0F E3 */ { &decoder32_modrm, BxOpcodeTable0FE3 },
+   /*    0F E4 */ { &decoder32_modrm, BxOpcodeTable0FE4 },
+   /*    0F E5 */ { &decoder32_modrm, BxOpcodeTable0FE5 },
+   /*    0F E6 */ { &decoder32_modrm, BxOpcodeTable0FE6 },
+   /*    0F E7 */ { &decoder32_modrm, BxOpcodeTable0FE7 },
+   /*    0F E8 */ { &decoder32_modrm, BxOpcodeTable0FE8 },
+   /*    0F E9 */ { &decoder32_modrm, BxOpcodeTable0FE9 },
+   /*    0F EA */ { &decoder32_modrm, BxOpcodeTable0FEA },
+   /*    0F EB */ { &decoder32_modrm, BxOpcodeTable0FEB },
+   /*    0F EC */ { &decoder32_modrm, BxOpcodeTable0FEC },
+   /*    0F ED */ { &decoder32_modrm, BxOpcodeTable0FED },
+   /*    0F EE */ { &decoder32_modrm, BxOpcodeTable0FEE },
+   /*    0F EF */ { &decoder32_modrm, BxOpcodeTable0FEF },
+   /*    0F F0 */ { &decoder32_modrm, BxOpcodeTable0FF0 },
+   /*    0F F1 */ { &decoder32_modrm, BxOpcodeTable0FF1 },
+   /*    0F F2 */ { &decoder32_modrm, BxOpcodeTable0FF2 },
+   /*    0F F3 */ { &decoder32_modrm, BxOpcodeTable0FF3 },
+   /*    0F F4 */ { &decoder32_modrm, BxOpcodeTable0FF4 },
+   /*    0F F5 */ { &decoder32_modrm, BxOpcodeTable0FF5 },
+   /*    0F F6 */ { &decoder32_modrm, BxOpcodeTable0FF6 },
+   /*    0F F7 */ { &decoder32_modrm, BxOpcodeTable0FF7 },
+   /*    0F F8 */ { &decoder32_modrm, BxOpcodeTable0FF8 },
+   /*    0F F9 */ { &decoder32_modrm, BxOpcodeTable0FF9 },
+   /*    0F FA */ { &decoder32_modrm, BxOpcodeTable0FFA },
+   /*    0F FB */ { &decoder32_modrm, BxOpcodeTable0FFB },
+   /*    0F FC */ { &decoder32_modrm, BxOpcodeTable0FFC },
+   /*    0F FD */ { &decoder32_modrm, BxOpcodeTable0FFD },
+   /*    0F FE */ { &decoder32_modrm, BxOpcodeTable0FFE },
    /*    0F FF */ { &decoder_simple32, BxOpcodeTable0FFF },
 #if BX_CPU_LEVEL >= 6
    // 3-byte opcode 0x0F 0x38
-   /* 0F 38 00 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3800 },
-   /* 0F 38 01 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3801 },
-   /* 0F 38 02 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3802 },
-   /* 0F 38 03 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3803 },
-   /* 0F 38 04 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3804 },
-   /* 0F 38 05 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3805 },
-   /* 0F 38 06 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3806 },
-   /* 0F 38 07 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3807 },
-   /* 0F 38 08 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3808 },
-   /* 0F 38 09 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3809 },
-   /* 0F 38 0A */ { &decoder32_sse, BxOpcodeGroupSSE_0F380A },
-   /* 0F 38 0B */ { &decoder32_sse, BxOpcodeGroupSSE_0F380B },
+   /* 0F 38 00 */ { &decoder32_modrm, BxOpcodeTable0F3800 },
+   /* 0F 38 01 */ { &decoder32_modrm, BxOpcodeTable0F3801 },
+   /* 0F 38 02 */ { &decoder32_modrm, BxOpcodeTable0F3802 },
+   /* 0F 38 03 */ { &decoder32_modrm, BxOpcodeTable0F3803 },
+   /* 0F 38 04 */ { &decoder32_modrm, BxOpcodeTable0F3804 },
+   /* 0F 38 05 */ { &decoder32_modrm, BxOpcodeTable0F3805 },
+   /* 0F 38 06 */ { &decoder32_modrm, BxOpcodeTable0F3806 },
+   /* 0F 38 07 */ { &decoder32_modrm, BxOpcodeTable0F3807 },
+   /* 0F 38 08 */ { &decoder32_modrm, BxOpcodeTable0F3808 },
+   /* 0F 38 09 */ { &decoder32_modrm, BxOpcodeTable0F3809 },
+   /* 0F 38 0A */ { &decoder32_modrm, BxOpcodeTable0F380A },
+   /* 0F 38 0B */ { &decoder32_modrm, BxOpcodeTable0F380B },
    /* 0F 38 0C */ { &decoder_ud32, NULL },
    /* 0F 38 0D */ { &decoder_ud32, NULL },
    /* 0F 38 0E */ { &decoder_ud32, NULL },
    /* 0F 38 0F */ { &decoder_ud32, NULL },
-   /* 0F 38 10 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3810 },
+   /* 0F 38 10 */ { &decoder32_modrm, BxOpcodeTable0F3810 },
    /* 0F 38 11 */ { &decoder_ud32, NULL },
    /* 0F 38 12 */ { &decoder_ud32, NULL },
    /* 0F 38 13 */ { &decoder_ud32, NULL },
-   /* 0F 38 14 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3814 },
-   /* 0F 38 15 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3815 },
+   /* 0F 38 14 */ { &decoder32_modrm, BxOpcodeTable0F3814 },
+   /* 0F 38 15 */ { &decoder32_modrm, BxOpcodeTable0F3815 },
    /* 0F 38 16 */ { &decoder_ud32, NULL },
-   /* 0F 38 17 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3817 },
+   /* 0F 38 17 */ { &decoder32_modrm, BxOpcodeTable0F3817 },
    /* 0F 38 18 */ { &decoder_ud32, NULL },
    /* 0F 38 19 */ { &decoder_ud32, NULL },
    /* 0F 38 1A */ { &decoder_ud32, NULL },
    /* 0F 38 1B */ { &decoder_ud32, NULL },
-   /* 0F 38 1C */ { &decoder32_sse, BxOpcodeGroupSSE_0F381C },
-   /* 0F 38 1D */ { &decoder32_sse, BxOpcodeGroupSSE_0F381D },
-   /* 0F 38 1E */ { &decoder32_sse, BxOpcodeGroupSSE_0F381E },
+   /* 0F 38 1C */ { &decoder32_modrm, BxOpcodeTable0F381C },
+   /* 0F 38 1D */ { &decoder32_modrm, BxOpcodeTable0F381D },
+   /* 0F 38 1E */ { &decoder32_modrm, BxOpcodeTable0F381E },
    /* 0F 38 1F */ { &decoder_ud32, NULL },
-   /* 0F 38 20 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3820 },
-   /* 0F 38 21 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3821 },
-   /* 0F 38 22 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3822 },
-   /* 0F 38 23 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3823 },
-   /* 0F 38 24 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3824 },
-   /* 0F 38 25 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3825 },
+   /* 0F 38 20 */ { &decoder32_modrm, BxOpcodeTable0F3820 },
+   /* 0F 38 21 */ { &decoder32_modrm, BxOpcodeTable0F3821 },
+   /* 0F 38 22 */ { &decoder32_modrm, BxOpcodeTable0F3822 },
+   /* 0F 38 23 */ { &decoder32_modrm, BxOpcodeTable0F3823 },
+   /* 0F 38 24 */ { &decoder32_modrm, BxOpcodeTable0F3824 },
+   /* 0F 38 25 */ { &decoder32_modrm, BxOpcodeTable0F3825 },
    /* 0F 38 26 */ { &decoder_ud32, NULL },
    /* 0F 38 27 */ { &decoder_ud32, NULL },
-   /* 0F 38 28 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3828 },
-   /* 0F 38 29 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3829 },
-   /* 0F 38 2A */ { &decoder32_sse, BxOpcodeGroupSSE_0F382A },
-   /* 0F 38 2B */ { &decoder32_sse, BxOpcodeGroupSSE_0F382B },
+   /* 0F 38 28 */ { &decoder32_modrm, BxOpcodeTable0F3828 },
+   /* 0F 38 29 */ { &decoder32_modrm, BxOpcodeTable0F3829 },
+   /* 0F 38 2A */ { &decoder32_modrm, BxOpcodeTable0F382A },
+   /* 0F 38 2B */ { &decoder32_modrm, BxOpcodeTable0F382B },
    /* 0F 38 2C */ { &decoder_ud32, NULL },
    /* 0F 38 2D */ { &decoder_ud32, NULL },
    /* 0F 38 2E */ { &decoder_ud32, NULL },
    /* 0F 38 2F */ { &decoder_ud32, NULL },
-   /* 0F 38 30 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3830 },
-   /* 0F 38 31 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3831 },
-   /* 0F 38 32 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3832 },
-   /* 0F 38 33 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3833 },
-   /* 0F 38 34 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3834 },
-   /* 0F 38 35 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3835 },
+   /* 0F 38 30 */ { &decoder32_modrm, BxOpcodeTable0F3830 },
+   /* 0F 38 31 */ { &decoder32_modrm, BxOpcodeTable0F3831 },
+   /* 0F 38 32 */ { &decoder32_modrm, BxOpcodeTable0F3832 },
+   /* 0F 38 33 */ { &decoder32_modrm, BxOpcodeTable0F3833 },
+   /* 0F 38 34 */ { &decoder32_modrm, BxOpcodeTable0F3834 },
+   /* 0F 38 35 */ { &decoder32_modrm, BxOpcodeTable0F3835 },
    /* 0F 38 36 */ { &decoder_ud32, NULL },
-   /* 0F 38 37 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3837 },
-   /* 0F 38 38 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3838 },
-   /* 0F 38 39 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3839 },
-   /* 0F 38 3A */ { &decoder32_sse, BxOpcodeGroupSSE_0F383A },
-   /* 0F 38 3B */ { &decoder32_sse, BxOpcodeGroupSSE_0F383B },
-   /* 0F 38 3C */ { &decoder32_sse, BxOpcodeGroupSSE_0F383C },
-   /* 0F 38 3D */ { &decoder32_sse, BxOpcodeGroupSSE_0F383D },
-   /* 0F 38 3E */ { &decoder32_sse, BxOpcodeGroupSSE_0F383E },
-   /* 0F 38 3F */ { &decoder32_sse, BxOpcodeGroupSSE_0F383F },
-   /* 0F 38 40 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3840 },
-   /* 0F 38 41 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3841 },
+   /* 0F 38 37 */ { &decoder32_modrm, BxOpcodeTable0F3837 },
+   /* 0F 38 38 */ { &decoder32_modrm, BxOpcodeTable0F3838 },
+   /* 0F 38 39 */ { &decoder32_modrm, BxOpcodeTable0F3839 },
+   /* 0F 38 3A */ { &decoder32_modrm, BxOpcodeTable0F383A },
+   /* 0F 38 3B */ { &decoder32_modrm, BxOpcodeTable0F383B },
+   /* 0F 38 3C */ { &decoder32_modrm, BxOpcodeTable0F383C },
+   /* 0F 38 3D */ { &decoder32_modrm, BxOpcodeTable0F383D },
+   /* 0F 38 3E */ { &decoder32_modrm, BxOpcodeTable0F383E },
+   /* 0F 38 3F */ { &decoder32_modrm, BxOpcodeTable0F383F },
+   /* 0F 38 40 */ { &decoder32_modrm, BxOpcodeTable0F3840 },
+   /* 0F 38 41 */ { &decoder32_modrm, BxOpcodeTable0F3841 },
    /* 0F 38 42 */ { &decoder_ud32, NULL },
    /* 0F 38 43 */ { &decoder_ud32, NULL },
    /* 0F 38 44 */ { &decoder_ud32, NULL },
@@ -736,9 +754,9 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 38 7D */ { &decoder_ud32, NULL },
    /* 0F 38 7E */ { &decoder_ud32, NULL },
    /* 0F 38 7F */ { &decoder_ud32, NULL },
-   /* 0F 38 80 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3880 },
-   /* 0F 38 81 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3881 },
-   /* 0F 38 82 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3882 },
+   /* 0F 38 80 */ { &decoder32_modrm, BxOpcodeTable0F3880 },
+   /* 0F 38 81 */ { &decoder32_modrm, BxOpcodeTable0F3881 },
+   /* 0F 38 82 */ { &decoder32_modrm, BxOpcodeTable0F3882 },
    /* 0F 38 83 */ { &decoder_ud32, NULL },
    /* 0F 38 84 */ { &decoder_ud32, NULL },
    /* 0F 38 85 */ { &decoder_ud32, NULL },
@@ -808,14 +826,14 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 38 C5 */ { &decoder_ud32, NULL },
    /* 0F 38 C6 */ { &decoder_ud32, NULL },
    /* 0F 38 C7 */ { &decoder_ud32, NULL },
-   /* 0F 38 C8 */ { &decoder32_sse, BxOpcodeGroupSSE_0F38C8 },
-   /* 0F 38 C9 */ { &decoder32_sse, BxOpcodeGroupSSE_0F38C9 },
-   /* 0F 38 CA */ { &decoder32_sse, BxOpcodeGroupSSE_0F38CA },
-   /* 0F 38 CB */ { &decoder32_sse, BxOpcodeGroupSSE_0F38CB },
-   /* 0F 38 CC */ { &decoder32_sse, BxOpcodeGroupSSE_0F38CC },
-   /* 0F 38 CD */ { &decoder32_sse, BxOpcodeGroupSSE_0F38CD },
+   /* 0F 38 C8 */ { &decoder32_modrm, BxOpcodeTable0F38C8 },
+   /* 0F 38 C9 */ { &decoder32_modrm, BxOpcodeTable0F38C9 },
+   /* 0F 38 CA */ { &decoder32_modrm, BxOpcodeTable0F38CA },
+   /* 0F 38 CB */ { &decoder32_modrm, BxOpcodeTable0F38CB },
+   /* 0F 38 CC */ { &decoder32_modrm, BxOpcodeTable0F38CC },
+   /* 0F 38 CD */ { &decoder32_modrm, BxOpcodeTable0F38CD },
    /* 0F 38 CE */ { &decoder_ud32, NULL },
-   /* 0F 38 CF */ { &decoder_ud32, NULL },
+   /* 0F 38 CF */ { &decoder32_modrm, BxOpcodeTable0F38CF },
    /* 0F 38 D0 */ { &decoder_ud32, NULL },
    /* 0F 38 D1 */ { &decoder_ud32, NULL },
    /* 0F 38 D2 */ { &decoder_ud32, NULL },
@@ -827,11 +845,11 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 38 D8 */ { &decoder_ud32, NULL },
    /* 0F 38 D9 */ { &decoder_ud32, NULL },
    /* 0F 38 DA */ { &decoder_ud32, NULL },
-   /* 0F 38 DB */ { &decoder32_sse, BxOpcodeGroupSSE_0F38DB },
-   /* 0F 38 DC */ { &decoder32_sse, BxOpcodeGroupSSE_0F38DC },
-   /* 0F 38 DD */ { &decoder32_sse, BxOpcodeGroupSSE_0F38DD },
-   /* 0F 38 DE */ { &decoder32_sse, BxOpcodeGroupSSE_0F38DE },
-   /* 0F 38 DF */ { &decoder32_sse, BxOpcodeGroupSSE_0F38DF },
+   /* 0F 38 DB */ { &decoder32_modrm, BxOpcodeTable0F38DB },
+   /* 0F 38 DC */ { &decoder32_modrm, BxOpcodeTable0F38DC },
+   /* 0F 38 DD */ { &decoder32_modrm, BxOpcodeTable0F38DD },
+   /* 0F 38 DE */ { &decoder32_modrm, BxOpcodeTable0F38DE },
+   /* 0F 38 DF */ { &decoder32_modrm, BxOpcodeTable0F38DF },
    /* 0F 38 E0 */ { &decoder_ud32, NULL },
    /* 0F 38 E1 */ { &decoder_ud32, NULL },
    /* 0F 38 E2 */ { &decoder_ud32, NULL },
@@ -848,16 +866,16 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 38 ED */ { &decoder_ud32, NULL },
    /* 0F 38 EE */ { &decoder_ud32, NULL },
    /* 0F 38 EF */ { &decoder_ud32, NULL },
-   /* 0F 38 F0 */ { &decoder32_sse_osize, BxOpcodeGroupSSE_0F38F0 },
-   /* 0F 38 F1 */ { &decoder32_sse_osize, BxOpcodeGroupSSE_0F38F1 },
+   /* 0F 38 F0 */ { &decoder32_modrm, BxOpcodeTable0F38F0 },
+   /* 0F 38 F1 */ { &decoder32_modrm, BxOpcodeTable0F38F1 },
    /* 0F 38 F2 */ { &decoder_ud32, NULL },
    /* 0F 38 F3 */ { &decoder_ud32, NULL },
    /* 0F 38 F4 */ { &decoder_ud32, NULL },
    /* 0F 38 F5 */ { &decoder_ud32, NULL },
-   /* 0F 38 F6 */ { &decoder32_sse, BxOpcodeGroupSSE_0F38F6 },
+   /* 0F 38 F6 */ { &decoder32_modrm, BxOpcodeTable0F38F6 },
    /* 0F 38 F7 */ { &decoder_ud32, NULL },
    /* 0F 38 F8 */ { &decoder_ud32, NULL },
-   /* 0F 38 F9 */ { &decoder_ud32, NULL },
+   /* 0F 38 F9 */ { &decoder32_modrm, BxOpcodeTable0F38F6 },
    /* 0F 38 FA */ { &decoder_ud32, NULL },
    /* 0F 38 FB */ { &decoder_ud32, NULL },
    /* 0F 38 FC */ { &decoder_ud32, NULL },
@@ -874,22 +892,22 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A 05 */ { &decoder_ud32, NULL },
    /* 0F 3A 06 */ { &decoder_ud32, NULL },
    /* 0F 3A 07 */ { &decoder_ud32, NULL },
-   /* 0F 3A 08 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A08 },
-   /* 0F 3A 09 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A09 },
-   /* 0F 3A 0A */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0A },
-   /* 0F 3A 0B */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0B },
-   /* 0F 3A 0C */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0C },
-   /* 0F 3A 0D */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0D },
-   /* 0F 3A 0E */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0E },
-   /* 0F 3A 0F */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A0F },
+   /* 0F 3A 08 */ { &decoder32_modrm, BxOpcodeTable0F3A08 },
+   /* 0F 3A 09 */ { &decoder32_modrm, BxOpcodeTable0F3A09 },
+   /* 0F 3A 0A */ { &decoder32_modrm, BxOpcodeTable0F3A0A },
+   /* 0F 3A 0B */ { &decoder32_modrm, BxOpcodeTable0F3A0B },
+   /* 0F 3A 0C */ { &decoder32_modrm, BxOpcodeTable0F3A0C },
+   /* 0F 3A 0D */ { &decoder32_modrm, BxOpcodeTable0F3A0D },
+   /* 0F 3A 0E */ { &decoder32_modrm, BxOpcodeTable0F3A0E },
+   /* 0F 3A 0F */ { &decoder32_modrm, BxOpcodeTable0F3A0F },
    /* 0F 3A 10 */ { &decoder_ud32, NULL },
    /* 0F 3A 11 */ { &decoder_ud32, NULL },
    /* 0F 3A 12 */ { &decoder_ud32, NULL },
    /* 0F 3A 13 */ { &decoder_ud32, NULL },
-   /* 0F 3A 14 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A14 },
-   /* 0F 3A 15 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A15 },
-   /* 0F 3A 16 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A16 },
-   /* 0F 3A 17 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A17 },
+   /* 0F 3A 14 */ { &decoder32_modrm, BxOpcodeTable0F3A14 },
+   /* 0F 3A 15 */ { &decoder32_modrm, BxOpcodeTable0F3A15 },
+   /* 0F 3A 16 */ { &decoder32_modrm, BxOpcodeTable0F3A16 },
+   /* 0F 3A 17 */ { &decoder32_modrm, BxOpcodeTable0F3A17 },
    /* 0F 3A 18 */ { &decoder_ud32, NULL },
    /* 0F 3A 19 */ { &decoder_ud32, NULL },
    /* 0F 3A 1A */ { &decoder_ud32, NULL },
@@ -898,9 +916,9 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A 1D */ { &decoder_ud32, NULL },
    /* 0F 3A 1E */ { &decoder_ud32, NULL },
    /* 0F 3A 1F */ { &decoder_ud32, NULL },
-   /* 0F 3A 20 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A20 },
-   /* 0F 3A 21 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A21 },
-   /* 0F 3A 22 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A22 },
+   /* 0F 3A 20 */ { &decoder32_modrm, BxOpcodeTable0F3A20 },
+   /* 0F 3A 21 */ { &decoder32_modrm, BxOpcodeTable0F3A21 },
+   /* 0F 3A 22 */ { &decoder32_modrm, BxOpcodeTable0F3A22 },
    /* 0F 3A 23 */ { &decoder_ud32, NULL },
    /* 0F 3A 24 */ { &decoder_ud32, NULL },
    /* 0F 3A 25 */ { &decoder_ud32, NULL },
@@ -930,11 +948,11 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A 3D */ { &decoder_ud32, NULL },
    /* 0F 3A 3E */ { &decoder_ud32, NULL },
    /* 0F 3A 3F */ { &decoder_ud32, NULL },
-   /* 0F 3A 40 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A40 },
-   /* 0F 3A 41 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A41 },
-   /* 0F 3A 42 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A42 },
+   /* 0F 3A 40 */ { &decoder32_modrm, BxOpcodeTable0F3A40 },
+   /* 0F 3A 41 */ { &decoder32_modrm, BxOpcodeTable0F3A41 },
+   /* 0F 3A 42 */ { &decoder32_modrm, BxOpcodeTable0F3A42 },
    /* 0F 3A 43 */ { &decoder_ud32, NULL },
-   /* 0F 3A 44 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A44 },
+   /* 0F 3A 44 */ { &decoder32_modrm, BxOpcodeTable0F3A44 },
    /* 0F 3A 45 */ { &decoder_ud32, NULL },
    /* 0F 3A 46 */ { &decoder_ud32, NULL },
    /* 0F 3A 47 */ { &decoder_ud32, NULL },
@@ -962,10 +980,10 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A 5D */ { &decoder_ud32, NULL },
    /* 0F 3A 5E */ { &decoder_ud32, NULL },
    /* 0F 3A 5F */ { &decoder_ud32, NULL },
-   /* 0F 3A 60 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A60 },
-   /* 0F 3A 61 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A61 },
-   /* 0F 3A 62 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A62 },
-   /* 0F 3A 64 */ { &decoder32_sse, BxOpcodeGroupSSE_0F3A63 },
+   /* 0F 3A 60 */ { &decoder32_modrm, BxOpcodeTable0F3A60 },
+   /* 0F 3A 61 */ { &decoder32_modrm, BxOpcodeTable0F3A61 },
+   /* 0F 3A 62 */ { &decoder32_modrm, BxOpcodeTable0F3A62 },
+   /* 0F 3A 64 */ { &decoder32_modrm, BxOpcodeTable0F3A63 },
    /* 0F 3A 64 */ { &decoder_ud32, NULL },
    /* 0F 3A 65 */ { &decoder_ud32, NULL },
    /* 0F 3A 66 */ { &decoder_ud32, NULL },
@@ -1070,10 +1088,10 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A C9 */ { &decoder_ud32, NULL },
    /* 0F 3A CA */ { &decoder_ud32, NULL },
    /* 0F 3A CB */ { &decoder_ud32, NULL },
-   /* 0F 3A CC */ { &decoder32_sse, BxOpcodeGroupSSE_0F3ACC },
+   /* 0F 3A CC */ { &decoder32_modrm, BxOpcodeTable0F3ACC },
    /* 0F 3A CD */ { &decoder_ud32, NULL },
-   /* 0F 3A CE */ { &decoder_ud32, NULL },
-   /* 0F 3A CF */ { &decoder_ud32, NULL },
+   /* 0F 3A CE */ { &decoder32_modrm, BxOpcodeTable0F3ACE },
+   /* 0F 3A CF */ { &decoder32_modrm, BxOpcodeTable0F3ACF },
    /* 0F 3A D0 */ { &decoder_ud32, NULL },
    /* 0F 3A D1 */ { &decoder_ud32, NULL },
    /* 0F 3A D2 */ { &decoder_ud32, NULL },
@@ -1089,7 +1107,7 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 3A DC */ { &decoder_ud32, NULL },
    /* 0F 3A DD */ { &decoder_ud32, NULL },
    /* 0F 3A DE */ { &decoder_ud32, NULL },
-   /* 0F 3A DF */ { &decoder32_sse, BxOpcodeGroupSSE_0F3ADF },
+   /* 0F 3A DF */ { &decoder32_modrm, BxOpcodeTable0F3ADF },
    /* 0F 3A E0 */ { &decoder_ud32, NULL },
    /* 0F 3A E1 */ { &decoder_ud32, NULL },
    /* 0F 3A E2 */ { &decoder_ud32, NULL },
@@ -1193,17 +1211,10 @@ static unsigned sreg_mod1or2_base32[8] = {
   BX_SEG_REG_DS
 };
 
-// table of all Bochs opcodes
-bxIAOpcodeTable BxOpcodesTable[] = {
-#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) { b, c, { s1, s2, s3, s4 }, e },
-#include "ia_opcodes.h"
-};
-#undef  bx_define_opcode
-
 extern const Bit8u *decodeModrm32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned mod, unsigned nnn, unsigned rm);
 extern const Bit8u *parseModrm32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, struct bx_modrm *modrm);
-extern int decodeImmediate32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned imm_mode, unsigned imm_mode2);
-extern Bit16u WalkOpcodeTables(const BxExtOpcodeInfo_t *OpcodeInfoPtr, Bit16u &attr, bx_bool is_64, unsigned modrm, unsigned sse_prefix, unsigned osize, unsigned vex_vl, bx_bool vex_w);
+extern int fetchImmediate(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, Bit16u ia_opcode, bx_bool is_64);
+extern Bit16u findOpcode(const Bit64u *opMap, Bit32u opMsk);
 
 const Bit8u *parseModrm32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, struct bx_modrm *modrm)
 {
@@ -1376,15 +1387,19 @@ modrm_done:
   return iptr;
 }
 
-int decodeImmediate32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned imm_mode, unsigned imm_mode2)
+int fetchImmediate(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, Bit16u ia_opcode, bx_bool is_64)
 {
-  if (imm_mode) {
-    // make sure iptr was advanced after Ib(), Iw() and Id()
-    switch (imm_mode) {
-      case BxImmediate_I1:
+  for (unsigned n = 0; n <= 3; n++) {
+    unsigned src = (unsigned) BxOpcodesTable[ia_opcode].src[n];
+    unsigned type = BX_DISASM_SRC_TYPE(src);
+    src = BX_DISASM_SRC_ORIGIN(src);
+
+    if (src == BX_SRC_IMM || src == BX_SRC_BRANCH_OFFSET) {
+      switch(type) {
+      case BX_IMM1:
         i->modRMForm.Ib[0] = 1;
         break;
-      case BxImmediate_Ib:
+      case BX_IMMB:
         if (remain != 0) {
           i->modRMForm.Ib[0] = *iptr++;
           remain--;
@@ -1393,22 +1408,36 @@ int decodeImmediate32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, u
           return(-1);
         }
         break;
-      case BxImmediate_BrOff8:
-      case BxImmediate_Ib_SE: // Sign extend to OS size
+      case BX_IMMBW_SE: // Sign extend 8-bit to 16-bit
         if (remain != 0) {
           Bit8s temp8s = *iptr++;
-          // this code works correctly both for LE and BE hosts
-          if (i->os32L())
-            i->modRMForm.Id    = (Bit32s) temp8s;
-          else
-            i->modRMForm.Iw[0] = (Bit16s) temp8s;
+          i->modRMForm.Iw[0] = (Bit16s) temp8s;
           remain--;
         }
         else {
           return(-1);
         }
         break;
-      case BxImmediate_Iw:
+      case BX_IMMBD_SE: // Sign extend 8-bit to 32-bit
+        if (remain != 0) {
+          Bit8s temp8s = *iptr++;
+          i->modRMForm.Id    = (Bit32s) temp8s;
+          remain--;
+        }
+        else {
+          return(-1);
+        }
+        break;
+      case BX_IMMB2:
+        if (remain != 0) {
+          i->modRMForm.Ib2[0] = *iptr++;
+          remain--;
+        }
+        else {
+          return(-1);
+        }
+        break;
+      case BX_IMMW:
         if (remain > 1) {
           i->modRMForm.Iw[0] = FetchWORD(iptr);
           iptr += 2;
@@ -1418,7 +1447,7 @@ int decodeImmediate32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, u
           return(-1);
         }
         break;
-      case BxImmediate_Id:
+      case BX_IMMD:
         if (remain > 3) {
           i->modRMForm.Id = FetchDWORD(iptr);
           iptr += 4;
@@ -1428,64 +1457,128 @@ int decodeImmediate32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, u
           return(-1);
         }
         break;
-      case BxImmediate_O:
-        // For instructions which embed the address in the opcode.
-        if (i->as32L()) {
-          // fetch 32bit address into Id
+#if BX_SUPPORT_X86_64
+      case BX_IMMQ:
+        if (remain > 7) {
+          i->IqForm.Iq = FetchQWORD(iptr);
+          iptr += 8;
+          remain -= 8;
+        }
+        else {
+          return(-1);
+        }
+        break;
+#endif
+      case BX_DIRECT_PTR:
+        // IdIw2 in 32-bit mode, IwIw2 in 16-bit mode
+        if (i->os32L()) {
           if (remain > 3) {
             i->modRMForm.Id = FetchDWORD(iptr);
             iptr += 4;
             remain -= 4;
           }
-          else return(-1);
+          else {
+            return(-1);
+          }
         }
         else {
-          // fetch 16bit address into Id
           if (remain > 1) {
-            i->modRMForm.Id = (Bit32u) FetchWORD(iptr);
+            i->modRMForm.Iw[0] = FetchWORD(iptr);
             iptr += 2;
             remain -= 2;
           }
-          else return(-1);
+          else {
+            return(-1);
+          }
+        }
+
+        if (remain > 1) {
+          i->modRMForm.Iw2[0] = FetchWORD(iptr);
+          iptr += 2;
+          remain -= 2;
+        }
+        else {
+          return(-1);
         }
         break;
-      default:
-        BX_PANIC(("decoder32: imm_mode = %u", imm_mode));
-        break;
-    }
 
-    if (imm_mode2) {
-      switch (imm_mode2) {
-        case BxImmediate_Ib2:
-          if (remain != 0) {
-            i->modRMForm.Ib2[0] = *iptr;
-            remain--;
+      case BX_DIRECT_MEMREF_B:
+      case BX_DIRECT_MEMREF_W:
+      case BX_DIRECT_MEMREF_D:
+      case BX_DIRECT_MEMREF_Q:
+#if BX_SUPPORT_X86_64
+        if (is_64) {
+          // For instructions which embed the address in the opcode.
+          // There is only 64/32-bit addressing available in long64 mode.
+          if (i->as64L()) {
+            if (remain > 7) {
+              i->IqForm.Iq = FetchQWORD(iptr);
+              iptr += 8;
+              remain -= 8;
+            }
+            else {
+              return(-1);
+            }
+          }
+          else { // as32
+            if (remain > 3) {
+              i->IqForm.Iq = (Bit64u) FetchDWORD(iptr);
+              iptr += 4;
+              remain -= 4;
+            }
+            else {
+              return(-1);
+            }
+          }
+        }
+        else
+#endif
+        {
+          if (i->as32L()) {
+            // fetch 32bit address into Id
+            if (remain > 3) {
+              i->modRMForm.Id = FetchDWORD(iptr);
+              iptr += 4;
+              remain -= 4;
+            }
+            else {
+              return(-1);
+            }
           }
           else {
-            return(-1);
+            // fetch 16bit address into Id
+            if (remain > 1) {
+              i->modRMForm.Id = (Bit32u) FetchWORD(iptr);
+              iptr += 2;
+              remain -= 2;
+            }
+            else {
+              return(-1);
+            }
           }
-          break;
-        case BxImmediate_Iw2:
-          if (remain > 1) {
-            i->modRMForm.Iw2[0] = FetchWORD(iptr);
-            remain -= 2;
-          }
-          else {
-            return(-1);
-          }
-          break;
-        default:
-          BX_PANIC(("decoder32: imm_mode2 = %u", imm_mode2));
-          break;
+        }
+        break;
+
+      default:
+        break;
+      }
+    }
+    else {
+      if (src == BX_SRC_VIB) {
+        if (remain != 0) {
+          i->modRMForm.Ib[0] = *iptr++;
+          remain--;
+        }
+        else {
+          return(-1);
+        }
       }
     }
   }
-
   return 0;
 }
 
-#if BX_SUPPORT_EVEX
-unsigned evex_displ8_compression(bxInstruction_c *i, unsigned ia_opcode, unsigned src, unsigned type, unsigned vex_w)
+unsigned evex_displ8_compression(const bxInstruction_c *i, unsigned ia_opcode, unsigned src, unsigned type, unsigned vex_w)
 {
   if (src == BX_SRC_RM) {
     switch (type) {
@@ -1500,19 +1593,23 @@ unsigned evex_displ8_compression(bxInstruction_c *i, unsigned ia_opcode, unsigne
     return 1;
   }
 
-  if (ia_opcode == BX_IA_V512_VMOVDDUP_VpdWpd && i->getVL() == BX_VL128)
+  // VMOVDDUP special case
+#if BX_SUPPORT_EVEX
+  if ((ia_opcode == BX_IA_V512_VMOVDDUP_VpdWpd || ia_opcode == BX_IA_V512_VMOVDDUP_VpdWpd_Kmask) && (i->getVL() == BX_VL128))
     return 8;
+#endif
 
   unsigned len = i->getVL();
+  if (len == BX_NO_VL) len = BX_VL128;
 
   switch (type) {
   case BX_VMM_FULL_VECTOR:
-    if (i->getEvexb()) { // broadcast
+#if BX_SUPPORT_EVEX
+    if (i->getEvexb()) // broadcast
        return (4 << vex_w);
-    }
-    else {
+    else
+#endif
        return (16 * len);
-    }
 
   case BX_VMM_SCALAR_BYTE:
     return 1;
@@ -1520,23 +1617,33 @@ unsigned evex_displ8_compression(bxInstruction_c *i, unsigned ia_opcode, unsigne
   case BX_VMM_SCALAR_WORD:
     return 2;
 
+  case BX_VMM_SCALAR_DWORD:
+    return 4;
+
+  case BX_VMM_SCALAR_QWORD:
+    return 8;
+
   case BX_VMM_SCALAR:
     return (4 << vex_w);
 
   case BX_VMM_HALF_VECTOR:
-    if (i->getEvexb()) { // broadcast
+#if BX_SUPPORT_EVEX
+    if (i->getEvexb()) // broadcast
        return (4 << vex_w);
-    }
-    else {
+    else
+#endif
        return (8 * len);
-    }
 
   case BX_VMM_QUARTER_VECTOR:
+#if BX_SUPPORT_EVEX
     BX_ASSERT(! i->getEvexb());
+#endif
     return (4 * len);
 
   case BX_VMM_OCT_VECTOR:
+#if BX_SUPPORT_EVEX
     BX_ASSERT(! i->getEvexb());
+#endif
     return (2 * len);
 
   case BX_VMM_VEC128:
@@ -1548,15 +1655,18 @@ unsigned evex_displ8_compression(bxInstruction_c *i, unsigned ia_opcode, unsigne
 
   return 1;
 }
-#endif
 
 bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm)
 {
   for (unsigned n = 0; n <= 3; n++) {
     unsigned src = (unsigned) BxOpcodesTable[ia_opcode].src[n];
-    unsigned type = src >> 3;
-    switch(src & 0x7) {
+    unsigned type = BX_DISASM_SRC_TYPE(src);
+    unsigned index = BX_DISASM_SRC_ORIGIN(src);
+    switch(index) {
     case BX_SRC_NONE:
+    case BX_SRC_IMM:
+    case BX_SRC_BRANCH_OFFSET:
+    case BX_SRC_IMPLICIT:
       break;
     case BX_SRC_EAX:
       i->setSrcReg(n, 0);
@@ -1574,6 +1684,14 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsign
         if (type == BX_VMM_REG) tmpreg = BX_VECTOR_TMP_REGISTER;
 #endif
         i->setSrcReg(n, tmpreg);
+      }
+      break;
+    case BX_SRC_VECTOR_RM:
+      if (i->modC0()) {
+        i->setSrcReg(n, rm);
+      }
+      else {
+        i->setSrcReg(n, BX_VECTOR_TMP_REGISTER);
       }
       break;
     default:
@@ -1596,14 +1714,17 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
   // assign sources
   for (unsigned n = 0; n <= 3; n++) {
     unsigned src = (unsigned) BxOpcodesTable[ia_opcode].src[n];
-    unsigned type = src >> 3;
-    src &= 0x7;
+    unsigned type = BX_DISASM_SRC_TYPE(src);
+    src = BX_DISASM_SRC_ORIGIN(src);
 #if BX_SUPPORT_EVEX
     bx_bool mem_src = BX_FALSE;
 #endif
 
     switch(src) {
     case BX_SRC_NONE:
+    case BX_SRC_IMM:
+    case BX_SRC_BRANCH_OFFSET:
+    case BX_SRC_IMPLICIT:
       break;
     case BX_SRC_EAX:
       i->setSrcReg(n, 0);
@@ -1616,6 +1737,9 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
       break;
     case BX_SRC_RM:
       if (i->modC0()) {
+        if (type == BX_KMASK_REG)
+          rm &= 0x7;
+
         i->setSrcReg(n, rm);
       }
       else {
@@ -1625,22 +1749,19 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
         i->setSrcReg(n, (type == BX_VMM_REG) ? BX_VECTOR_TMP_REGISTER : BX_TMP_REGISTER);
       }
       break;
-#if BX_SUPPORT_EVEX
-    case BX_SRC_EVEX_RM:
+    case BX_SRC_VECTOR_RM:
       if (i->modC0()) {
-        if (type == BX_KMASK_REG)
-          rm &= 0x7;
-
         i->setSrcReg(n, rm);
       }
       else {
-        mem_src = BX_TRUE;
         i->setSrcReg(n, BX_VECTOR_TMP_REGISTER);
+#if BX_SUPPORT_EVEX
+        mem_src = BX_TRUE;
         if (n == 0) // zero masking is not allowed for memory destination
           if (i->isZeroMasking()) return BX_FALSE;
+#endif
       }
       break;
-#endif
     case BX_SRC_VVV:
       i->setSrcReg(n, vvv);
       use_vvv = BX_TRUE;
@@ -1701,29 +1822,30 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
 }
 #endif
 
-int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   int ia_opcode = BX_IA_ERROR;
 
   // make sure VEX 0xC4 or VEX 0xC5
   assert((b1 & ~0x1) == 0xc4);
 
+  if (remain == 0)
+    return(-1);
+
   if ((*iptr & 0xc0) != 0xc0) {
-    return decoder_modrm32(iptr, remain, i, b1, sse_prefix, opcode_table);
+    return decoder32_modrm(iptr, remain, i, b1, sse_prefix, opcode_table);
   }
 
 #if BX_SUPPORT_AVX
   unsigned rm = 0, mod = 0, nnn = 0;
 
   if (sse_prefix)
-    return(ia_opcode);
+    return(BX_IA_ERROR);
 
   bx_bool vex_w = 0;
   unsigned vex_opcext = 1;
-  if (remain == 0)
-    return(-1);
-  remain--;
   unsigned vex = *iptr++;
+  remain--;
 
   if (b1 == 0xc4) {
     // decode 3-byte VEX prefix
@@ -1750,9 +1872,7 @@ int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
   if (opcode_byte < 256 || opcode_byte >= 1024)
     return(ia_opcode);
   bx_bool has_modrm = (opcode_byte != 0x177); // if not VZEROUPPER/VZEROALL opcode
-
-  const BxExtOpcodeInfo_t *OpcodeInfoPtr = &BxOpcodeTableAVX[(opcode_byte-256)*2 + vex_l];
-  Bit16u attr = OpcodeInfoPtr->Attr;
+  opcode_byte -= 256;
 
   if (has_modrm) {
     // opcode requires modrm byte
@@ -1774,8 +1894,6 @@ int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
       if (! iptr) 
         return(-1);
     }
-
-    ia_opcode = WalkOpcodeTables(OpcodeInfoPtr, attr, BX_FALSE, b2, sse_prefix, i->osize(), i->getVL(), vex_w);
   }
   else {
     // Opcode does not require a MODRM byte.
@@ -1783,70 +1901,61 @@ int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
     // the if() above after fetching the 2nd byte, so this path is
     // taken in all cases if a modrm byte is NOT required.
 
-    unsigned group = attr & BxGroupX;
-    if (group == BxPrefixSSE && sse_prefix) {
-      OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[sse_prefix-1]);
-    }
-
-    ia_opcode = OpcodeInfoPtr->IA;
     rm = b1 & 0x7;
     nnn = (b1 >> 3) & 0x7;
     i->assertModC0();
   }
 
-  unsigned imm_mode = attr & BxImmediate;
-  if (imm_mode) {
-    if (BxImmediate_Ib == imm_mode) {
-      if (remain != 0) {
-        i->modRMForm.Ib[0] = *iptr;
-        remain--;
-      }
-      else {
-        return(-1);
-      }
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (sse_prefix << SSE_PREFIX_OFFSET) |
+                   (i->modC0() ? (1 << MODC0_OFFSET) : 0) |
+                   (nnn << NNN_OFFSET) |
+                   (rm << RRR_OFFSET) |
+                   (vex_w << VEX_W_OFFSET) |
+                   (vex_l << VEX_VL_128_256_OFFSET);
+  if (i->modC0() && nnn == rm)
+    decmask |= (1 << SRC_EQ_DST_OFFSET);
+
+  ia_opcode = findOpcode(BxOpcodeTableVEX[opcode_byte], decmask);
+
+  bx_bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
+  if (has_immediate) {
+    if (remain != 0) {
+      i->modRMForm.Ib[0] = *iptr;
+      remain--;
     }
     else {
-      BX_PANIC(("fetchdecode: VEX with imm_mode = %u", imm_mode));
+      return(-1);
     }
   }
 
   if (! assign_srcs(i, ia_opcode, BX_FALSE, nnn, rm, vvv, vex_w))
     ia_opcode = BX_IA_ERROR;
-
-  // invalid opcode sanity checks
-  if ((attr & BxVexW0) != 0 && vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexW1) != 0 && !vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL0) != 0 && i->getVL() != BX_VL128) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL1) != 0 && i->getVL() == BX_VL128) {
-    ia_opcode = BX_IA_ERROR;
-  }
 #endif
 
   return ia_opcode;
 }
 
-int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   int ia_opcode = BX_IA_ERROR;
 
   // make sure EVEX 0x62 prefix
   assert(b1 == 0x62);
 
+  if (remain == 0)
+    return(-1);
+
   if ((*iptr & 0xc0) != 0xc0) {
-    return decoder_modrm32(iptr, remain, i, b1, sse_prefix, opcode_table);
+    return decoder32_modrm(iptr, remain, i, b1, sse_prefix, opcode_table);
   }
 
 #if BX_SUPPORT_EVEX
   bx_bool displ8 = BX_FALSE;
 
   if (sse_prefix)
-    return(ia_opcode);
+    return(BX_IA_ERROR);
 
   Bit32u evex;
   if (remain > 3) {
@@ -1857,6 +1966,27 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   else {
     return(-1);
   }
+
+  // EVEX format: 0x62 P0 P1 P2
+  // -----------
+
+  //    7 6 5 4 3 2 1 0
+  //    ---------------
+  // P0 R X B R'0 0 m m
+  // P1 w v v v v 1 p p
+  // P2 z L'L b V'a a a
+
+  // EVEX.mmmm - opcode group
+  // EVEX.pp   - compressed legacy SSE prefix
+  // EVEX.RXB  - RXB to combine with MODRM.reg and MODRM.nnn
+  // EVEX.R'   - combine with EVEX.R and MODRM.reg
+  // EVEX.vvvv - save as VEX.vvvv
+  // EVEX.V'   - combine with EVEX.vvvv or when VSIB present
+  // EVEX.aaa  - embedded opmask register
+  // EVEX.W    - opsize promotion / opcode extension
+  // EVEX.z    - zero masking / merging
+  // EVEX.b    - broadcast / round control / SAE
+  // EVEX.LL   - vector length control
 
   // check for reserved EVEX bits
   if ((evex & 0x0c) != 0 || (evex & 0x400) == 0)
@@ -1871,7 +2001,7 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   if (vvv >= 8)
     return(ia_opcode);
 
-  bx_bool vex_w = (evex >> 15) & 0x1;
+  unsigned vex_w = (evex >> 15) & 0x1;
   unsigned opmask = (evex >> 16) & 0x7;
   i->setOpmask(opmask);
   unsigned evex_v = ((evex >> 19) & 0x1) ^ 0x1;
@@ -1894,9 +2024,6 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   unsigned opcode_byte = (evex >> 24);
   opcode_byte += 256 * (evex_opcext-1);
 
-  const BxExtOpcodeInfo_t *OpcodeInfoPtr = &BxOpcodeTableEVEX[opcode_byte*2 + (opmask != 0)];
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
   struct bx_modrm modrm;
   iptr = parseModrm32(iptr, remain, i, &modrm);
   if (! iptr) 
@@ -1911,42 +2038,38 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
     i->setVL(BX_VL512);
   }
 
-  ia_opcode = WalkOpcodeTables(OpcodeInfoPtr, attr, BX_FALSE, modrm.modrm, sse_prefix, i->osize(), i->getVL(), vex_w);
+  Bit32u vl = i->getVL()-1; // 0: VL128, 1: VL256, 3: VL512
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (sse_prefix << SSE_PREFIX_OFFSET) |
+                   (i->modC0() ? (1 << MODC0_OFFSET) : 0) |
+                   (modrm.nnn << NNN_OFFSET) |
+                   (modrm.rm << RRR_OFFSET) |
+                   (vex_w << VEX_W_OFFSET) |
+                   (vl << VEX_VL_128_256_OFFSET);
+  if (i->modC0() && modrm.nnn == modrm.rm)
+    decmask |= (1 << SRC_EQ_DST_OFFSET);
+  if (!opmask)
+    decmask |= (1 << MASK_K0_OFFSET);
 
-  unsigned imm_mode = attr & BxImmediate;
-  if (imm_mode) {
-    if (BxImmediate_Ib == imm_mode) {
-      if (remain != 0) {
-        i->modRMForm.Ib[0] = *iptr;
-        remain--;
-      }
-      else {
-        return(-1);
-      }
+  ia_opcode = findOpcode(BxOpcodeTableEVEX[opcode_byte], decmask);
+
+  bx_bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
+  if (has_immediate) {
+    if (remain != 0) {
+      i->modRMForm.Ib[0] = *iptr;
+      remain--;
     }
     else {
-      BX_PANIC(("fetchdecode: EVEX with imm_mode = %u", imm_mode));
+      return(-1);
     }
   }
 
   if (! assign_srcs(i, ia_opcode, BX_FALSE, modrm.nnn, modrm.rm, vvv, vex_w, BX_TRUE, displ8))
     ia_opcode = BX_IA_ERROR;
 
-  // invalid opcode sanity checks
-  if ((attr & BxVexW0) != 0 && vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexW1) != 0 && !vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
   // EVEX specific #UD conditions
-  else if (i->getVL() > BX_VL512) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL0) != 0 && i->getVL() != BX_VL128) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL1) != 0 && i->getVL() == BX_VL128) {
+  if (i->getVL() > BX_VL512) {
     ia_opcode = BX_IA_ERROR;
   }
 #endif
@@ -1954,29 +2077,19 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   return ia_opcode;
 }
 
-int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   int ia_opcode = BX_IA_ERROR;
 
   // make sure XOP 0x8f prefix
   assert(b1 == 0x8f);
 
+  if (remain == 0)
+    return(-1);
+
   if ((*iptr & 0xc8) != 0xc8) {
     // not XOP prefix, decode regular opcode
-    struct bx_modrm modrm;
-    iptr = parseModrm32(iptr, remain, i, &modrm);
-    if (! iptr) 
-      return(-1);
-
-    if (modrm.nnn != 0)
-      return BX_IA_ERROR;
-
-    const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[i->osize()]);
-    ia_opcode = OpcodeInfoPtr->IA;
-
-    assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-    return ia_opcode;
+    return decoder32_modrm(iptr, remain, i, b1, sse_prefix, opcode_table);
   }
 
 #if BX_SUPPORT_AVX
@@ -2010,65 +2123,34 @@ int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
   unsigned opcode_byte = *iptr++;
   opcode_byte += 256 * xop_opcext;
 
-  const BxExtOpcodeInfo_t *OpcodeInfoPtr = &BxOpcodeTableXOP[opcode_byte];
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
   struct bx_modrm modrm;
   iptr = parseModrm32(iptr, remain, i, &modrm);
   if (! iptr) 
     return(-1);
 
-  ia_opcode = WalkOpcodeTables(OpcodeInfoPtr, attr, BX_FALSE, modrm.modrm, sse_prefix, i->osize(), i->getVL(), vex_w);
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (i->modC0() ? (1 << MODC0_OFFSET) : 0) |
+                   (modrm.nnn << NNN_OFFSET) |
+                   (modrm.rm << RRR_OFFSET) |
+                   (vex_w << VEX_W_OFFSET) |
+                   (vex_l << VEX_VL_128_256_OFFSET);
+  if (i->modC0() && modrm.nnn == modrm.rm)
+    decmask |= (1 << SRC_EQ_DST_OFFSET);
 
-  unsigned imm_mode = attr & BxImmediate;
-  if (imm_mode) {
-    switch (imm_mode) {
-      case BxImmediate_Ib:
-        if (remain != 0) {
-          i->modRMForm.Ib[0] = *iptr;
-          remain--;
-        }
-        else {
-          return(-1);
-        }
-        break;
-      case BxImmediate_Id:
-        if (remain > 3) {
-          i->modRMForm.Id = FetchDWORD(iptr);
-          remain -= 4;
-        }
-        else {
-          return(-1);
-        }
-        break;
-      default:
-        BX_PANIC(("fetchdecode: XOP with imm_mode = %u", imm_mode));
-        break;
-    }
-  }
+  ia_opcode = findOpcode(BxOpcodeTableXOP[opcode_byte], decmask);
+
+  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+    return (-1);
 
   if (! assign_srcs(i, ia_opcode, BX_FALSE, modrm.nnn, modrm.rm, vvv, vex_w))
     ia_opcode = BX_IA_ERROR;
-
-  // invalid opcode sanity checks
-  if ((attr & BxVexW0) != 0 && vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexW1) != 0 && !vex_w) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL0) != 0 && i->getVL() != BX_VL128) {
-    ia_opcode = BX_IA_ERROR;
-  }
-  else if ((attr & BxVexL1) != 0 && i->getVL() == BX_VL128) {
-    ia_opcode = BX_IA_ERROR;
-  }
 #endif
 
   return ia_opcode;
 }
 
-int decoder32_fp_escape(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder32_fp_escape(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
 #if BX_SUPPORT_FPU == 0
   return BX_IA_FPUESC;
@@ -2107,171 +2189,7 @@ int decoder32_fp_escape(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i,
 #endif
 }
 
-int decoder32_sse(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[sse_prefix]);
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  unsigned imm_mode = attr & BxImmediate;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, 0 /* imm_mode2 */) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-int decoder32_sse_osize(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  unsigned osize = i->osize();
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[osize * 4 + sse_prefix]);
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  unsigned imm_mode = attr & BxImmediate;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, 0 /* imm_mode2 */) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-int decoder32_group_nnn(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[modrm.nnn]);
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  unsigned imm_mode = attr & BxImmediate;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, 0 /* imm_mode2 */) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-int decoder32_group_nnn_osize(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  unsigned osize = i->osize();
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[modrm.nnn + osize * 8]);
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  unsigned imm_mode = attr & BxImmediate;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, 0 /* imm_mode2 */) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-int decoder32_sse_group_nnn(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[sse_prefix + modrm.nnn * 4]);
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  unsigned imm_mode = attr & BxImmediate;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, 0 /* imm_mode2 */) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-// special case for 0F 01 opcode - G7 group
-int decoder32_group7(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr;
-  if (modrm.mod != 0xc0) {
-    // mem form
-    OpcodeInfoPtr = &(opcode_table[modrm.nnn]);
-  }
-  else {
-    // reg form - special opcode table
-    OpcodeInfoPtr = &(BxOpcodeTable0F01[modrm.modrm & 0x3f]);
-  }
-
-  int ia_opcode = OpcodeInfoPtr->IA;
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  if (attr == BxNoPrefixSSE && sse_prefix)
-    ia_opcode = BX_IA_ERROR;
-#if BX_SUPPORT_X86_64
-  // SWAPGS is valid only in 64-bit mode
-  if (ia_opcode == BX_IA_SWAPGS)
-    ia_opcode = BX_IA_ERROR;
-#endif
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-// special case for 0F C7 opcode - G9 group
-int decoder32_group9(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  unsigned osize = i->osize();
-
-  // opcode requires modrm byte
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  static const BxExtOpcodeInfo_t BxOpcodeTable0FC7[2] = {
-    /* 0F C7 /w */ { BxGroup9, BX_IA_ERROR, BxOpcodeInfoG9w },
-    /* 0F C7 /d */ { BxGroup9, BX_IA_ERROR, BxOpcodeInfoG9d }
-  };
-
-  const BxExtOpcodeInfo_t *OpcodeInfoPtr = &(BxOpcodeTable0FC7[osize]);
-  Bit16u attr = OpcodeInfoPtr->Attr;
-  int ia_opcode = WalkOpcodeTables(OpcodeInfoPtr, attr, BX_FALSE, modrm.modrm, sse_prefix, osize, i->getVL(), 0 /* vex_w */);
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-// special case for 0F AE opcode - G15 group
-int decoder32_group15(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder32_modrm(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   // opcode requires modrm byte
   struct bx_modrm modrm;
@@ -2279,73 +2197,58 @@ int decoder32_group15(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, u
   if (! iptr) 
     return(-1);
 
-  const BxOpcodeInfo_t *OpcodeInfoPtr;
-  if (modrm.mod == 0xc0) {
-    OpcodeInfoPtr = &(BxOpcodeTable0FAE_G15_R32[modrm.nnn]);
-  }
-  else {
-    OpcodeInfoPtr = &(BxOpcodeTable0FAE_G15M[modrm.nnn * 4 + sse_prefix]);
-  }
-  int ia_opcode = OpcodeInfoPtr->IA;
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (sse_prefix << SSE_PREFIX_OFFSET) |
+                   (i->modC0() ? (1 << MODC0_OFFSET) : 0) |
+                   (modrm.nnn << NNN_OFFSET) |
+                   (modrm.rm << RRR_OFFSET);
+  if (i->modC0() && modrm.nnn == modrm.rm)
+    decmask |= (1 << SRC_EQ_DST_OFFSET);
 
-  Bit16u attr = OpcodeInfoPtr->Attr;
-  if (attr == BxNoPrefixSSE && sse_prefix)
-    ia_opcode = BX_IA_ERROR;
+  Bit16u ia_opcode = findOpcode((Bit64u *) opcode_table, decmask);
 
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-// special case for 0F 78 opcode (SSE4A)
-int decoder32_group17a(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  // opcode requires modrm byte
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  int ia_opcode = BX_IA_ERROR;
-  if (sse_prefix) {
-    // handle SSE4A extension, decode manually
-    switch (sse_prefix) {
-    case SSE_PREFIX_66:
-      if (modrm.nnn == 0) ia_opcode = BX_IA_EXTRQ_UdqIbIb;
-      break;
-    case SSE_PREFIX_F3:
-      ia_opcode = BX_IA_ERROR;
-      break;
-    case SSE_PREFIX_F2:
-      ia_opcode = BX_IA_INSERTQ_VdqUqIbIb;
-      break;
-    default:
-      break;
-    }
-
-    if (decodeImmediate32(iptr, remain, i, BxImmediate_Ib, BxImmediate_Ib2) < 0)
-      return (-1);
-  }
-  else {
-    const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[0]);
-    ia_opcode = OpcodeInfoPtr->IA;
-  }
+  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+    return (-1);
 
   assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
 
   return ia_opcode;
 }
 
-int decoder_creg32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
+  unsigned rm = b1 & 0x7;
+  unsigned nnn = (b1 >> 3) & 0x7;
+  i->assertModC0();
+
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (sse_prefix << SSE_PREFIX_OFFSET) |
+                   (1 << MODC0_OFFSET);
+  if (nnn == rm)
+    decmask |= (1 << SRC_EQ_DST_OFFSET);
+
+  Bit16u ia_opcode = findOpcode((Bit64u *) opcode_table, decmask);
+
+  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+    return (-1);
+
+  assign_srcs(i, ia_opcode, nnn, rm);
+
+  return ia_opcode;
+}
+
+int decoder_creg32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
+{
+  // MOVs with CRx and DRx always use register ops and ignore the mod field.
+  assert((b1 & ~7) == 0x120);
+
   // opcode requires modrm byte
   if (remain == 0)
     return(-1);
   remain--;
-  unsigned b2 = *iptr++;
-
-  // MOVs with CRx and DRx always use register ops and ignore the mod field.
-  assert((b1 & ~7) == 0x120);
+  unsigned b2 = *iptr++; // fetch modrm byte
 
   // Parse mod-nnn-rm and related bytes
   unsigned nnn = (b2 >> 3) & 0x7;
@@ -2353,110 +2256,48 @@ int decoder_creg32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
 
   i->assertModC0();
 
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &opcode_table[0];
-  if (b1 == 0x120 || b1 == 0x122)
-     OpcodeInfoPtr = &(opcode_table[nnn]);
-  int ia_opcode = OpcodeInfoPtr->IA;
+  Bit32u decmask = (i->osize() << OS32_OFFSET) |
+                   (i->asize() << AS32_OFFSET) |
+                   (sse_prefix << SSE_PREFIX_OFFSET) |
+                   (i->modC0() ? (1 << MODC0_OFFSET) : 0) |
+                   (nnn << NNN_OFFSET) |
+                   (rm << RRR_OFFSET);
+
+  Bit16u ia_opcode = findOpcode((Bit64u *) opcode_table, decmask);
 
   assign_srcs(i, ia_opcode, nnn, rm);
 
   return ia_opcode;
 }
 
-int decoder_lzcnt_tzcnt32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder32_3dnow(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
-  unsigned osize = i->osize();
-
-  // opcode requires modrm byte
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[osize]);
-  if (sse_prefix == SSE_PREFIX_F3) {
-    if (b1 == 0x1bc)
-      OpcodeInfoPtr = &(BxOpcodeTable0FBC_TZCNT[osize]);
-    else
-      OpcodeInfoPtr = &(BxOpcodeTable0FBD_LZCNT[osize]);
-  }
-  int ia_opcode = OpcodeInfoPtr->IA;
-
-  assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
-
-  return ia_opcode;
-}
-
-int decoder_modrm32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  unsigned osize = i->osize();
-
-  // opcode requires modrm byte
-  struct bx_modrm modrm;
-  iptr = parseModrm32(iptr, remain, i, &modrm);
-  if (! iptr) 
-    return(-1);
-
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[osize]);
-  Bit16u attr = OpcodeInfoPtr->Attr;
-  int ia_opcode = OpcodeInfoPtr->IA;
-
-  unsigned imm_mode  = attr & BxImmediate,
-           imm_mode2 = attr & BxImmediate2; // for SSE4A from AMD
-  if (decodeImmediate32(iptr, remain, i, imm_mode, imm_mode2) < 0)
-    return (-1);
-
-  // check forbidden SSE prefixes
-  unsigned group = attr & BxGroupX;
-  if (group) {
-    if (group < BxPrefixSSE) {
-      /* For opcodes with only one allowed SSE prefix */
-      if (sse_prefix != (group >> 4)) {
-        return BX_IA_ERROR;
-      }
-    }
-    if (group & BxNoPrefixSSE) {
-      if (sse_prefix)
-        return BX_IA_ERROR;
-    }
-  }
+  Bit16u ia_opcode = BX_IA_ERROR;
 
 #if BX_SUPPORT_3DNOW
-  if(b1 == 0x10f)
-    ia_opcode = Bx3DNowOpcode[i->modRMForm.Ib[0]];
-#endif
+  // opcode requires modrm byte
+  struct bx_modrm modrm;
+  iptr = parseModrm32(iptr, remain, i, &modrm);
+  if (! iptr) 
+    return(-1);
+
+  if (remain != 0) {
+    i->modRMForm.Ib[0] = *iptr;
+    remain--;
+  }
+  else {
+    return(-1);
+  }
+
+  ia_opcode = Bx3DNowOpcode[i->modRMForm.Ib[0]];
 
   assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
+#endif
 
   return ia_opcode;
 }
 
-int decoder32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
-{
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[i->osize()]);
-  Bit16u attr = OpcodeInfoPtr->Attr;
-
-  // Opcode does not require a MODRM byte.
-  unsigned group = attr & BxGroupX;
-  if (group == BxNoPrefixSSE && sse_prefix)
-    return BX_IA_ERROR;
-  int ia_opcode = OpcodeInfoPtr->IA;
-
-  unsigned rm = b1 & 0x7;
-  unsigned nnn = (b1 >> 3) & 0x7;
-  i->assertModC0();
-
-  unsigned imm_mode  = attr & BxImmediate,
-           imm_mode2 = attr & BxImmediate2;
-  if (decodeImmediate32(iptr, remain, i, imm_mode, imm_mode2) < 0)
-    return (-1);
-
-  assign_srcs(i, ia_opcode, nnn, rm);
-
-  return ia_opcode;
-}
-
-int decoder32_nop(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder32_nop(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   assert(b1 == 0x90);
 
@@ -2468,32 +2309,52 @@ int decoder32_nop(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
     return BX_IA_NOP;
 }
 
-int decoder_simple32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder_simple32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   i->assertModC0();
 
-  const BxOpcodeInfo_t *OpcodeInfoPtr = &(opcode_table[0]);
-  int ia_opcode = OpcodeInfoPtr->IA;
+  const Bit64u *op = (const Bit64u *) opcode_table;
+
+  // no immediate expected, no sources expected, take first opcode
+  // check attributes ?
+  Bit64u ia_opcode = Bit16u(*op >> 48) & 0x7FFF; // upper bit indicates that parsing is done and doesn't belong to opcode
   return ia_opcode;
 }
 
-int decoder_ud32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const BxOpcodeInfo_t *opcode_table)
+int decoder_ud32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, const void *opcode_table)
 {
   return BX_IA_ERROR;
 }
 
-int fetchDecode32(const Bit8u *iptr, Bit32u fetchModeMask, bx_bool handle_lock_cr0, bxInstruction_c *i, unsigned remainingInPage)
+Bit16u findOpcode(const Bit64u *opMap, Bit32u decmask)
+{
+  Bit16u ia_opcode = BX_IA_ERROR;
+  Bit64u op;
+
+  do {
+    op = *opMap++;
+    Bit32u ignmsk = Bit32u(op) & 0xFFFFFF;
+    Bit32u opmsk  = Bit32u(op >> 24);
+    if ((opmsk & ignmsk) == (decmask & ignmsk)) {
+      ia_opcode = Bit16u(op >> 48) & 0x7FFF; // upper bit indicates that parsing is done and doesn't belong to opcode
+      break;
+    }
+  } while(Bit64s(op) > 0);
+
+  return ia_opcode;
+}
+
+int fetchDecode32(const Bit8u *iptr, bx_bool is_32, bxInstruction_c *i, unsigned remainingInPage)
 {
   if (remainingInPage > 15) remainingInPage = 15;
+  i->setILen(remainingInPage);
 
   unsigned remain = remainingInPage; // remain must be at least 1
   unsigned b1;
   int ia_opcode = BX_IA_ERROR;
   unsigned seg_override = BX_SEG_REG_NULL;
-  bx_bool is_32, os_32, lock = 0;
+  bx_bool os_32 = is_32, lock = 0;
   unsigned sse_prefix = SSE_PREFIX_NONE;
-
-  os_32 = is_32 = fetchModeMask & BX_FETCH_MODE_IS32_MASK;
 
   i->init(/*os32*/ is_32,  /*as32*/ is_32,
           /*os64*/     0,  /*as64*/     0);
@@ -2584,6 +2445,39 @@ fetch_b1:
   if (! BX_NULL_SEG_REG(seg_override))
     i->setSeg(seg_override);
 
+  Bit32u op_flags = BxOpcodesTable[ia_opcode].opflags;
+
+  if (lock) {
+    i->setLock();
+    // lock prefix not allowed or destination operand is not memory
+    if (i->modC0() || !(op_flags & BX_LOCKABLE)) {
+#if BX_CPU_LEVEL >= 6
+      if ((op_flags & BX_LOCKABLE) != 0) {
+        if (ia_opcode == BX_IA_MOV_CR0Rd)
+          i->setSrcReg(0, 8); // extend CR0 -> CR8
+        else if (ia_opcode == BX_IA_MOV_RdCR0)
+          i->setSrcReg(1, 8); // extend CR0 -> CR8
+        else
+          i->setIaOpcode(BX_IA_ERROR); // replace execution function with undefined-opcode
+      }
+      else
+#endif
+      {
+        // replace execution function with undefined-opcode
+        i->setIaOpcode(BX_IA_ERROR);
+      }
+    }
+  }
+
+  return(0);
+}
+
+#ifndef BX_STANDALONE_DECODER
+
+int assignHandler(bxInstruction_c *i, Bit32u fetchModeMask)
+{
+  unsigned ia_opcode = i->getIaOpcode();
+
   if (! i->modC0()) {
     i->execute1 = BxOpcodesTable[ia_opcode].execute1;
     i->handlers.execute2 = BxOpcodesTable[ia_opcode].execute2;
@@ -2605,27 +2499,6 @@ fetch_b1:
   BX_ASSERT(i->execute1);
 
   Bit32u op_flags = BxOpcodesTable[ia_opcode].opflags;
-
-  if (lock) {
-    i->setLock();
-    // lock prefix not allowed or destination operand is not memory
-    if (i->modC0() || !(op_flags & BX_LOCKABLE)) {
-#if BX_CPU_LEVEL >= 6
-      if (handle_lock_cr0 && (ia_opcode == BX_IA_MOV_CR0Rd || ia_opcode == BX_IA_MOV_RdCR0)) {
-        if (ia_opcode == BX_IA_MOV_CR0Rd)
-          i->setSrcReg(0, 8); // extend CR0 -> CR8
-        if (ia_opcode == BX_IA_MOV_RdCR0)
-          i->setSrcReg(1, 8); // extend CR0 -> CR8
-      }
-      else
-#endif
-      {
-        // replace execution function with undefined-opcode
-        i->execute1 = &BX_CPU_C::BxError;
-      }
-    }
-  }
-
 
 #if BX_SUPPORT_EVEX
   if ((op_flags & BX_PREPARE_EVEX) != 0 && i->getEvexb()) {
@@ -2680,137 +2553,12 @@ fetch_b1:
   return(0);
 }
 
-Bit16u WalkOpcodeTables(const BxExtOpcodeInfo_t *OpcodeInfoPtr, Bit16u &attr, bx_bool is_64, unsigned modrm, unsigned sse_prefix, unsigned osize, unsigned vex_vl, bx_bool vex_w)
-{
-  // Parse mod-nnn-rm and related bytes
-  unsigned mod_mem = (modrm & 0xc0) != 0xc0;
-  unsigned nnn = (modrm >> 3) & 0x7;
-//rm  = modrm & 0x7;
-
-  attr |= OpcodeInfoPtr->Attr;
-
-  while(attr & BxGroupX) {
-    Bit32u group = attr & BxGroupX;
-    attr &= ~BxGroupX;
-
-    // ignore 0x66 SSE prefix is required
-    if (group == BxPrefixSSEF2F3) {
-      if (sse_prefix == SSE_PREFIX_66) sse_prefix = SSE_PREFIX_NONE;
-      group = BxPrefixSSE;
-    }
-
-    if (group == BxNoPrefixSSE) {
-      /* For opcodes with no SSE prefix allowed */
-      if (sse_prefix) {
-        attr = 0;
-        return BX_IA_ERROR;
-      }
-      break;
-    }
-
-    if (group < BxPrefixSSE) {
-      /* For opcodes with only one allowed SSE prefix */
-      if (sse_prefix != (group >> 4)) {
-        attr = 0;
-        return BX_IA_ERROR;
-      }
-      break;
-    }
-
-    switch(group) {
-      case BxGroupN:
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[nnn]);
-        break;
-      case BxSplitGroupN:
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[nnn + (mod_mem << 3)]);
-        break;
-#if BX_SUPPORT_AVX
-      case BxSplitMod11B:
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[mod_mem]);
-        break;
-#endif
-#if BX_SUPPORT_EVEX
-      case BxSplitVexVL:
-        if (vex_vl > BX_VLMAX) {
-          attr = 0;
-          return BX_IA_ERROR;
-        }
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[vex_vl]);
-        break;
-#endif
-      case BxPrefixSSE:
-        /* For SSE opcodes look into another 3-entry table
-                   with the opcode prefixes (NONE, 0x66, 0xF3, 0xF2) */
-        if (sse_prefix) {
-          OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[sse_prefix-1]);
-          break;
-        }
-        continue;
-      case BxPrefixSSE4:
-        /* For SSE opcodes look into another 4-entry table
-           with the opcode prefixes (NONE, 0x66, 0xF3, 0xF2) */
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[sse_prefix]);
-        break;
-      case BxPrefixSSE2:
-        /* For SSE opcodes look into another 2-entry table
-           with the opcode prefixes (NONE, 0x66), 0xF2 and 0xF3 not allowed */
-        if (sse_prefix > SSE_PREFIX_66) {
-          attr = 0;
-          return BX_IA_ERROR;
-        }
-        OpcodeInfoPtr = &(OpcodeInfoPtr->AnotherArray[sse_prefix]);
-        break;
-      default:
-        BX_PANIC(("WalkOpcodeTables: Unknown opcode group %x", group));
-        return BX_IA_ERROR;
-    }
-
-    /* get additional attributes from group table */
-    attr |= OpcodeInfoPtr->Attr;
-  }
-
-  Bit16u ia_opcode = OpcodeInfoPtr->IA;
-
-  if (ia_opcode != BX_IA_ERROR) {
-    unsigned has_alias = attr & BxAlias;
-    if (has_alias) {
-      unsigned alias = 0;
-      if (has_alias == BxAliasSSE) {
-        alias = sse_prefix;
-      }
-#if BX_SUPPORT_AVX
-      else {
-        // VexW64 is ignored in 32-bit mode
-        if (has_alias == BxAliasVexW || is_64) {
-          alias = vex_w;
-        }
-      }
-#endif
-      ia_opcode += alias;
-    }
-  }
-
-  return (ia_opcode);
-}
-
-const char *get_bx_opcode_name(Bit16u ia_opcode)
-{
-  static const char* BxOpcodeNamesTable[BX_IA_LAST] =
-  {
-#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) #a,
-#include "ia_opcodes.h"
-  };
-#undef  bx_define_opcode
-
-  return (ia_opcode < BX_IA_LAST) ? BxOpcodeNamesTable[ia_opcode] : 0;
-}
-
 void BX_CPU_C::init_FetchDecodeTables(void)
 {
   static Bit8u BxOpcodeFeatures[BX_IA_LAST] =
   {
 #define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) d,
-#include "ia_opcodes.h"
+#include "ia_opcodes.def"
   };
 #undef  bx_define_opcode
 
@@ -2847,7 +2595,7 @@ void BX_CPU_C::init_FetchDecodeTables(void)
       BxOpcodesTable[n].execute1 = &BX_CPU_C::BxError;
       BxOpcodesTable[n].execute2 = &BX_CPU_C::BxError;
       // won't allow this new #UD opcode to check prepare_SSE and similar
-      BxOpcodesTable[n].src[3] = 0;
+      BxOpcodesTable[n].opflags = 0;
     }
   }
 
@@ -2867,4 +2615,28 @@ void BX_CPU_C::init_FetchDecodeTables(void)
     BxOpcodesTable[BX_IA_TZCNT_GqEq] = BxOpcodesTable[BX_IA_BSF_GqEq];
 #endif
   }
+
+  // handle lock MOV CR0 AMD extension
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_ALT_MOV_CR8)) {
+    BxOpcodesTable[BX_IA_MOV_CR0Rd].opflags |= BX_LOCKABLE;
+    BxOpcodesTable[BX_IA_MOV_RdCR0].opflags |= BX_LOCKABLE;
+#if BX_SUPPORT_X86_64
+    BxOpcodesTable[BX_IA_MOV_CR0Rq].opflags |= BX_LOCKABLE;
+    BxOpcodesTable[BX_IA_MOV_RqCR0].opflags |= BX_LOCKABLE;
+#endif
+  }
+}
+
+#endif
+
+const char *get_bx_opcode_name(Bit16u ia_opcode)
+{
+  static const char* BxOpcodeNamesTable[BX_IA_LAST] =
+  {
+#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) #a,
+#include "ia_opcodes.def"
+  };
+#undef  bx_define_opcode
+
+  return (ia_opcode < BX_IA_LAST) ? BxOpcodeNamesTable[ia_opcode] : 0;
 }

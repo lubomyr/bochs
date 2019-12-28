@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -128,6 +128,7 @@
 #define BX_HAVE_MKSTEMP 0
 #define BX_HAVE_SYS_MMAN_H 0
 #define BX_HAVE_XPM_H 0
+#define BX_HAVE_XRANDR_H 0
 #define BX_HAVE_TIMELOCAL 0
 #define BX_HAVE_GMTIME 0
 #define BX_HAVE_MKTIME 0
@@ -307,6 +308,11 @@
 #else
   #define BX_USE_WIN32CONFIG 0
 #endif
+
+// set to 1 if wxMSW is a unicode version
+#define WX_MSW_UNICODE 0
+// set to GDK major version for wxGTK
+#define WX_GDK_VERSION 0
 
 // A certain functions must NOT be fastcall even if compiled with fastcall
 // option, and those are callbacks from Windows which are defined either 
@@ -918,6 +924,9 @@ typedef
 
 // I/O Interface to debugger
 #define BX_SUPPORT_IODEBUG 0
+
+// Legacy feature disabled by default
+#define BX_LOAD32BITOSHACK 0
 
 #ifdef WIN32
 #define BX_FLOPPY0_NAME "Floppy Disk A:"

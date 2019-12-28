@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dnssearch.cc 12356 2014-06-04 19:46:21Z sshwarts $
+// $Id: dnssearch.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Domain search option for DHCP (RFC 3397)
@@ -25,10 +25,10 @@
  * THE SOFTWARE.
  */
 
+#include "slirp.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "slirp.h"
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP
 

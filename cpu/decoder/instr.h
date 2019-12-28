@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instr.h 13052 2017-01-28 19:25:30Z sshwarts $
+// $Id: instr.h 13553 2019-02-17 21:22:54Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2016-2017 Stanislav Shwartsman
@@ -28,9 +28,26 @@ extern bx_address bx_asize_mask[];
 
 const char *get_bx_opcode_name(Bit16u ia_opcode);
 
+class BX_CPU_C;
+class bxInstruction_c;
+
+#ifndef BX_STANDALONE_DECODER
+
+// <TAG-TYPE-EXECUTEPTR-START>
+#if BX_USE_CPU_SMF
+typedef void (BX_CPP_AttrRegparmN(1) *BxExecutePtr_tR)(bxInstruction_c *);
+#else
+typedef void (BX_CPU_C::*BxExecutePtr_tR)(bxInstruction_c *) BX_CPP_AttrRegparmN(1);
+#endif
+// <TAG-TYPE-EXECUTEPTR-END>
+
+#endif
+
 // <TAG-CLASS-INSTRUCTION-START>
 class bxInstruction_c {
 public:
+
+#ifndef BX_STANDALONE_DECODER
   // Function pointers; a function to resolve the modRM address
   // given the current state of the CPU and the instruction data,
   // and a function to execute the instruction after resolving
@@ -41,6 +58,7 @@ public:
     BxExecutePtr_tR execute2;
     bxInstruction_c *next;
   } handlers;
+#endif
 
   struct {
     // 15...0 opcode
@@ -50,6 +68,7 @@ public:
     //  3...0 ilen (0..15)
     Bit8u ilen;
 
+#define BX_LOCK_PREFIX_USED 1
     //  7...6 lockUsed, repUsed (0=none, 1=0xF0, 2=0xF2, 3=0xF3)
     //  5...5 extend8bit
     //  4...4 mod==c0 (modrm)
@@ -78,7 +97,7 @@ public:
       union {
         Bit32u Id;
         Bit16u Iw[2];
-        // use Ib[3] as AVX mask register
+        // use Ib[3] as EVEX mask register
         // use Ib[2] as AVX attributes
         //     7..5 (unused)
         //     4..4 VEX.W
@@ -117,9 +136,11 @@ public:
   }
 #endif
 
+#ifndef BX_STANDALONE_DECODER
   BX_CPP_INLINE BxExecutePtr_tR execute2(void) const {
     return handlers.execute2;
   }
+#endif
 
   BX_CPP_INLINE unsigned seg(void) const {
     return metaData[BX_INSTR_METADATA_SEG];
@@ -268,7 +289,10 @@ public:
   }
 
   BX_CPP_INLINE void setLock(void) {
-    setLockRepUsed(1);
+    setLockRepUsed(BX_LOCK_PREFIX_USED);
+  }
+  BX_CPP_INLINE bx_bool getLock(void) const {
+    return lockRepUsedValue() == BX_LOCK_PREFIX_USED;
   }
 
   BX_CPP_INLINE unsigned getVL(void) const {
@@ -289,6 +313,8 @@ public:
   BX_CPP_INLINE unsigned getVexW(void) const {
     return modRMForm.Ib[2] & (1 << 4);
   }
+#else
+  BX_CPP_INLINE unsigned getVexW(void) const { return 0; }
 #endif
 
 #if BX_SUPPORT_EVEX
@@ -356,7 +382,7 @@ public:
     metaInfo.metaInfo1 |= (1<<4);
   }
 
-#if BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS && BX_ENABLE_TRACE_LINKING
+#if BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS && BX_ENABLE_TRACE_LINKING && !defined(BX_STANDALONE_DECODER)
   BX_CPP_INLINE bxInstruction_c* getNextTrace(Bit32u currTraceLinkTimeStamp) {
     if (currTraceLinkTimeStamp > modRMForm.Id2) handlers.next = NULL;
     return handlers.next;
@@ -369,12 +395,5 @@ public:
 
 };
 // <TAG-CLASS-INSTRUCTION-END>
-
-enum {
-#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) a,
-#include "ia_opcodes.h"
-   BX_IA_LAST
-};
-#undef  bx_define_opcode
 
 #endif

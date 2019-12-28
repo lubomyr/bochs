@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gui.cc 13174 2017-04-02 16:16:53Z vruppert $
+// $Id: gui.cc 13617 2019-11-24 18:13:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2017  The Bochs Project
@@ -1214,7 +1214,7 @@ int bx_gui_c::bx_printf(const char *s)
       }
     }
     if (console.cursor_y == 25) {
-      memcpy(console.screen, console.screen+160, BX_CONSOLE_BUFSIZE-160);
+      memmove(console.screen, console.screen+160, BX_CONSOLE_BUFSIZE-160);
       console.cursor_y--;
       offset = console.cursor_y * 160 + console.cursor_x * 2;
       for (int j = 0; j < 160; j+=2) {
@@ -1252,7 +1252,7 @@ char* bx_gui_c::bx_gets(char *s, int size)
         keystr[0] = 0x08;
         bx_printf(keystr);
       }
-      memcpy(&console.keys[0], &console.keys[1], 15);
+      memmove(&console.keys[0], &console.keys[1], 15);
       console.n_keys--;
     }
 #if BX_HAVE_USLEEP

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rfb.cc 13075 2017-02-18 11:13:56Z vruppert $
+// $Id: rfb.cc 13293 2017-09-10 15:55:13Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2000  Psyon.Org!
@@ -46,6 +46,9 @@
 #include "rfb.h"
 #include "rfbkeys.h"
 
+#include "bxthread.h"
+
+
 class bx_rfb_gui_c : public bx_gui_c {
 public:
   bx_rfb_gui_c (void) {}
@@ -86,9 +89,6 @@ IMPLEMENT_GUI_PLUGIN_CODE(rfb)
 #include <sys/errno.h>
 #else
 #include <errno.h>
-#endif
-#if !defined(__CYGWIN__)
-#include <pthread.h>
 #endif
 
 typedef int SOCKET;
@@ -1254,9 +1254,9 @@ end_of_thread:
 
 void rfbStartThread()
 {
-  BX_THREAD_ID(threadID);
+  BX_THREAD_VAR(thread_var);
 
-  BX_THREAD_CREATE(rfbServerThreadInit, NULL, threadID);
+  BX_THREAD_CREATE(rfbServerThreadInit, NULL, thread_var);
 }
 
 void HandleRfbClient(SOCKET sClient)

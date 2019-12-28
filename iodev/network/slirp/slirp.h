@@ -1,14 +1,18 @@
-/////////////////////////////////////////////////////////////////////////
-// $Id: slirp.h 12578 2014-12-25 17:58:26Z vruppert $
+// $Id: slirp.h 13588 2019-11-02 19:30:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#ifdef __CYGWIN__
+#define __USE_W32_SOCKETS
+#define _WIN32
+#endif
+
 #include "config.h"
 #include "slirp_config.h"
 
-#if defined(WIN32) && !defined(__CYGWIN__)
+#ifdef _WIN32
 
 #if !defined(_MSC_VER)
 # include <inttypes.h>
@@ -24,6 +28,13 @@ typedef char *caddr_t;
 # include <sys/timeb.h>
 # include <iphlpapi.h>
 
+#if defined(__CYGWIN__) && defined(_WIN64)
+#undef FIONBIO
+#define FIONBIO 0x8004667e
+#undef FIONREAD
+#define FIONREAD 0x4004667f
+#endif
+
 #else
 # define ioctlsocket ioctl
 # define closesocket(s) close(s)
@@ -33,7 +44,7 @@ typedef char *caddr_t;
 #endif
 
 #include <sys/types.h>
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__linux__)
 #include <stdint.h>
 #include <sys/wait.h>
 #endif

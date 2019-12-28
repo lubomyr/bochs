@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.h 12865 2015-10-22 18:13:59Z vruppert $
+// $Id: usb_msd.h 13476 2018-03-23 19:02:38Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
 //
 //  Copyright (c) 2006 CodeSourcery.
 //  Written by Paul Brook
-//  Copyright (C) 2009-2015  The Bochs Project
+//  Copyright (C) 2009-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -69,6 +69,7 @@ private:
     char info_txt[BX_PATHNAME_LEN];
     char journal[BX_PATHNAME_LEN]; // undoable / volatile disk only
     int size; // VVFAT disk only
+    unsigned sect_size; // sector size for disks only (default = 512 bytes)
     // members handled by runtime config
     bx_bool status_changed;
     // members handled by save/restore

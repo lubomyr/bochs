@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.c 13073 2017-02-16 21:43:52Z vruppert $
+// $Id: rombios.c 13498 2018-05-03 17:54:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2018  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -134,6 +134,7 @@
 // i440FX is emulated by Bochs and QEMU
 #define PCI_FIXED_HOST_BRIDGE 0x12378086  ;; i440FX PCI bridge
 #define PCI_FIXED_HOST_BRIDGE2 0x01228086 ;; i430FX PCI bridge
+#define PCI_FIXED_HOST_BRIDGE3 0x71908086 ;; i440BX PCI bridge
 
 // #20  is dec 20
 // #$20 is hex 20 = 32
@@ -674,7 +675,7 @@ typedef struct {
 
   // for access to EBDA area
   //     The EBDA structure should conform to
-  //     http://www.frontiernet.net/~fys/rombios.htm document
+  //     http://www.fysnet.net/rombios.htm document
   //     I made the ata and cdemu structs begin at 0x121 in the EBDA seg
   // EBDA must be at most 768 bytes; it lives at EBDA_SEG, and the boot
   // device tables are at IPL_SEG
@@ -927,9 +928,9 @@ Bit16u cdrom_boot();
 
 #endif // BX_ELTORITO_BOOT
 
-static char bios_cvs_version_string[] = "$Revision: 13073 $ $Date: 2017-02-16 22:43:52 +0100 (Do, 16. Feb 2017) $";
+static char bios_cvs_version_string[] = "$Revision: 13498 $ $Date: 2018-05-03 19:54:31 +0200 (Do, 03. Mai 2018) $";
 
-#define BIOS_COPYRIGHT_STRING "(c) 2001-2017  The Bochs Project"
+#define BIOS_COPYRIGHT_STRING "(c) 2001-2018  The Bochs Project"
 
 #if DEBUG_ATA
 #  define BX_DEBUG_ATA(a...) BX_DEBUG(a)
@@ -2592,7 +2593,7 @@ void ata_detect( )
   hdcount=cdcount=0;
 
   for(device=0; device<BX_MAX_ATA_DEVICES; device++) {
-    Bit16u iobase1, iobase2;
+    Bit16u iobase1, iobase2, blksize;
     Bit8u  channel, slave, shift;
     Bit8u  sc, sn, cl, ch, st;
 
@@ -2648,7 +2649,7 @@ void ata_detect( )
     // Now we send a IDENTIFY command to ATA device
     if(type == ATA_TYPE_ATA) {
       Bit32u sectors_low, sectors_high;
-      Bit16u cylinders, heads, spt, blksize;
+      Bit16u cylinders, heads, spt;
       Bit8u  translation, removable, mode;
 
       //Temporary values to do the transfer
@@ -2756,7 +2757,6 @@ void ata_detect( )
     if(type == ATA_TYPE_ATAPI) {
 
       Bit8u  type, removable, mode;
-      Bit16u blksize;
 
       //Temporary values to do the transfer
       write_byte_DS(&EbdaData->ata.devices[device].device,ATA_DEVICE_CDROM);
@@ -2783,12 +2783,26 @@ void ata_detect( )
     {
       Bit32u sizeinmb;
       Bit16u ataversion;
-      Bit8u  c, i, version, model[41];
+      Bit8u  c, i, lshift, rshift, version, model[41];
 
       switch (type) {
         case ATA_TYPE_ATA:
-          sizeinmb = (read_dword_DS(&EbdaData->ata.devices[device].sectors_high) << 21)
-            | (read_dword_DS(&EbdaData->ata.devices[device].sectors_low) >> 11);
+          // Ben: be sides, this trick doesn't work an very large disks...
+          switch (blksize) {
+            case 1024:
+              lshift = 22;
+              rshift = 10;
+              break;
+            case 4096:
+              lshift = 24;
+              rshift = 8;
+              break;
+            default:
+              lshift = 21;
+              rshift = 11;
+          }
+          sizeinmb = (read_dword_DS(&EbdaData->ata.devices[device].sectors_high) << lshift)
+            | (read_dword_DS(&EbdaData->ata.devices[device].sectors_low) >> rshift);
         case ATA_TYPE_ATAPI:
           // Read ATA/ATAPI version
           ataversion=((Bit16u)(read_byte_SS(buffer+161))<<8)|read_byte_SS(buffer+160);
@@ -2956,7 +2970,12 @@ Bit32u lba_low, lba_high;
   iobase1 = read_word_DS(&EbdaData->ata.channels[channel].iobase1);
   iobase2 = read_word_DS(&EbdaData->ata.channels[channel].iobase2);
   mode    = read_byte_DS(&EbdaData->ata.devices[device].mode);
-  blksize = 0x200; // was = read_word_DS(&EbdaData->ata.devices[device].blksize);
+  if ((command == ATA_CMD_IDENTIFY_DEVICE) ||
+      (command == ATA_CMD_IDENTIFY_DEVICE_PACKET)) {
+    blksize = 0x200;
+  } else {
+    blksize = read_word_DS(&EbdaData->ata.devices[device].blksize);
+  }
   if (mode == ATA_MODE_PIO32) blksize>>=2;
   else blksize>>=1;
 
@@ -9572,16 +9591,19 @@ bios32_entry_point:
   in  eax, dx
 #ifdef PCI_FIXED_HOST_BRIDGE
   cmp eax, #PCI_FIXED_HOST_BRIDGE
-  je pci_found
+  je  pci_found
+#endif
 #ifdef PCI_FIXED_HOST_BRIDGE2
   cmp eax, #PCI_FIXED_HOST_BRIDGE2
-  jne unknown_service
+  je  pci_found
 #endif
-#else
+#ifdef PCI_FIXED_HOST_BRIDGE3
+  cmp eax, #PCI_FIXED_HOST_BRIDGE3
+  je  pci_found
+#endif
   ;; say ok if a device is present
   cmp eax, #0xffffffff
   je unknown_service
-#endif
 pci_found:
   mov ebx, #0x000f0000
   mov ecx, #0x10000
@@ -9606,7 +9628,7 @@ pcibios_protected:
   cmp al, #0x01 ;; installation check
   jne pci_pro_f02
   mov bx, #0x0210
-  mov cx, #0
+  call pci_pro_get_max_bus ;; sets CX
   mov edx, #0x20494350 ;; "PCI "
   mov al, #0x01
   jmp pci_pro_ok
@@ -9628,7 +9650,7 @@ pci_pro_devloop:
   dec si
 pci_pro_nextdev:
   inc bx
-  cmp bx, #0x0100
+  cmp bx, #0x0200
   jne pci_pro_devloop
   mov ah, #0x86
   jmp pci_pro_fail
@@ -9649,7 +9671,7 @@ pci_pro_devloop2:
   dec si
 pci_pro_nextdev2:
   inc bx
-  cmp bx, #0x0100
+  cmp bx, #0x0200
   jne pci_pro_devloop2
   mov ah, #0x86
   jmp pci_pro_fail
@@ -9743,6 +9765,23 @@ pci_pro_ok:
   clc
   retf
 
+pci_pro_get_max_bus:
+  push eax
+  mov  eax, #0x80000000
+  mov  dx, #0x0cf8
+  out  dx, eax
+  mov  dx, #0x0cfc
+  in   eax, dx
+  mov  cx, #0
+#ifdef PCI_FIXED_HOST_BRIDGE3
+  cmp  eax, #PCI_FIXED_HOST_BRIDGE3
+  jne  pci_pro_no_i440bx
+  mov  cx, #0x0001
+#endif
+pci_pro_no_i440bx:
+  pop  eax
+  ret
+
 pci_pro_select_reg:
   push edx
   mov eax, #0x800000
@@ -9769,15 +9808,18 @@ pcibios_real:
 #ifdef PCI_FIXED_HOST_BRIDGE
   cmp eax, #PCI_FIXED_HOST_BRIDGE
   je  pci_present
+#endif
 #ifdef PCI_FIXED_HOST_BRIDGE2
   cmp eax, #PCI_FIXED_HOST_BRIDGE2
   je  pci_present
 #endif
-#else
+#ifdef PCI_FIXED_HOST_BRIDGE3
+  cmp eax, #PCI_FIXED_HOST_BRIDGE3
+  je  pci_present
+#endif
   ;; say ok if a device is present
   cmp eax, #0xffffffff
   jne  pci_present
-#endif
   pop dx
   pop eax
   mov ah, #0xff
@@ -9790,7 +9832,7 @@ pci_present:
   jne pci_real_f02
   mov ax, #0x0001
   mov bx, #0x0210
-  mov cx, #0
+  call pci_real_get_max_bus ;; sets CX
   mov edx, #0x20494350 ;; "PCI "
   mov edi, #0xf0000
   mov di, #pcibios_protected
@@ -9816,7 +9858,7 @@ pci_real_devloop:
   dec si
 pci_real_nextdev:
   inc bx
-  cmp bx, #0x0100
+  cmp bx, #0x0200
   jne pci_real_devloop
   mov dx, cx
   shr ecx, #16
@@ -9839,7 +9881,7 @@ pci_real_devloop2:
   dec si
 pci_real_nextdev2:
   inc bx
-  cmp bx, #0x0100
+  cmp bx, #0x0200
   jne pci_real_devloop2
   mov dx, cx
   shr ecx, #16
@@ -9960,6 +10002,23 @@ pci_real_ok:
   clc
   ret
 
+pci_real_get_max_bus:
+  push eax
+  mov  eax, #0x80000000
+  mov  dx, #0x0cf8
+  out  dx, eax
+  mov  dx, #0x0cfc
+  in   eax, dx
+  mov  cx, #0
+#ifdef PCI_FIXED_HOST_BRIDGE3
+  cmp  eax, #PCI_FIXED_HOST_BRIDGE3
+  jne  pci_real_no_i440bx
+  mov  cx, #0x0001
+#endif
+pci_real_no_i440bx:
+  pop  eax
+  ret
+
 pci_real_select_reg:
   push dx
   mov eax, #0x800000
@@ -10039,7 +10098,7 @@ pci_routing_table_structure_start:
   dw 0xdef8 ;; IRQ bitmap INTD#
   db 3 ;; physical slot (0 = embedded)
   db 0 ;; reserved
-  ;; 5th slot entry: 4rd PCI slot
+  ;; 5th slot entry: 4th PCI slot
   db 0 ;; pci bus number
   db 0x28 ;; pci device number (bit 7-3)
   db 0x60 ;; link value INTA#
@@ -10052,7 +10111,7 @@ pci_routing_table_structure_start:
   dw 0xdef8 ;; IRQ bitmap INTD#
   db 4 ;; physical slot (0 = embedded)
   db 0 ;; reserved
-  ;; 6th slot entry: 5rd PCI slot
+  ;; 6th slot entry: 5th PCI slot
   db 0 ;; pci bus number
   db 0x30 ;; pci device number (bit 7-3)
   db 0x61 ;; link value INTA#
@@ -10522,11 +10581,26 @@ pnpbios_real:
 pnpbios_code:
   mov  ax, 8[ebp]
   cmp  ax, #0x60 ;; Get Version and Installation Check
+  jnz  pnpbios_00
+  push es
+  push di
+  les  di, 10[ebp]
+  mov  ax, #0x0101
+  stosw
+  pop  di
+  pop  es
+  xor  ax, ax ;; SUCCESS
+  jmp  pnpbios_exit
+pnpbios_00:
+  cmp  ax, #0x00 ;; Get Number of System Device Nodes
   jnz  pnpbios_fail
   push es
   push di
-  les  di, 10[bp]
-  mov  ax, #0x0101
+  les  di, 10[ebp]
+  mov  al, #0x00
+  stosb
+  les  di, 14[ebp]
+  mov  ax, #0x0000
   stosw
   pop  di
   pop  es

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: scalar_arith.h 12892 2016-02-21 18:39:10Z sshwarts $
+// $Id: scalar_arith.h 13322 2017-10-21 19:57:12Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2014 Stanislav Shwartsman
@@ -23,6 +23,13 @@
 
 #ifndef BX_SCALAR_ARITH_FUNCTIONS_H
 #define BX_SCALAR_ARITH_FUNCTIONS_H
+
+// parity
+
+BX_CPP_INLINE unsigned parity_byte(Bit8u val_8)
+{
+  return (0x9669 >> ((val_8 ^ (val_8 >> 4)) & 0xF)) & 1;
+}
 
 // tzcnt
 
@@ -107,6 +114,15 @@ BX_CPP_INLINE unsigned lzcntq(Bit64u val_64)
 }
 
 // popcnt
+
+BX_CPP_INLINE unsigned popcntb(Bit8u val_8)
+{
+  val_8 = ((val_8>>1) & 0x55) + (val_8 & 0x55);
+  val_8 = ((val_8>>2) & 0x33) + (val_8 & 0x33);
+  val_8 = ((val_8>>4) & 0x0F) + (val_8 & 0x0F);
+
+  return val_8;
+}
 
 BX_CPP_INLINE unsigned popcntw(Bit16u val_16)
 {

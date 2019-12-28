@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fpu_cmov.cc 11415 2012-09-12 21:08:40Z vruppert $
+// $Id: fpu_cmov.cc 13466 2018-02-16 07:57:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2012 Stanislav Shwartsman
+//   Copyright (c) 2012-2018 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -28,13 +28,13 @@
 
 #if BX_SUPPORT_FPU
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVB_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVB_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (get_CF())
@@ -44,13 +44,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVB_ST0_STj(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVBE_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVBE_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (get_CF() || get_ZF())
@@ -60,13 +60,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVBE_ST0_STj(bxInstruction_c *i
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVE_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVE_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (get_ZF())
@@ -76,13 +76,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVE_ST0_STj(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNB_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNB_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (! get_CF())
@@ -92,13 +92,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNB_ST0_STj(bxInstruction_c *i
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNBE_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNBE_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (! get_CF() && ! get_ZF())
@@ -108,13 +108,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNBE_ST0_STj(bxInstruction_c *
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNE_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNE_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (! get_ZF())
@@ -124,13 +124,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNE_ST0_STj(bxInstruction_c *i
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNU_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNU_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (! get_PF())
@@ -140,13 +140,13 @@ BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVNU_ST0_STj(bxInstruction_c *i
   BX_NEXT_INSTR(i);
 }
 
-BX_INSF_TYPE BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVU_ST0_STj(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::FCMOVU_ST0_STj(bxInstruction_c *i)
 {
   BX_CPU_THIS_PTR prepareFPU(i);
   BX_CPU_THIS_PTR FPU_update_last_instruction(i);
 
   if (IS_TAG_EMPTY(0) || IS_TAG_EMPTY(i->src())) {
-     FPU_stack_underflow(0);
+     FPU_stack_underflow(i, 0);
   }
   else {
      if (get_PF())

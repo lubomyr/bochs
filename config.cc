@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: config.cc 13146 2017-03-24 18:23:07Z vruppert $
+// $Id: config.cc 13624 2019-11-30 17:51:19Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -45,7 +45,6 @@ Bit8u bx_user_plugin_count = 0;
 
 extern bx_debug_t bx_dbg;
 
-static const char *get_builtin_variable(const char *varname);
 static int parse_line_unformatted(const char *context, char *line);
 static int parse_line_formatted(const char *context, int num_params, char *params[]);
 static int parse_bochsrc(const char *rcfile);
@@ -175,17 +174,16 @@ void bx_init_std_nic_options(const char *name, bx_list_c *menu)
   };
 
   bx_param_enum_c *ethmod;
-  bx_param_string_c *macaddr;
+  bx_param_bytestring_c *macaddr;
   bx_param_filename_c *path, *bootrom;
   char descr[120];
 
   sprintf(descr, "MAC address of the %s device. Don't use an address of a machine on your net.", name);
-  macaddr = new bx_param_string_c(menu,
+  macaddr = new bx_param_bytestring_c(menu,
     "mac",
     "MAC Address",
     descr,
     "", 6);
-  macaddr->set_options(macaddr->RAW_BYTES);
   macaddr->set_initial_val("\xfe\xfd\xde\xad\xbe\xef");
   macaddr->set_separator(':');
   ethmod = new bx_param_enum_c(menu,
@@ -349,6 +347,12 @@ void bx_init_options()
       "dumpstats mode",
       "dump statistics period",
       0, BX_MAX_BIT32U, 0);
+  // unlock disk images
+  new bx_param_bool_c(menu,
+      "unlock_images",
+      "Unlock disk images",
+      "Unlock disk images leftover previous from Bochs session",
+      0);
 
   // subtree for setting up log actions by device in bochsrc
   bx_list_c *logfn = new bx_list_c(menu, "logfn", "Logfunctions");
@@ -857,7 +861,7 @@ void bx_init_options()
   bx_list_c *pci = new bx_list_c(root_param, "pci", "PCI Options");
 
   // pci options
-  static const char *pci_chipset_names[] = { "i430fx", "i440fx", NULL };
+  static const char *pci_chipset_names[] = { "i430fx", "i440fx", "i440bx", NULL };
   deplist = new bx_list_c(NULL);
 
   enabled = new bx_param_bool_c(pci,
@@ -1113,6 +1117,7 @@ void bx_init_options()
       "Skips check for the 0xaa55 signature on floppy boot device.",
       0);
 
+#if BX_LOAD32BITOSHACK
   // loader hack
   bx_list_c *load32bitos = new bx_list_c(boot_params, "load32bitos", "32-bit OS Loader Hack");
 
@@ -1148,6 +1153,7 @@ void bx_init_options()
   whichOS->set_dependent_list(load32bitos->clone(), 1);
   whichOS->set_dependent_bitmap(Load32bitOSNone, 0);
   whichOS->set(Load32bitOSNone);
+#endif
   boot_params->set_options(menu->SHOW_PARENT);
 
   // floppy subtree
@@ -1391,6 +1397,17 @@ void bx_init_options()
         0);
       spt->set_ask_format("Enter number of sectors per track: [%d] ");
 
+      static const char *sector_size_names[] = { "512", "1024", "4096", NULL };
+
+      bx_param_enum_c *sect_size = new bx_param_enum_c(menu,
+        "sect_size",
+        "Sector size",
+        "Size of a disk sector in bytes",
+        sector_size_names,
+        BX_SECT_SIZE_512,
+        BX_SECT_SIZE_512);
+      sect_size->set_ask_format("Enter sector size: [%s]");
+
       bx_param_string_c *model = new bx_param_string_c(menu,
         "model",
         "Model name",
@@ -1427,8 +1444,8 @@ void bx_init_options()
 
       // all items depend on the drive type
       type->set_dependent_list(menu->clone(), 0);
-      type->set_dependent_bitmap(BX_ATA_DEVICE_DISK, 0x7e6);
-      type->set_dependent_bitmap(BX_ATA_DEVICE_CDROM, 0x30a);
+      type->set_dependent_bitmap(BX_ATA_DEVICE_DISK, 0xfe6);
+      type->set_dependent_bitmap(BX_ATA_DEVICE_CDROM, 0x60a);
 
       type->set_handler(bx_param_handler);
     }
@@ -1847,7 +1864,7 @@ static int parse_bochsrc(const char *rcfile)
   return retval;
 }
 
-static const char *get_builtin_variable(const char *varname)
+const char *get_builtin_variable(const char *varname)
 {
 #ifdef WIN32
   int code;
@@ -1862,7 +1879,7 @@ static const char *get_builtin_variable(const char *varname)
   else {
     if (!strcmp(varname, "BXSHARE")) {
 #ifdef WIN32
-      wsprintf(keyname, "Software\\Bochs %s", VER_STRING);
+      wsprintf(keyname, "Software\\Bochs");
       code = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyname, 0, KEY_READ, &hkey);
       if (code == ERROR_SUCCESS) {
         data[0] = 0;
@@ -2148,8 +2165,7 @@ static int parse_debug_symbols(const char *context, const char **params, int num
 
 static int parse_param_bool(const char *input, int len, const char *param)
 {
-  if (input[len] == '0' || input[len] == '1') {
-    SIM->get_param_bool(param)->set(input[len] - '0');
+  if (SIM->get_param_bool(param)->parse_param(&input[len]) == 1) {
     return 0;
   }
 
@@ -2227,26 +2243,22 @@ int bx_parse_usb_port_params(const char *context, bx_bool devopt, const char *pa
 
 int bx_parse_nic_params(const char *context, const char *param, bx_list_c *base)
 {
-  int tmp[6];
-  char tmpchar[6];
   int valid = 0;
   int n;
+  bx_param_bytestring_c *bsp;
 
   if (!strncmp(param, "enabled=", 8)) {
-    n = atol(&param[8]);
-    SIM->get_param_bool("enabled", base)->set(n);
+    SIM->get_param_bool("enabled", base)->parse_param(&param[8]);
+    n = SIM->get_param_bool("enabled", base)->get();
     if (n == 0) valid |= 0x80;
     else valid &= 0x7f;
   } else if (!strncmp(param, "mac=", 4)) {
-    n = sscanf(&param[4], "%x:%x:%x:%x:%x:%x",
-               &tmp[0],&tmp[1],&tmp[2],&tmp[3],&tmp[4],&tmp[5]);
-    if (n != 6) {
+    bsp = (bx_param_bytestring_c*)SIM->get_param_string("mac", base);
+    if (bsp->parse_param(&param[4]) == 0) {
       PARSE_ERR(("%s: '%s' mac address malformed.", context, base->get_name()));
+    } else {
+      valid |= 0x04;
     }
-    for (n=0;n<6;n++)
-      tmpchar[n] = (unsigned char)tmp[n];
-    SIM->get_param_string("mac", base)->set(tmpchar);
-    valid |= 0x04;
   } else if (!strncmp(param, "ethmod=", 7)) {
     if (!SIM->get_param_enum("ethmod", base)->set_by_name(&param[7]))
       PARSE_ERR(("%s: ethernet module '%s' not available", context, &param[7]));
@@ -2310,8 +2322,10 @@ static int parse_line_formatted(const char *context, int num_params, char *param
       pname = strtok(param, "=");
       val = strtok(NULL, "");
       if (val != NULL) {
-        if (isdigit(val[0])) {
-          SIM->opt_plugin_ctrl(pname, atoi(val));
+        if (!strcmp(val, "0") || !stricmp(val, "false")) {
+          SIM->opt_plugin_ctrl(pname, 0);
+        } else if (!strcmp(val, "1") || !stricmp(val, "true")) {
+          SIM->opt_plugin_ctrl(pname, 1);
         } else {
           PARSE_ERR(("%s: plugin_ctrl directive malformed", context));
         }
@@ -2723,7 +2737,12 @@ static int parse_line_formatted(const char *context, int num_params, char *param
     }
     for (i=1; i<num_params; i++) {
       if (!strncmp(params[i], "extension=", 10)) {
-        SIM->get_param_string(BXPN_VGA_EXTENSION)->set(&params[i][10]);
+        const char *vgaext = &params[i][10];
+        SIM->get_param_string(BXPN_VGA_EXTENSION)->set(vgaext);
+        if ((strlen(vgaext) > 0) &&
+            (strcmp(vgaext, "none") && strcmp(vgaext, "vbe") && strcmp(vgaext, "cirrus"))) {
+          PLUG_load_vga_plugin(vgaext);
+        }
       } else if (!strncmp(params[i], "update_freq=", 12)) {
         SIM->get_param_num(BXPN_VGA_UPDATE_FREQUENCY)->set(atol(&params[i][12]));
       } else if (!strncmp(params[i], "realtime=", 9)) {
@@ -2985,6 +3004,7 @@ static int parse_line_formatted(const char *context, int num_params, char *param
       PARSE_ERR(("%s: port_e9_hack directive malformed.", context));
     }
   } else if (!strcmp(params[0], "load32bitOSImage")) {
+#if BX_LOAD32BITOSHACK
     if ((num_params!=4) && (num_params!=5)) {
       PARSE_ERR(("%s: load32bitOSImage directive: wrong # args.", context));
     }
@@ -3015,6 +3035,9 @@ static int parse_line_formatted(const char *context, int num_params, char *param
       SIM->get_param_string(BXPN_LOAD32BITOS_INITRD)->set(&params[4][7]);
     }
     PARSE_WARN(("%s: WARNING: This Bochs feature is not maintained yet", context));
+#else
+    PARSE_ERR(("%s: load32bitOSImage: BX_LOAD32BITOSHACK must be set to 1.", context));
+#endif
   } else if (!strcmp(params[0], "user_plugin")) {
 #if BX_PLUGINS
     char tmpname[80];
@@ -3084,23 +3107,15 @@ int bx_write_param_list(FILE *fp, bx_list_c *base, const char *optname, bx_bool 
       strcat(bxrcline, tmpstr);
       switch (param->get_type()) {
         case BXT_PARAM_NUM:
-          if (((bx_param_num_c*)param)->get_base() == BASE_DEC) {
-            sprintf(tmpstr, FMT_LL "d", ((bx_param_num_c*)param)->get64());
-          } else {
-            sprintf(tmpstr, "0x" FMT_LL "x", ((bx_param_num_c*)param)->get64());
-          }
-          break;
         case BXT_PARAM_BOOL:
-          sprintf(tmpstr, "%d", ((bx_param_bool_c*)param)->get());
-          break;
         case BXT_PARAM_ENUM:
-          sprintf(tmpstr, "%s", ((bx_param_enum_c*)param)->get_selected());
-          break;
         case BXT_PARAM_STRING:
-          ((bx_param_string_c*)param)->sprint(tmpstr, BX_PATHNAME_LEN, 1);
+        case BXT_PARAM_BYTESTRING:
+          param->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
           break;
         default:
           BX_ERROR(("bx_write_param_list(): unsupported parameter type"));
+          tmpstr[0] = 0;
       }
       strcat(bxrcline, tmpstr);
       p++;
@@ -3161,16 +3176,16 @@ int bx_write_floppy_options(FILE *fp, int drive)
 int bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base)
 {
   int i;
-  char tmpname[20], tmpstr[BX_PATHNAME_LEN];
+  char tmpname[24], tmpstr[BX_PATHNAME_LEN];
 
   fprintf(fp, "usb_%s: enabled=%d", base->get_name(), SIM->get_param_bool("enabled", base)->get());
   if (SIM->get_param_bool("enabled", base)->get()) {
     for (i = 1; i <= maxports; i++) {
       sprintf(tmpname, "port%d.device", i);
-      SIM->get_param_string(tmpname, base)->sprint(tmpstr, BX_PATHNAME_LEN, 1);
+      SIM->get_param_string(tmpname, base)->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
       fprintf(fp, ", port%d=%s", i, tmpstr);
       sprintf(tmpname, "port%d.options", i);
-      SIM->get_param_string(tmpname, base)->sprint(tmpstr, BX_PATHNAME_LEN, 1);
+      SIM->get_param_string(tmpname, base)->dump_param(tmpstr, BX_PATHNAME_LEN, 1);
       fprintf(fp, ", options%d=%s", i, tmpstr);
     }
   }
@@ -3178,6 +3193,7 @@ int bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base)
   return 0;
 }
 
+#if BX_LOAD32BITOSHACK
 int bx_write_loader_options(FILE *fp)
 {
   if (SIM->get_param_enum(BXPN_LOAD32BITOS_WHICH)->get() == Load32bitOSNone) {
@@ -3191,6 +3207,7 @@ int bx_write_loader_options(FILE *fp)
       SIM->get_param_string(BXPN_LOAD32BITOS_INITRD)->getptr());
   return 0;
 }
+#endif
 
 int bx_write_clock_cmos_options(FILE *fp)
 {
@@ -3412,7 +3429,9 @@ int bx_write_configuration(const char *rc, int overwrite)
   fprintf(fp, "screenmode: name=\"%s\"\n", SIM->get_param_string(BXPN_SCREENMODE)->getptr());
 #endif
   bx_write_clock_cmos_options(fp);
+#if BX_LOAD32BITOSHACK
   bx_write_loader_options(fp);
+#endif
   bx_write_log_options(fp, (bx_list_c*) SIM->get_param("log"));
   bx_write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_KEYBOARD), NULL, 0);
   bx_write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_MOUSE), NULL, 0);

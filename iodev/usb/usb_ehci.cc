@@ -1,10 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ehci.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: usb_ehci.cc 13497 2018-05-01 15:54:37Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Experimental USB EHCI adapter (partly ported from Qemu)
 //
-//  Copyright (C) 2015-2017  The Bochs Project
+//  Copyright (C) 2015-2018  The Bochs Project
 //
 //  Copyright(c) 2008  Emutex Ltd. (address@hidden)
 //  Copyright(c) 2011-2012 Red Hat, Inc.
@@ -245,10 +245,9 @@ void bx_usb_ehci_c::init(void)
   // 0x8086 = vendor (Intel)
   // 0x24cd = device (82801D)
   // revision number (0x10)
-  init_pci_conf(0x8086, 0x24cd, 0x10, 0x0c0320, 0x00);
-  BX_EHCI_THIS pci_conf[0x3d] = BX_PCI_INTD;
+  init_pci_conf(0x8086, 0x24cd, 0x10, 0x0c0320, 0x00, BX_PCI_INTD);
   BX_EHCI_THIS pci_conf[0x60] = 0x20;
-  BX_EHCI_THIS pci_base_address[0] = 0x0;
+  BX_EHCI_THIS init_bar_mem(0, IO_SPACE_SIZE, read_handler, write_handler);
 
   for (i = 0; i < 3; i++) {
     BX_EHCI_THIS uhci[i] = new bx_uhci_core_c();
@@ -431,12 +430,7 @@ void bx_usb_ehci_c::after_restore_state(void)
 {
   int i;
 
-  if (DEV_pci_set_base_mem(BX_EHCI_THIS_PTR, read_handler, write_handler,
-                         &BX_EHCI_THIS pci_base_address[0],
-                         &BX_EHCI_THIS pci_conf[0x10],
-                         256))  {
-     BX_INFO(("new base address: 0x%04X", BX_EHCI_THIS pci_base_address[0]));
-  }
+  bx_pci_device_c::after_restore_pci_state(NULL);
   for (i=0; i<USB_EHCI_PORTS; i++) {
     if (BX_EHCI_THIS hub.usb_port[i].device != NULL) {
       BX_EHCI_THIS hub.usb_port[i].device->after_restore_state();
@@ -650,7 +644,7 @@ bx_bool bx_usb_ehci_c::read_handler(bx_phy_address addr, unsigned len, void *dat
 {
   Bit32u val = 0, val_hi = 0;
   int port;
-  const Bit32u offset = (Bit32u) (addr - BX_EHCI_THIS pci_base_address[0]);
+  const Bit32u offset = (Bit32u) (addr - BX_EHCI_THIS pci_bar[0].addr);
 
   if (offset < OPS_REGS_OFFSET) {
     switch (offset) {
@@ -756,7 +750,7 @@ bx_bool bx_usb_ehci_c::write_handler(bx_phy_address addr, unsigned len, void *da
   Bit32u value_hi = *((Bit32u *) ((Bit8u *) data + 4));
   bx_bool oldcfg, oldpo, oldpr, oldfpr;
   int i, port;
-  const Bit32u offset = (Bit32u) (addr - BX_EHCI_THIS pci_base_address[0]);
+  const Bit32u offset = (Bit32u) (addr - BX_EHCI_THIS pci_bar[0].addr);
 
   // modify val and val_hi per len of data to write
   switch (len) {
@@ -857,7 +851,7 @@ bx_bool bx_usb_ehci_c::write_handler(bx_phy_address addr, unsigned len, void *da
           }
           if (oldpr && !BX_EHCI_THIS hub.usb_port[port].portsc.pr) {
             if (BX_EHCI_THIS hub.usb_port[port].device != NULL) {
-              DEV_usb_send_msg(BX_EHCI_THIS hub.usb_port[port].device, USB_MSG_RESET);
+              BX_EHCI_THIS hub.usb_port[port].device->usb_send_msg(USB_MSG_RESET);
               BX_EHCI_THIS hub.usb_port[port].portsc.csc = 0;
               if (BX_EHCI_THIS hub.usb_port[port].device->get_speed() == USB_SPEED_HIGH) {
                 BX_EHCI_THIS hub.usb_port[port].portsc.ped = 1;
@@ -1053,7 +1047,7 @@ void bx_usb_ehci_c::free_queue(EHCIQueue *q, const char *warn)
 
   cancelled = BX_EHCI_THIS cancel_queue(q);
   if (warn && cancelled > 0) {
-    BX_ERROR(("%s",warn));
+    BX_ERROR(("%s", warn));
   }
   QTAILQ_REMOVE(head, q, next);
   free(q);
@@ -2241,15 +2235,13 @@ void bx_usb_ehci_c::runtime_config(void)
 // pci configuration space write callback handler
 void bx_usb_ehci_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len)
 {
-  Bit8u value8, oldval;
-  bx_bool baseaddr_change = 0;
-
   if (((address >= 0x14) && (address <= 0x3b)) || (address > 0x80))
     return;
 
+  BX_DEBUG_PCI_WRITE(address, value, io_len);
   for (unsigned i=0; i<io_len; i++) {
-    value8 = (value >> (i*8)) & 0xFF;
-    oldval = BX_EHCI_THIS pci_conf[address+i];
+    Bit8u value8 = (value >> (i*8)) & 0xFF;
+//  Bit8u oldval = BX_EHCI_THIS pci_conf[address+i];
     switch (address+i) {
       case 0x04:
         value8 &= 0x06; // (bit 0 is read only for this card) (we don't allow port IO)
@@ -2262,20 +2254,6 @@ void bx_usb_ehci_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_l
       case 0x3e: //
       case 0x3f: //
       case 0x60: //
-        break;
-      case 0x3c:
-        if (value8 != oldval) {
-          BX_INFO(("new irq line = %d", value8));
-          BX_EHCI_THIS pci_conf[address+i] = value8;
-        }
-        break;
-      case 0x10:  // low 8 bits of BAR are R/O
-        value8 = 0x00;
-      case 0x11:
-      case 0x12:
-      case 0x13:
-        baseaddr_change |= (value8 != oldval);
-        BX_EHCI_THIS pci_conf[address+i] = value8;
         break;
       case 0x2c:
       case 0x2d:
@@ -2291,21 +2269,6 @@ void bx_usb_ehci_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_l
         BX_EHCI_THIS pci_conf[address+i] = value8;
     }
   }
-  if (baseaddr_change) {
-    if (DEV_pci_set_base_mem(BX_EHCI_THIS_PTR, read_handler, write_handler,
-                             &BX_EHCI_THIS pci_base_address[0],
-                             &BX_EHCI_THIS pci_conf[0x10],
-                             IO_SPACE_SIZE)) {
-      BX_INFO(("new base address: 0x%08x", BX_EHCI_THIS pci_base_address[0]));
-    }
-  }
-
-  if (io_len == 1)
-    BX_DEBUG(("write PCI register 0x%02X value 0x%02X (len=1)", address, value));
-  else if (io_len == 2)
-    BX_DEBUG(("write PCI register 0x%02X value 0x%04X (len=2)", address, value));
-  else if (io_len == 4)
-    BX_DEBUG(("write PCI register 0x%02X value 0x%08X (len=4)", address, value));
 }
 
 // USB runtime parameter handler

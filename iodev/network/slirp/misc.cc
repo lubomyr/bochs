@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc.cc 12994 2016-12-13 20:22:28Z vruppert $
+// $Id: misc.cc 13207 2017-04-23 08:38:16Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski.
@@ -8,12 +8,23 @@
  * terms and conditions of the copyright.
  */
 
+#include "slirp.h"
+#include "libslirp.h"
+
 #ifndef _WIN32
 #include <dirent.h>
 #endif
 
-#include "slirp.h"
-#include "libslirp.h"
+#ifdef ANDROID
+int getdtablesize()
+{
+    struct rlimit r;
+    if (getrlimit(RLIMIT_NOFILE, &r) < 0) {
+        return sysconf(_SC_OPEN_MAX);
+    }
+    return r.rlim_cur;
+}
+#endif
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP
 
@@ -141,7 +152,7 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
 		    bind(s, (struct sockaddr *)&addr, addrlen) < 0 ||
 		    listen(s, 1) < 0) {
 #ifdef DEBUG
-			lprint("Error: inet socket: %s\n", strerror(errno));
+			printf("Error: inet socket: %s\n", strerror(errno));
 #endif
 			closesocket(s);
 
@@ -153,7 +164,7 @@ fork_exec(struct socket *so, const char *ex, int do_pty)
 	switch(pid) {
 	 case -1:
 #ifdef DEBUG
-		lprint("Error: fork failed: %s\n", strerror(errno));
+		printf("Error: fork failed: %s\n", strerror(errno));
 #endif
 		close(s);
 		return 0;
