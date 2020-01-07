@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: stack.cc 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: stack.cc 13658 2019-12-09 18:37:02Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2012-2019 Stanislav Shwartsman
@@ -108,7 +108,7 @@ void BX_CPP_AttrRegparmN(2) BX_CPU_C::stackPrefetch(bx_address offset, unsigned 
   }
 
   Bit64u lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 0);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us write access from this CPL
     // Assuming that we always can read if write access is OK

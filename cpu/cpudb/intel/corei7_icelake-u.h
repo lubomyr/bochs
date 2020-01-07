@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_icelake-u.h 13570 2019-09-24 20:26:14Z sshwarts $
+// $Id: corei7_icelake-u.h 13768 2020-01-03 19:53:20Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2014 Stanislav Shwartsman
@@ -24,7 +24,7 @@
 #ifndef BX_COREI7_ICELAKE_CPUID_DEFINITIONS_H
 #define BX_COREI7_ICELAKE_CPUID_DEFINITIONS_H
 
-#if BX_SUPPORT_X86_64 && BX_SUPPORT_AVX && BX_SUPPORT_EVEX
+#if BX_SUPPORT_X86_64 && BX_SUPPORT_AVX
 
 #include "cpu/cpuid.h"
 
@@ -62,7 +62,6 @@ private:
   void get_ext_cpuid_leaf_1(cpuid_function_t *leaf) const;
   void get_ext_cpuid_leaf_6(cpuid_function_t *leaf) const;
   void get_ext_cpuid_leaf_7(cpuid_function_t *leaf) const;
-  void get_ext_cpuid_leaf_8(cpuid_function_t *leaf) const;
 };
 
 extern bx_cpuid_t *create_corei7_icelake_u_cpuid(BX_CPU_C *cpu);

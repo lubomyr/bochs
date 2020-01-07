@@ -1,7 +1,10 @@
 package net.sourceforge.bochs;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,6 +24,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
+import static android.app.Activity.RESULT_OK;
 import static android.content.Context.MODE_PRIVATE;
 
 public class StorageTabFragment extends Fragment implements OnClickListener {
@@ -50,8 +54,9 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     private String m_chosenDir = "";
     private boolean m_newFolderEnabled = true;
     final String SAVED_PATH = "saved_path";
-
+    final int REQUEST_FILE = 1;
     private enum Requestor {ATA0_MASTER, ATA0_SLAVE, ATA1_MASTER, ATA1_SLAVE, FLOPPY_A, FLOPPY_B}
+    private Requestor requestType = null;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -96,6 +101,50 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
                 else
                     fileSelection(Requestor.ATA1_SLAVE, Config.ataType[ATA_1_SLAVE]);
                 break;
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
+            Uri uri = data.getData();
+            String uriPath = uri.getPath();
+            String filename = uriPath.substring(uriPath.lastIndexOf("/") + 1, uriPath.length());
+            String filepathWOType = uriPath.substring(uriPath.lastIndexOf(":") + 1, uriPath.length());
+            String filepath = filepathWOType.startsWith("/") ? filepathWOType
+                    : Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filepathWOType;
+            saveLastPath(filepath);
+            switch (requestType) {
+                case ATA0_MASTER:
+                    tvAta[ATA_0_MASTER].setText(filename);
+                    Config.ataImage[ATA_0_MASTER] = filepath;
+                    Config.ataMode[ATA_0_MASTER] = getMode(filename);
+                    break;
+                case ATA0_SLAVE:
+                    tvAta[ATA_0_SLAVE].setText(filename);
+                    Config.ataImage[ATA_0_SLAVE] = filepath;
+                    Config.ataMode[ATA_0_SLAVE] = getMode(filename);
+                    break;
+                case ATA1_MASTER:
+                    tvAta[ATA_1_MASTER].setText(filename);
+                    Config.ataImage[ATA_1_MASTER] = filepath;
+                    Config.ataMode[ATA_1_MASTER] = getMode(filename);
+                    break;
+                case ATA1_SLAVE:
+                    tvAta[ATA_1_SLAVE].setText(filename);
+                    Config.ataImage[ATA_1_SLAVE] = filepath;
+                    Config.ataMode[ATA_1_SLAVE] = getMode(filename);
+                    break;
+                case FLOPPY_A:
+                    tvFloppy[FLOPPY_A].setText(filename);
+                    Config.floppyImage[FLOPPY_A] = filepath;
+                    break;
+                case FLOPPY_B:
+                    tvFloppy[FLOPPY_B].setText(filename);
+                    Config.floppyImage[FLOPPY_B] = filepath;
+                    break;
+            }
         }
     }
 
@@ -277,7 +326,7 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
     private void fileSelection(final Requestor num, String type) {
         // Set up extension
-        String extension[] = null;
+/*        String extension[] = null;
         switch (type) {
             case DISK:
                 extension = new String[]{".img", ".vmdk", ".vhd", ".vdi"};
@@ -288,48 +337,14 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
             case FLOPPY:
                 extension = new String[]{".img", ".ima"};
                 break;
-        }
-        FileChooser filechooser = new FileChooser(getActivity(), getLastPath(), extension);
-        filechooser.setFileListener(new FileChooser.FileSelectedListener() {
-            @Override
-            public void fileSelected(final File file) {
-                String filename = file.getAbsolutePath();
-                saveLastPath(file.getPath());
-                switch (num) {
-                    case ATA0_MASTER:
-                        tvAta[ATA_0_MASTER].setText(file.getName());
-                        Config.ataImage[ATA_0_MASTER] = filename;
-                        Config.ataMode[ATA_0_MASTER] = getMode(file.getName());
-                        break;
-                    case ATA0_SLAVE:
-                        tvAta[ATA_0_SLAVE].setText(file.getName());
-                        Config.ataImage[ATA_0_SLAVE] = filename;
-                        Config.ataMode[ATA_0_SLAVE] = getMode(file.getName());
-                        break;
-                    case ATA1_MASTER:
-                        tvAta[ATA_1_MASTER].setText(file.getName());
-                        Config.ataImage[ATA_1_MASTER] = filename;
-                        Config.ataMode[ATA_1_MASTER] = getMode(file.getName());
-                        break;
-                    case ATA1_SLAVE:
-                        tvAta[ATA_1_SLAVE].setText(file.getName());
-                        Config.ataImage[ATA_1_SLAVE] = filename;
-                        Config.ataMode[ATA_1_SLAVE] = getMode(file.getName());
-                        break;
-                    case FLOPPY_A:
-                        tvFloppy[FLOPPY_A].setText(file.getName());
-                        Config.floppyImage[FLOPPY_A] = filename;
-                        break;
-                    case FLOPPY_B:
-                        tvFloppy[FLOPPY_B].setText(file.getName());
-                        Config.floppyImage[FLOPPY_B] = filename;
-                        break;
-                }
+        }*/
+        requestType = num;
 
-            }
-        });
+        Intent intent = new Intent()
+                .setType("*/*")
+                .setAction(Intent.ACTION_GET_CONTENT);
 
-        filechooser.showDialog();
+        startActivityForResult(Intent.createChooser(intent, "Select a file"), REQUEST_FILE);
     }
 
     private String getMode(String str) {

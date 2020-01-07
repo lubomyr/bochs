@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.c 13498 2018-05-03 17:54:31Z vruppert $
+// $Id: rombios.c 13752 2019-12-30 13:16:18Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -928,7 +928,7 @@ Bit16u cdrom_boot();
 
 #endif // BX_ELTORITO_BOOT
 
-static char bios_cvs_version_string[] = "$Revision: 13498 $ $Date: 2018-05-03 19:54:31 +0200 (Do, 03. Mai 2018) $";
+static char bios_svn_version_string[] = "$Revision: 13752 $ $Date: 2019-12-30 14:16:18 +0100 (Mon, 30 Dec 2019) $";
 
 #define BIOS_COPYRIGHT_STRING "(c) 2001-2018  The Bochs Project"
 
@@ -1988,7 +1988,7 @@ void
 print_bios_banner()
 {
   printf(BX_APPNAME" BIOS - build: %s\n%s\nOptions: ",
-    BIOS_BUILD_DATE, bios_cvs_version_string);
+    BIOS_BUILD_DATE, bios_svn_version_string);
   printf(
 #if BX_APM
   "apmbios "
@@ -2240,7 +2240,7 @@ log_bios_start()
 #if BX_DEBUG_SERIAL
   outb(BX_DEBUG_PORT+UART_LCR, 0x03); /* setup for serial logging: 8N1 */
 #endif
-  BX_INFO("%s\n", bios_cvs_version_string);
+  BX_INFO("%s\n", bios_svn_version_string);
 }
 
   bx_bool
@@ -11075,6 +11075,17 @@ normal_post:
   mov  ax, #0xc780
   call rom_scan
 
+  ;; Hack fix: SeaVGABIOS does not setup a video mode
+  mov  dx, #0x03d4
+  mov  al, #0x00
+  out  dx, al
+  inc  dx
+  in   al, dx
+  test al, al
+  jnz  vga_init_ok
+  mov  ax, #0x0003
+  int  #0x10
+vga_init_ok:
   call _print_bios_banner
 
   ;;

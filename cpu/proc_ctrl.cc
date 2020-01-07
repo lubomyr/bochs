@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: proc_ctrl.cc 13582 2019-10-24 19:49:25Z sshwarts $
+// $Id: proc_ctrl.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -760,6 +760,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSENTER(bxInstruction_c *i)
   }
 #endif
 
+#if BX_SUPPORT_CET
+  if (ShadowStackEnabled(CPL))
+    BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = SSP;
+  if (ShadowStackEnabled(0)) SSP = 0;
+  track_indirect(0);
+#endif
+
   parse_selector(BX_CPU_THIS_PTR msr.sysenter_cs_msr & BX_SELECTOR_RPL_MASK,
                        &BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector);
 
@@ -918,6 +925,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSEXIT(bxInstruction_c *i)
   BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.u.segment.l            = 0;
 #endif
 
+#if BX_SUPPORT_CET
+  if (ShadowStackEnabled(CPL))
+    SSP = BX_CPU_THIS_PTR msr.ia32_pl_ssp[3];
+#endif
+
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSEXIT,
                       FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
@@ -940,6 +952,10 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
   invalidate_prefetch_q();
 
   BX_INSTR_FAR_BRANCH_ORIGIN();
+
+#if BX_SUPPORT_CET
+  unsigned old_CPL = CPL;
+#endif
 
 #if BX_SUPPORT_X86_64
   if (long_mode())
@@ -1050,6 +1066,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSCALL(bxInstruction_c *i)
     BX_CPU_THIS_PTR clear_RF();
     RIP = temp_RIP;
   }
+
+#if BX_SUPPORT_CET
+  if (ShadowStackEnabled(old_CPL))
+    BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = SSP;
+  if (ShadowStackEnabled(0)) SSP = 0;
+  track_indirect(0);
+#endif
 
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSCALL,
                       FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
@@ -1185,6 +1208,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::SYSRET(bxInstruction_c *i)
 
   RIP = temp_RIP;
 
+#if BX_SUPPORT_CET
+  if (ShadowStackEnabled(CPL))
+    SSP = BX_CPU_THIS_PTR msr.ia32_pl_ssp[3];
+#endif
+
   BX_INSTR_FAR_BRANCH(BX_CPU_ID, BX_INSTR_IS_SYSRET,
                       FAR_BRANCH_PREV_CS, FAR_BRANCH_PREV_RIP,
                       BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value, RIP);
@@ -1303,9 +1331,9 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::WRGSBASE_Eq(bxInstruction_c *i)
 
 #if BX_SUPPORT_PKEYS
 
-void BX_CPU_C::set_PKRU(Bit32u pkru)
+void BX_CPU_C::set_PKRU(Bit32u pkru_val)
 {
-  BX_CPU_THIS_PTR pkru = RAX;
+  BX_CPU_THIS_PTR pkru = pkru_val;
 
   for (unsigned i=0; i<16; i++) {
     BX_CPU_THIS_PTR rd_pkey[i] = BX_CPU_THIS_PTR wr_pkey[i] =
@@ -1313,18 +1341,24 @@ void BX_CPU_C::set_PKRU(Bit32u pkru)
 
     if (long_mode() && BX_CPU_THIS_PTR cr4.get_PKE()) {
       // accessDisable bit set
-      if (pkru & (1<<(i*2))) {
+      if (pkru_val & (1<<(i*2))) {
         BX_CPU_THIS_PTR rd_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
         BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
       }
     
       // writeDisable bit set
-      if (pkru & (1<<(i*2+1))) {
+      if (pkru_val & (1<<(i*2+1))) {
         BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserWriteOK);
         if (BX_CPU_THIS_PTR cr0.get_WP())
           BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_SysWriteOK);
       }
     }
+
+#if BX_SUPPORT_CET
+    // replicate pkey access bits for shadow stack checks
+    BX_CPU_THIS_PTR rd_pkey[i] |= BX_CPU_THIS_PTR rd_pkey[i]<<4;
+    BX_CPU_THIS_PTR wr_pkey[i] |= BX_CPU_THIS_PTR wr_pkey[i]<<4;
+#endif
   }
 }
 

@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: call_far.cc 12845 2015-09-28 18:45:26Z sshwarts $
+// $Id: call_far.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2005-2012 Stanislav Shwartsman
+//   Copyright (c) 2005-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -55,6 +55,11 @@ BX_CPU_C::call_protected(bxInstruction_c *i, Bit16u cs_raw, bx_address disp)
   {
     check_cs(&cs_descriptor, cs_raw, BX_SELECTOR_RPL(cs_raw), CPL);
 
+#if BX_SUPPORT_CET
+    bx_address temp_LIP = get_laddr(BX_SEG_REG_CS, RIP);
+    Bit16u old_CS = BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value;
+#endif
+
 #if BX_SUPPORT_X86_64
     if (long_mode() && cs_descriptor.u.segment.l) {
       Bit64u temp_rsp = RSP; 
@@ -81,8 +86,7 @@ BX_CPU_C::call_protected(bxInstruction_c *i, Bit16u cs_raw, bx_address disp)
       // load code segment descriptor into CS cache
       // load CS with new code segment selector
       // set RPL of CS to CPL
-      branch_far64(&cs_selector, &cs_descriptor, disp, CPL);
-
+      branch_far(&cs_selector, &cs_descriptor, disp, CPL);
       RSP = temp_rsp;
     }
     else
@@ -127,13 +131,20 @@ BX_CPU_C::call_protected(bxInstruction_c *i, Bit16u cs_raw, bx_address disp)
       // load code segment descriptor into CS cache
       // load CS with new code segment selector
       // set RPL of CS to CPL
-      branch_far64(&cs_selector, &cs_descriptor, disp, CPL);
+      branch_far(&cs_selector, &cs_descriptor, disp, CPL);
 
       if (BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.u.segment.d_b)
         ESP = (Bit32u) temp_RSP;
       else
          SP = (Bit16u) temp_RSP;
     }
+
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(CPL)) {
+      call_far_shadow_stack_push(old_CS, temp_LIP, SSP);
+    }
+    track_indirect(CPL);
+#endif
 
     return;
   }
@@ -223,14 +234,14 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
   bx_descriptor_t cs_descriptor;
 
   // examine code segment selector in call gate descriptor
-  BX_DEBUG(("call_protected: call gate"));
+  BX_DEBUG(("call_gate: call gate"));
 
   Bit16u dest_selector = gate_descriptor->u.gate.dest_selector;
   Bit32u new_EIP       = gate_descriptor->u.gate.dest_offset;
 
   // selector must not be null else #GP(0)
   if ((dest_selector & 0xfffc) == 0) {
-    BX_ERROR(("call_protected: selector in gate null"));
+    BX_ERROR(("call_gate: selector in gate null"));
     exception(BX_GP_EXCEPTION, 0);
   }
 
@@ -247,13 +258,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
   if (cs_descriptor.valid==0 || cs_descriptor.segment==0 ||
       IS_DATA_SEGMENT(cs_descriptor.type) || cs_descriptor.dpl > CPL)
   {
-    BX_ERROR(("call_protected: selected descriptor is not code"));
+    BX_ERROR(("call_gate: selected descriptor is not code"));
     exception(BX_GP_EXCEPTION, dest_selector & 0xfffc);
   }
 
   // code segment must be present else #NP(selector)
   if (! IS_PRESENT(cs_descriptor)) {
-    BX_ERROR(("call_protected: code segment not present !"));
+    BX_ERROR(("call_gate: code segment not present !"));
     exception(BX_NP_EXCEPTION, dest_selector & 0xfffc);
   }
 
@@ -276,7 +287,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
     // check selector & descriptor for new SS:
     // selector must not be null, else #TS(0)
     if ((SS_for_cpl_x & 0xfffc) == 0) {
-      BX_ERROR(("call_protected: new SS null"));
+      BX_ERROR(("call_gate: new SS null"));
       exception(BX_TS_EXCEPTION, 0);
     }
 
@@ -289,14 +300,14 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
     // selector's RPL must equal DPL of code segment,
     //   else #TS(SS selector)
     if (ss_selector.rpl != cs_descriptor.dpl) {
-      BX_ERROR(("call_protected: SS selector.rpl != CS descr.dpl"));
+      BX_ERROR(("call_gate: SS selector.rpl != CS descr.dpl"));
       exception(BX_TS_EXCEPTION, SS_for_cpl_x & 0xfffc);
     }
 
     // stack segment DPL must equal DPL of code segment,
     //   else #TS(SS selector)
     if (ss_descriptor.dpl != cs_descriptor.dpl) {
-      BX_ERROR(("call_protected: SS descr.rpl != CS descr.dpl"));
+      BX_ERROR(("call_gate: SS descr.rpl != CS descr.dpl"));
       exception(BX_TS_EXCEPTION, SS_for_cpl_x & 0xfffc);
     }
 
@@ -305,13 +316,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
     if (ss_descriptor.valid==0 || ss_descriptor.segment==0 ||
         IS_CODE_SEGMENT(ss_descriptor.type) || !IS_DATA_SEGMENT_WRITEABLE(ss_descriptor.type))
     {
-      BX_ERROR(("call_protected: ss descriptor is not writable data seg"));
+      BX_ERROR(("call_gate: ss descriptor is not writable data seg"));
       exception(BX_TS_EXCEPTION, SS_for_cpl_x & 0xfffc);
     }
 
     // segment must be present, else #SS(SS selector)
     if (! IS_PRESENT(ss_descriptor)) {
-      BX_ERROR(("call_protected: ss descriptor not present"));
+      BX_ERROR(("call_gate: ss descriptor not present"));
       exception(BX_SS_EXCEPTION, SS_for_cpl_x & 0xfffc);
     }
 
@@ -419,9 +430,15 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
 
     // new eIP must be in code segment limit else #GP(0)
     if (new_EIP > cs_descriptor.u.segment.limit_scaled) {
-      BX_ERROR(("call_protected: EIP not within CS limits"));
+      BX_ERROR(("call_gate: EIP not within CS limits"));
       exception(BX_GP_EXCEPTION, 0);
     }
+
+#if BX_SUPPORT_CET
+    bx_address temp_LIP = get_laddr(BX_SEG_REG_CS, return_EIP);
+    unsigned old_SS_DPL = BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl;
+    unsigned old_CPL = CPL;
+#endif
 
     /* load SS descriptor */
     load_ss(&ss_selector, &ss_descriptor, cs_descriptor.dpl);
@@ -431,7 +448,23 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
     /* set CPL to stack segment DPL */
     /* set RPL of CS to CPL */
     load_cs(&cs_selector, &cs_descriptor, cs_descriptor.dpl);
+
     EIP = new_EIP;
+
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(old_CPL)) {
+      if (old_CPL == 3)
+        BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = SSP;
+    }
+
+    if(ShadowStackEnabled(CPL)) {
+      bx_address old_SSP = SSP;
+      shadow_stack_switch(BX_CPU_THIS_PTR msr.ia32_pl_ssp[CPL]);
+      if (old_SS_DPL != 3)
+        call_far_shadow_stack_push(return_CS, temp_LIP, old_SSP);
+    }
+    track_indirect(CPL);
+#endif
   }
   else   // CALL GATE TO SAME PRIVILEGE
   {
@@ -448,10 +481,22 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate(bx_descriptor_t *gate_descriptor
       push_16(IP);
     }
 
+#if BX_SUPPORT_CET
+    Bit32u temp_LIP = get_segment_base(BX_SEG_REG_CS) + ((gate_descriptor->type == BX_386_CALL_GATE) ? EIP : IP);
+    Bit16u old_CS = BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value;
+#endif
+
     // load CS:EIP from gate
     // load code segment descriptor into CS register
     // set RPL of CS to CPL
-    branch_far32(&cs_selector, &cs_descriptor, new_EIP, CPL);
+    branch_far(&cs_selector, &cs_descriptor, new_EIP, CPL);
+
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(CPL)) {
+      call_far_shadow_stack_push(old_CS, temp_LIP, SSP);
+    }
+    track_indirect(CPL);
+#endif
   }
 }
 
@@ -515,11 +560,17 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate64(bx_selector_t *gate_selector)
   Bit64u old_CS  = BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].selector.value;
   Bit64u old_RIP = RIP;
 
+#if BX_SUPPORT_CET
+  bx_address temp_LIP = get_laddr(BX_SEG_REG_CS, RIP);
+  unsigned old_SS_DPL = BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS].cache.dpl;
+  unsigned old_CPL = CPL;
+#endif
+
   // CALL GATE TO MORE PRIVILEGE
   // if non-conforming code segment and DPL < CPL then
   if (IS_CODE_SEGMENT_NON_CONFORMING(cs_descriptor.type) && (cs_descriptor.dpl < CPL))
   {
-    BX_DEBUG(("CALL GATE TO MORE PRIVILEGE LEVEL"));
+    BX_DEBUG(("CALL GATE64 TO MORE PRIVILEGE LEVEL"));
 
     // get new RSP for new privilege level from TSS
     Bit64u RSP_for_cpl_x  = get_RSP_from_TSS(cs_descriptor.dpl);
@@ -535,25 +586,79 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_gate64(bx_selector_t *gate_selector)
     RSP_for_cpl_x -= 32;
 
     // load CS:RIP (guaranteed to be in 64 bit mode)
-    branch_far64(&cs_selector, &cs_descriptor, new_RIP, cs_descriptor.dpl);
+    branch_far(&cs_selector, &cs_descriptor, new_RIP, cs_descriptor.dpl);
 
     // set up null SS descriptor
     load_null_selector(&BX_CPU_THIS_PTR sregs[BX_SEG_REG_SS], cs_descriptor.dpl);
 
     RSP = RSP_for_cpl_x;
+
+#if BX_SUPPORT_CET
+    if(ShadowStackEnabled(old_CPL)) {
+      if (old_CPL == 3)
+        BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = SSP;
+    }
+    if(ShadowStackEnabled(CPL)) {
+      bx_address old_SSP = SSP;
+      shadow_stack_switch(BX_CPU_THIS_PTR msr.ia32_pl_ssp[CPL]);
+      if (old_SS_DPL != 3)
+        call_far_shadow_stack_push(old_CS, temp_LIP, old_SSP);
+    }
+    track_indirect(CPL);
+#endif
   }
   else
   {
-    BX_DEBUG(("CALL GATE TO SAME PRIVILEGE"));
+    BX_DEBUG(("CALL GATE64 TO SAME PRIVILEGE"));
 
     // push to 64-bit stack, switch to long64 guaranteed
     write_new_stack_qword(RSP -  8, CPL, old_CS);
     write_new_stack_qword(RSP - 16, CPL, old_RIP);
 
     // load CS:RIP (guaranteed to be in 64 bit mode)
-    branch_far64(&cs_selector, &cs_descriptor, new_RIP, CPL);
+    branch_far(&cs_selector, &cs_descriptor, new_RIP, CPL);
 
     RSP -= 16;
+
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(CPL)) {
+      call_far_shadow_stack_push(old_CS, temp_LIP, SSP);
+    }
+    track_indirect(CPL);
+#endif
   }
 }
+
+#if BX_SUPPORT_CET
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::shadow_stack_switch(bx_address new_SSP)
+{
+  SSP = new_SSP;
+
+  if (SSP & 0x7) {
+    BX_ERROR(("shadow_stack_switch: SSP is not aligned to 8 byte boundary"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+  if (!long64_mode() && GET32H(SSP) != 0) {
+    BX_ERROR(("shadow_stack_switch: 64-bit SSP not in 64-bit mode"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+  if (!shadow_stack_atomic_set_busy(SSP, CPL)) {
+    BX_ERROR(("shadow_stack_switch: failure to set busy bit"));
+    exception(BX_GP_EXCEPTION, 0);
+  }
+}
+
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::call_far_shadow_stack_push(Bit16u cs, bx_address lip, bx_address old_ssp)
+{
+  if (SSP & 0x7) {
+    shadow_stack_write_dword(SSP-4, CPL, 0);
+    SSP &= ~BX_CONST64(0x7);
+  }
+
+  shadow_stack_push_64(cs);
+  shadow_stack_push_64(lip);
+  shadow_stack_push_64(old_ssp);
+}
+#endif
+
 #endif

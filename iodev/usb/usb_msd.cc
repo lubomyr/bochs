@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.cc 13476 2018-03-23 19:02:38Z vruppert $
+// $Id: usb_msd.cc 13769 2020-01-03 21:17:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
 //
 //  Copyright (c) 2006 CodeSourcery.
 //  Written by Paul Brook
-//  Copyright (C) 2009-2018  The Bochs Project
+//  Copyright (C) 2009-2020  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -356,17 +356,17 @@ usb_msd_device_c::usb_msd_device_c(usbdev_type type, const char *filename)
     ptr2 = strtok(NULL, ":");
     if ((ptr2 == NULL) || (strlen(ptr1) < 2)) {
       s.image_mode = BX_HDIMAGE_MODE_FLAT;
-      s.fname = filename;
+      strcpy(s.fname, filename);
     } else {
       s.image_mode = SIM->hdimage_get_mode(ptr1);
-      s.fname = filename+strlen(ptr1)+1;
+      strcpy(s.fname, filename+strlen(ptr1)+1);
     }
     s.journal[0] = 0;
     s.size = 0;
     s.sect_size = 512;
   } else if (d.type == USB_DEV_TYPE_CDROM) {
     strcpy(d.devname, "BOCHS USB CDROM");
-    s.fname = filename;
+    strcpy(s.fname, filename);
     // config options
     bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
     sprintf(pname, "cdrom%d", ++usb_cdrom_count);
@@ -715,7 +715,7 @@ int usb_msd_device_c::handle_data(USBPacket *p)
 
           s.usb_buf = data;
           s.usb_len = len;
-          if (s.scsi_len) {
+          while (s.usb_len && s.scsi_len) {
             copy_data();
           }
           if (s.residue && s.usb_len) {
@@ -771,7 +771,7 @@ int usb_msd_device_c::handle_data(USBPacket *p)
             len = s.data_len;
           s.usb_buf = data;
           s.usb_len = len;
-          if (s.scsi_len) {
+          while (s.usb_len && s.scsi_len) {
             copy_data();
           }
           if (s.residue && s.usb_len) {

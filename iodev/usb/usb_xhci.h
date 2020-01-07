@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_xhci.h 13376 2017-12-09 11:18:18Z vruppert $
+// $Id: usb_xhci.h 13651 2019-12-09 15:14:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2010-2017  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -52,7 +52,7 @@
 // HCSPARAMS1
 #define MAX_SLOTS           32   // (1 based)
 #define INTERRUPTERS         8   //
-#define USB_XHCI_PORTS       4   // physical sockets, each supporting USB3 or USB2 (0x08 = uPD720201, 0x04 = uPD720202)
+#define USB_XHCI_PORTS       4   // Port Registers, each supporting USB3 or USB2 (0x08 = uPD720201, 0x04 = uPD720202)
 
 #if (USB_XHCI_PORTS != 4)
   #error "USB_XHCI_PORTS must equal 4"

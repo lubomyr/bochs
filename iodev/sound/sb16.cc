@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sb16.cc 13517 2018-05-24 16:22:16Z vruppert $
+// $Id: sb16.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2018  The Bochs Project
@@ -2346,7 +2346,7 @@ void bx_sb16_c::opl_timerevent()
       } else {
         mask = 0x3ff;
       }
-      if (((++OPL.timer[i]) & mask) == 0) { // overflow occured, set flags accordingly
+      if (((++OPL.timer[i]) & mask) == 0) { // overflow occurred, set flags accordingly
         OPL.timer[i] = OPL.timerinit[i];      // reset the counter
         if ((OPL.tmask[i/2] >> (6 - (i % 2))) == 0) { // set flags only if unmasked
           writelog(MIDILOG(5), "OPL Timer Interrupt: Chip %d, Timer %d", i/2, 1 << (i % 2));

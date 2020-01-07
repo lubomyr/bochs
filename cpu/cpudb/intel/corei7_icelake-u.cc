@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_icelake-u.cc 13586 2019-10-26 20:09:30Z sshwarts $
+// $Id: corei7_icelake-u.cc 13768 2020-01-03 19:53:20Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2019 Stanislav Shwartsman
@@ -28,7 +28,7 @@
 
 #define LOG_THIS cpu->
 
-#if BX_SUPPORT_X86_64 && BX_SUPPORT_AVX && BX_SUPPORT_EVEX
+#if BX_SUPPORT_X86_64 && BX_SUPPORT_AVX
 
 #define VMCS_REVISION_ID 0x04
 
@@ -103,12 +103,14 @@ corei7_icelake_t::corei7_icelake_t(BX_CPU_C *cpu):
   enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_FCS_FDS_DEPRECATION);
   enable_cpu_extension(BX_ISA_SHA);
+#if BX_SUPPORT_EVEX
   enable_cpu_extension(BX_ISA_GFNI);
   enable_cpu_extension(BX_ISA_VAES_VPCLMULQDQ);
   enable_cpu_extension(BX_ISA_AVX512);
   enable_cpu_extension(BX_ISA_AVX512_VL);
-  enable_cpu_extension(BX_ISA_AVX512_BW);
   enable_cpu_extension(BX_ISA_AVX512_DQ);
+  enable_cpu_extension(BX_ISA_AVX512_CD);
+  enable_cpu_extension(BX_ISA_AVX512_BW);
   enable_cpu_extension(BX_ISA_AVX512_IFMA52);
   enable_cpu_extension(BX_ISA_AVX512_VBMI);
   enable_cpu_extension(BX_ISA_AVX512_VBMI2);
@@ -116,6 +118,7 @@ corei7_icelake_t::corei7_icelake_t(BX_CPU_C *cpu):
   enable_cpu_extension(BX_ISA_AVX512_BITALG);
   enable_cpu_extension(BX_ISA_AVX512_VPOPCNTDQ);
   enable_cpu_extension(BX_ISA_AVX512_VP2INTERSECT);
+#endif
   enable_cpu_extension(BX_ISA_CLFLUSHOPT);
   enable_cpu_extension(BX_ISA_XSAVEC);
   enable_cpu_extension(BX_ISA_XSAVES);
@@ -577,17 +580,23 @@ void corei7_icelake_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t
                 BX_CPUID_EXT3_ENCHANCED_REP_STRINGS |
                 BX_CPUID_EXT3_INVPCID |
                 BX_CPUID_EXT3_DEPRECATE_FCS_FDS |
+#if BX_SUPPORT_EVEX
                 BX_CPUID_EXT3_AVX512F |
                 BX_CPUID_EXT3_AVX512DQ |
+#endif
                 BX_CPUID_EXT3_RDSEED |
                 BX_CPUID_EXT3_ADX |
                 BX_CPUID_EXT3_SMAP |
+#if BX_SUPPORT_EVEX
                 BX_CPUID_EXT3_AVX512IFMA52 |
+#endif
                 BX_CPUID_EXT3_CLFLUSHOPT |
+#if BX_SUPPORT_EVEX
                 BX_CPUID_EXT3_AVX512CD |
-                BX_CPUID_EXT3_SHA |
                 BX_CPUID_EXT3_AVX512BW |
-                BX_CPUID_EXT3_AVX512VL;
+                BX_CPUID_EXT3_AVX512VL |
+#endif
+                BX_CPUID_EXT3_SHA;
 
     //     [0:0]    PREFETCHWT1 instruction support
     // *   [1:1]    AVX512 VBMI instructions support
@@ -617,17 +626,22 @@ void corei7_icelake_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t
     // ! [30:30]    SGX_LC: SGX Launch Configuration
     //   [31:31]    reserved
 
-    leaf->ecx = BX_CPUID_EXT4_AVX512_VBMI |
+    leaf->ecx = 
+#if BX_SUPPORT_EVEX
+                BX_CPUID_EXT4_AVX512_VBMI |
+#endif
                 BX_CPUID_EXT4_UMIP |
 #if BX_SUPPORT_PKEYS
                 BX_CPUID_EXT4_PKU |
 #endif
+#if BX_SUPPORT_EVEX
                 BX_CPUID_EXT4_AVX512_VBMI2 |
                 BX_CPUID_EXT4_GFNI |
                 BX_CPUID_EXT4_VAES | BX_CPUID_EXT4_VPCLMULQDQ |
                 BX_CPUID_EXT4_AVX512_VNNI |
                 BX_CPUID_EXT4_AVX512_BITALG |
                 BX_CPUID_EXT4_AVX512_VPOPCNTDQ |
+#endif
                 BX_CPUID_EXT4_RDPID;
 #if BX_SUPPORT_PKEYS
     if (cpu->cr4.get_PKE())
@@ -863,14 +877,6 @@ void corei7_icelake_t::get_ext_cpuid_leaf_7(cpuid_function_t *leaf) const
 }
 
 // leaf 0x80000008 //
-void corei7_icelake_t::get_ext_cpuid_leaf_8(cpuid_function_t *leaf) const
-{
-  // virtual & phys address size in low 2 bytes.
-  leaf->eax = BX_PHY_ADDRESS_WIDTH | (BX_LIN_ADDRESS_WIDTH << 8);
-  leaf->ebx = 0;
-  leaf->ecx = 0; // Reserved, undefined
-  leaf->edx = 0;
-}
 
 void corei7_icelake_t::dump_cpuid(void) const
 {

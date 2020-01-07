@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: ctrl_xfer_pro.cc 12613 2015-01-25 20:55:10Z sshwarts $
+// $Id: ctrl_xfer_pro.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -112,41 +112,32 @@ BX_CPU_C::load_cs(bx_selector_t *selector, bx_descriptor_t *descriptor, Bit8u cp
   invalidate_prefetch_q();
 }
 
-void BX_CPU_C::branch_far32(bx_selector_t *selector,
-           bx_descriptor_t *descriptor, Bit32u eip, Bit8u cpl)
-{
-  /* instruction pointer must be in code segment limit else #GP(0) */
-  if (eip > descriptor->u.segment.limit_scaled) {
-    BX_ERROR(("branch_far32: EIP > limit"));
-    exception(BX_GP_EXCEPTION, 0);
-  }
-
-  /* Load CS:IP from destination pointer */
-  /* Load CS-cache with new segment descriptor */
-  load_cs(selector, descriptor, cpl);
-
-  /* Change the EIP value */
-  EIP = eip;
-}
-
-void BX_CPU_C::branch_far64(bx_selector_t *selector,
-           bx_descriptor_t *descriptor, bx_address rip, Bit8u cpl)
+void BX_CPU_C::branch_far(bx_selector_t *selector, bx_descriptor_t *descriptor, bx_address rip, unsigned cpl)
 {
 #if BX_SUPPORT_X86_64
   if (long_mode() && descriptor->u.segment.l) {
     if (! IsCanonical(rip)) {
-      BX_ERROR(("branch_far64: canonical RIP violation"));
+      BX_ERROR(("branch_far: canonical RIP violation"));
       exception(BX_GP_EXCEPTION, 0);
     }
   }
   else
 #endif
   {
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(cpl)) {
+      if (GET32H(SSP) != 0) {
+        BX_ERROR(("branch_far64: 64-bit SSP when jumping to legacy mode"));
+        exception(BX_GP_EXCEPTION, 0);
+      }
+    }
+#endif
+
     rip &= 0xffffffff;
 
     /* instruction pointer must be in code segment limit else #GP(0) */
     if (rip > descriptor->u.segment.limit_scaled) {
-      BX_ERROR(("branch_far64: RIP > limit"));
+      BX_ERROR(("branch_far: RIP > limit"));
       exception(BX_GP_EXCEPTION, 0);
     }
   }

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: harddrv.cc 13590 2019-11-08 13:49:48Z vruppert $
+// $Id: harddrv.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -179,7 +179,7 @@ void bx_hard_drive_c::init(void)
   char  pname[10];
   bx_list_c *base;
 
-  BX_DEBUG(("Init $Id: harddrv.cc 13590 2019-11-08 13:49:48Z vruppert $"));
+  BX_DEBUG(("Init $Id: harddrv.cc 13653 2019-12-09 16:29:23Z sshwarts $"));
 
   for (channel=0; channel<BX_MAX_ATA_CHANNEL; channel++) {
     sprintf(ata_name, "ata.%d.resources", channel);
@@ -1102,7 +1102,7 @@ Bit32u bx_hard_drive_c::read(Bit32u address, unsigned io_len)
         (unsigned) address));
   }
 
-  BX_PANIC(("hard drive: shouldnt get here!"));
+  BX_PANIC(("hard drive: shouldn't get here!"));
   return(0);
 
 return_value32:

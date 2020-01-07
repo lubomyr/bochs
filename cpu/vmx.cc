@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.cc 13586 2019-10-26 20:09:30Z sshwarts $
+// $Id: vmx.cc 13764 2020-01-03 17:35:02Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2019 Stanislav Shwartsman
@@ -36,6 +36,12 @@ extern VMCS_Mapping vmcs_map;
 #if BX_SUPPORT_VMX >= 2
 extern bx_bool isValidMSR_PAT(Bit64u pat_msr);
 #endif
+
+#if BX_SUPPORT_CET
+extern bx_bool is_invalid_cet_control(bx_address val);
+#endif
+
+extern const char *segname[];
 
 ////////////////////////////////////////////////////////////
 // VMEXIT reasons for BX prints
@@ -112,6 +118,11 @@ static const char *VMX_vmexit_reason_name[] =
   /* 66 */  "Sub-Page Protection",
   /* 67 */  "UMWAIT",
   /* 68 */  "TPAUSE",
+  /* 69 */  "Reserved69",
+  /* 70 */  "Reserved70",
+  /* 71 */  "Reserved71",
+  /* 72 */  "ENQCMD PASID Translation",
+  /* 73 */  "ENQCMDS PASID Translation",
 };
 
 #include "decoder/ia_opcodes.h"
@@ -411,9 +422,13 @@ void BX_CPU_C::VMabort(VMX_vmabort_code error_code)
 
 Bit32u BX_CPU_C::VMXReadRevisionID(bx_phy_address pAddr)
 {
+  unsigned revision_id_field_offset = BX_CPU_THIS_PTR vmcs_map->vmcs_field_offset(VMCS_REVISION_ID_FIELD_ENCODING);
+  if(revision_id_field_offset >= VMX_VMCS_AREA_SIZE)
+    BX_PANIC(("Can't access VMCS_REVISION_ID encoding, offset=0x%x", revision_id_field_offset));
+
   Bit32u revision;
-  access_read_physical(pAddr + VMCS_REVISION_ID_FIELD_ADDR, 4, &revision);
-  BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + VMCS_REVISION_ID_FIELD_ADDR, 4, MEMTYPE(BX_CPU_THIS_PTR vmcs_memtype),
+  access_read_physical(pAddr + revision_id_field_offset, 4, &revision);
+  BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + revision_id_field_offset, 4, MEMTYPE(BX_CPU_THIS_PTR vmcs_memtype),
           BX_READ, BX_VMCS_ACCESS, (Bit8u*)(&revision));
 
   return revision;
@@ -440,7 +455,17 @@ bx_bool BX_CPU_C::is_eptptr_valid(Bit64u eptptr)
     }
   }
 
-#define BX_EPTPTR_RESERVED_BITS 0xf80 /* bits 11:7 are reserved */
+  // [7]   CET: Enable supervisor shadow stack control
+#if BX_SUPPORT_CET
+  if (! BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET)) {
+    if (eptptr & 0x80) {
+      BX_ERROR(("is_eptptr_valid: EPTPTR CET supervisor shadow stack control bit enabled when not supported by CPU"));
+      return 0;
+    }
+  }
+#endif
+
+#define BX_EPTPTR_RESERVED_BITS 0xf00 /* bits 11:8 are reserved */
   if (eptptr & BX_EPTPTR_RESERVED_BITS) {
     BX_ERROR(("is_eptptr_valid: EPTPTR reserved bits set"));
     return 0;
@@ -570,7 +595,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
   if (vm->vmexec_ctrls1 & ~VMX_CHECKS_USE_MSR_VMX_PINBASED_CTRLS_HI) {
-     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX pin-based controls allowed 1-settings"));
+     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX pin-based controls allowed 1-settings [0x%08x]", vm->vmexec_ctrls1 & ~VMX_CHECKS_USE_MSR_VMX_PINBASED_CTRLS_HI));
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
 
@@ -579,7 +604,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
   if (vm->vmexec_ctrls2 & ~VMX_CHECKS_USE_MSR_VMX_PROCBASED_CTRLS_HI) {
-     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX proc-based controls allowed 1-settings"));
+     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX proc-based controls allowed 1-settings [0x%08x]", vm->vmexec_ctrls2 & ~VMX_CHECKS_USE_MSR_VMX_PROCBASED_CTRLS_HI));
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
 
@@ -588,7 +613,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
   if (vm->vmexec_ctrls3 & ~VMX_MSR_VMX_PROCBASED_CTRLS2_HI) {
-     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX secondary proc-based controls allowed 1-settings"));
+     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX secondary controls allowed 1-settings [0x%08x]", vm->vmexec_ctrls3 & ~VMX_MSR_VMX_PROCBASED_CTRLS2_HI));
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
 
@@ -834,7 +859,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
   if (vm->vmexit_ctrls & ~VMX_CHECKS_USE_MSR_VMX_VMEXIT_CTRLS_HI) {
-     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX vmexit controls allowed 1-settings"));
+     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX vmexit controls allowed 1-settings [0x%08x]", vm->vmexit_ctrls & ~VMX_CHECKS_USE_MSR_VMX_VMEXIT_CTRLS_HI));
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
 
@@ -889,7 +914,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
   if (vm->vmentry_ctrls & ~VMX_CHECKS_USE_MSR_VMX_VMENTRY_CTRLS_HI) {
-     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX vmentry controls allowed 1-settings"));
+     BX_ERROR(("VMFAIL: VMCS EXEC CTRL: VMX vmentry controls allowed 1-settings [0x%08x]", vm->vmentry_ctrls & ~VMX_CHECKS_USE_MSR_VMX_VMENTRY_CTRLS_HI));
      return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
   }
 
@@ -933,6 +958,11 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      unsigned push_error_reference = 0;
      if (event_type == BX_HARDWARE_EXCEPTION && vector < BX_CPU_HANDLED_EXCEPTIONS)
         push_error_reference = exceptions_info[vector].push_error;
+#if BX_SUPPORT_CET
+     if (! BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET)) {
+        if (vector == BX_CP_EXCEPTION) push_error_reference = false;
+     }
+#endif     
 
      if (vm->vmentry_interr_info & 0x7ffff000) {
         BX_ERROR(("VMFAIL: VMENTRY broken interruption info field"));
@@ -998,16 +1028,21 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckVmControls(void)
      }
 #endif
 
-     if (push_error != push_error_reference) {
-       BX_ERROR(("VMFAIL: VMENTRY injected event vector %d broken error code", vector));
-       return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
+     if (! BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET)) {
+       // CET added new #CP exception with error code but legacy software assumed that this vector have no error code.
+       // Therefore CET enabled processors do not check the error code anymore and able to deliver a hardware
+       // exception with or without an error code, regardless of vector as indicated in VMX_MSR_VMX_BASIC[56]
+       if (push_error != push_error_reference) {
+         BX_ERROR(("VMFAIL: VMENTRY injected event vector %d broken error code", vector));
+         return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
+       }
      }
 
      if (push_error) {
-        if (error_code & 0xffff0000) {
-          BX_ERROR(("VMFAIL: VMENTRY bad error code 0x%08x for injected event %d", error_code, vector));
-          return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
-        }
+       if (error_code & 0xffff0000) {
+         BX_ERROR(("VMFAIL: VMENTRY bad error code 0x%08x for injected event %d", error_code, vector));
+         return VMXERR_VMENTRY_INVALID_VM_CONTROL_FIELD;
+       }
      }
   }
 
@@ -1169,6 +1204,38 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
   host_state->rsp = (bx_address) VMread_natural(VMCS_HOST_RSP);
   host_state->rip = (bx_address) VMread_natural(VMCS_HOST_RIP);
 
+#if BX_SUPPORT_CET
+  if (vmexit_ctrls & VMX_VMEXIT_CTRL1_LOAD_HOST_CET_STATE) {
+    host_state->msr_ia32_s_cet = VMread_natural(VMCS_HOST_IA32_S_CET);
+    if (!IsCanonical(host_state->msr_ia32_s_cet) || (!x86_64_host && GET32H(host_state->msr_ia32_s_cet))) {
+       BX_ERROR(("VMFAIL: VMCS host IA32_S_CET/EB_LEG_BITMAP_BASE non canonical or invalid"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+
+    if (is_invalid_cet_control(host_state->msr_ia32_s_cet)) {
+       BX_ERROR(("VMFAIL: VMCS host IA32_S_CET invalid"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+
+    host_state->ssp = VMread_natural(VMCS_HOST_SSP);
+    if (!IsCanonical(host_state->ssp) || (!x86_64_host && GET32H(host_state->ssp))) {
+       BX_ERROR(("VMFAIL: VMCS host SSP non canonical or invalid"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+
+    host_state->interrupt_ssp_table_address = VMread_natural(VMCS_HOST_INTERRUPT_SSP_TABLE_ADDR);
+    if (!IsCanonical(host_state->interrupt_ssp_table_address)) {
+       BX_ERROR(("VMFAIL: VMCS host INTERRUPT_SSP_TABLE_ADDR non canonical or invalid"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+
+    if ((host_state->cr4 & BX_CR4_CET_MASK) && (host_state->cr0 & BX_CR0_WP_MASK) == 0) {
+      BX_ERROR(("VMENTER FAIL: VMCS host CR4.CET=1 when CR0.WP=0"));
+      return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+  }
+#endif
+
 #if BX_SUPPORT_X86_64
 
 #if BX_SUPPORT_VMX >= 2
@@ -1235,7 +1302,6 @@ BX_CPP_INLINE bx_bool IsLimitAccessRightsConsistent(Bit32u limit, Bit32u ar)
 
 Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
 {
-  static const char *segname[] = { "ES", "CS", "SS", "DS", "FS", "GS" };
   int n;
 
   VMCS_GUEST_STATE guest;
@@ -1345,15 +1411,45 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
         return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
      }
   }
-#endif
 
-#if BX_SUPPORT_X86_64
   if (vmentry_ctrls & VMX_VMENTRY_CTRL1_LOAD_DBG_CTRLS) {
      guest.dr7 = VMread_natural(VMCS_GUEST_DR7);
      if (GET32H(guest.dr7)) {
         BX_ERROR(("VMENTER FAIL: VMCS guest invalid DR7"));
         return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
      }
+  }
+#endif
+
+#if BX_SUPPORT_CET
+  if ((guest.cr4 & BX_CR4_CET_MASK) && (guest.cr0 & BX_CR0_WP_MASK) == 0) {
+    BX_ERROR(("VMENTER FAIL: VMCS guest CR4.CET=1 when CR0.WP=0"));
+    return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+  }
+
+  if (vmentry_ctrls & VMX_VMENTRY_CTRL1_LOAD_GUEST_CET_STATE) {
+    guest.msr_ia32_s_cet = VMread_natural(VMCS_GUEST_IA32_S_CET);
+    if (!IsCanonical(guest.msr_ia32_s_cet) || (!x86_64_guest && GET32H(guest.msr_ia32_s_cet))) {
+       BX_ERROR(("VMFAIL: VMCS guest IA32_S_CET/EB_LEG_BITMAP_BASE non canonical or invalid"));
+       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+    }
+
+    if (is_invalid_cet_control(guest.msr_ia32_s_cet)) {
+       BX_ERROR(("VMFAIL: VMCS guest IA32_S_CET invalid"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+
+    guest.ssp = VMread_natural(VMCS_GUEST_SSP);
+    if (!IsCanonical(guest.ssp) || (!x86_64_guest && GET32H(guest.ssp))) {
+       BX_ERROR(("VMFAIL: VMCS guest SSP non canonical or invalid"));
+       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+    }
+
+    guest.interrupt_ssp_table_address = VMread_natural(VMCS_GUEST_INTERRUPT_SSP_TABLE_ADDR);
+    if (!IsCanonical(guest.interrupt_ssp_table_address)) {
+       BX_ERROR(("VMFAIL: VMCS guest INTERRUPT_SSP_TABLE_ADDR non canonical or invalid"));
+       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+    }
   }
 #endif
 
@@ -1937,6 +2033,14 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   RIP = BX_CPU_THIS_PTR prev_rip = guest.rip;
   RSP = guest.rsp;
 
+#if BX_SUPPORT_CET
+  if (vmentry_ctrls & VMX_VMENTRY_CTRL1_LOAD_GUEST_CET_STATE) {
+    SSP = guest.ssp;
+    BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table = guest.interrupt_ssp_table_address;
+    BX_CPU_THIS_PTR msr.ia32_cet_control[0] = guest.msr_ia32_s_cet;
+  }
+#endif
+
   BX_CPU_THIS_PTR async_event = 0;
 
   setEFlags((Bit32u) guest.rflags);
@@ -2109,26 +2213,33 @@ Bit32u BX_CPU_C::LoadMSRs(Bit32u msr_cnt, bx_phy_address pAddr)
     BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr, 8, MEMTYPE(resolve_memtype(pAddr)), BX_READ, BX_VMX_LOAD_MSR_ACCESS, (Bit8u*)(&msr_lo));
     access_read_physical(pAddr + 8, 8, &msr_hi);
     BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + 8, 8, MEMTYPE(resolve_memtype(pAddr)), BX_READ, BX_VMX_LOAD_MSR_ACCESS, (Bit8u*)(&msr_hi));
+    pAddr += 16; // to next MSR
 
-    if (GET32H(msr_lo))
+    if (GET32H(msr_lo)) {
+      BX_ERROR(("VMX LoadMSRs %d: broken msr index 0x" FMT_LL "x", msr, msr_lo));
       return msr;
+    }
 
     Bit32u index = GET32L(msr_lo);
 
 #if BX_SUPPORT_X86_64
-    if (index == BX_MSR_FSBASE || index == BX_MSR_GSBASE)
+    if (index == BX_MSR_FSBASE || index == BX_MSR_GSBASE) {
+      BX_ERROR(("VMX LoadMSRs %d: unable to restore FSBASE or GSBASE", msr));
       return msr;
+    }
 #endif
 
     if (is_cpu_extension_supported(BX_ISA_X2APIC)) {
-      if ((index & 0xfffff800) == 0x800) // X2APIC range
+      if (is_x2apic_msr_range(index)) {
+        BX_ERROR(("VMX LoadMSRs %d: unable to restore X2APIC range MSR %x", msr, index));
         return msr;
+      }
     }
 
-    if (! wrmsr(index, msr_hi))
+    if (! wrmsr(index, msr_hi)) {
+      BX_ERROR(("VMX LoadMSRs %d: unable to set up MSR %x", msr, index));
       return msr;
-
-    pAddr += 16; // to next MSR
+    }
   }
 
   return 0;
@@ -2143,18 +2254,24 @@ Bit32u BX_CPU_C::StoreMSRs(Bit32u msr_cnt, bx_phy_address pAddr)
     BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr, 8, MEMTYPE(resolve_memtype(pAddr)),
                                           BX_READ, BX_VMX_STORE_MSR_ACCESS, (Bit8u*)(&msr_lo));
 
-    if (GET32H(msr_lo))
+    if (GET32H(msr_lo)) {
+      BX_ERROR(("VMX StoreMSRs %d: broken msr index 0x" FMT_LL "x", msr, msr_lo));
       return msr;
+    }
 
     Bit32u index = GET32L(msr_lo);
 
     if (is_cpu_extension_supported(BX_ISA_X2APIC)) {
-      if ((index & 0xfffff800) == 0x800) // X2APIC range
+      if (is_x2apic_msr_range(index)) {
+        BX_ERROR(("VMX StoreMSRs %d: unable to save X2APIC range MSR %x", msr, index));
         return msr;
+      }
     }
 
-    if (! rdmsr(index, &msr_hi))
+    if (! rdmsr(index, &msr_hi)) {
+      BX_ERROR(("VMX StoreMSRs %d: unable to read MSR %x", msr, index));
       return msr;
+    }
 
     access_write_physical(pAddr + 8, 8, &msr_hi);
     BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + 8, 8, MEMTYPE(resolve_memtype(pAddr)),
@@ -2196,6 +2313,14 @@ void BX_CPU_C::VMexitSaveGuestState(void)
   VMwrite_natural(VMCS_GUEST_RIP, RIP);
   VMwrite_natural(VMCS_GUEST_RSP, RSP);
   VMwrite_natural(VMCS_GUEST_RFLAGS, read_eflags());
+
+#if BX_SUPPORT_CET
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET)) {
+    VMwrite_natural(VMCS_GUEST_IA32_S_CET, BX_CPU_THIS_PTR msr.ia32_cet_control[0]);
+    VMwrite_natural(VMCS_GUEST_INTERRUPT_SSP_TABLE_ADDR, BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table);
+    VMwrite_natural(VMCS_GUEST_SSP, SSP);
+  }
+#endif
 
   for (n=0; n<6; n++) {
      Bit32u selector = BX_CPU_THIS_PTR sregs[n].selector.value;
@@ -2480,6 +2605,14 @@ void BX_CPU_C::VMexitLoadHostState(void)
   RIP = BX_CPU_THIS_PTR prev_rip = host_state->rip;
   RSP = host_state->rsp;
 
+#if BX_SUPPORT_CET
+  if (vmexit_ctrls & VMX_VMEXIT_CTRL1_LOAD_HOST_CET_STATE) {
+    SSP = host_state->ssp;
+    BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table = host_state->interrupt_ssp_table_address;
+    BX_CPU_THIS_PTR msr.ia32_cet_control[0] = host_state->msr_ia32_s_cet;
+  }
+#endif
+
   BX_CPU_THIS_PTR inhibit_mask = 0;
   BX_CPU_THIS_PTR debug_trap = 0;
 
@@ -2545,8 +2678,12 @@ void BX_CPU_C::VMexit(Bit32u reason, Bit64u qualification)
   // VMEXITs are FAULT-like: restore RIP/RSP to value before VMEXIT occurred
   if (! IS_TRAP_LIKE_VMEXIT(reason)) {
     RIP = BX_CPU_THIS_PTR prev_rip;
-    if (BX_CPU_THIS_PTR speculative_rsp)
+    if (BX_CPU_THIS_PTR speculative_rsp) {
       RSP = BX_CPU_THIS_PTR prev_rsp;
+#if BX_SUPPORT_CET
+      SSP = BX_CPU_THIS_PTR prev_ssp;
+#endif
+    }
   }
   BX_CPU_THIS_PTR speculative_rsp = 0;
 
@@ -2826,7 +2963,6 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLAUNCH(bxInstruction_c *i)
   }
 
   Bit32u launch_state = VMread32(VMCS_LAUNCH_STATE_FIELD_ENCODING);
-
   if (vmlaunch) {
     if (launch_state != VMCS_STATE_CLEAR) {
        BX_ERROR(("VMFAIL: VMLAUNCH with non-clear VMCS!"));
@@ -2877,7 +3013,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLAUNCH(bxInstruction_c *i)
 
   Bit32u msr = LoadMSRs(BX_CPU_THIS_PTR vmcs.vmentry_msr_load_cnt, BX_CPU_THIS_PTR vmcs.vmentry_msr_load_addr);
   if (msr) {
-    BX_ERROR(("VMEXIT: Error when loading guest MSR 0x%08x", msr));
+    BX_ERROR(("VMEXIT: Error when loading guest MSR number %d", msr));
     VMexit(VMX_VMEXIT_VMENTRY_FAILURE_MSR | (1 << 31), msr);
   }
 
@@ -3468,9 +3604,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMCLEAR(bxInstruction_c *i)
     // initialize implementation-specific data in VMCS region
 
     // clear VMCS launch state
+    unsigned launch_field_offset = BX_CPU_THIS_PTR vmcs_map->vmcs_field_offset(VMCS_LAUNCH_STATE_FIELD_ENCODING);
+    if(launch_field_offset >= VMX_VMCS_AREA_SIZE)
+      BX_PANIC(("VMCLEAR: can't access VMCS_LAUNCH_STATE encoding, offset=0x%x", launch_field_offset));
+
     Bit32u launch_state = VMCS_STATE_CLEAR;
-    access_write_physical(pAddr + VMCS_LAUNCH_STATE_FIELD_ADDR, 4, &launch_state);
-    BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + VMCS_LAUNCH_STATE_FIELD_ADDR, 4,
+    access_write_physical(pAddr + launch_field_offset, 4, &launch_state);
+    BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr + launch_field_offset, 4,
             MEMTYPE(BX_CPU_THIS_PTR vmcs_memtype), BX_WRITE, BX_VMCS_ACCESS, (Bit8u*)(&launch_state));
 
     if (pAddr == BX_CPU_THIS_PTR vmcsptr) {
@@ -3882,6 +4022,11 @@ void BX_CPU_C::register_vmx_state(bx_param_c *parent)
 #if BX_SUPPORT_X86_64
   BXRS_HEX_PARAM_FIELD(host, efer_msr, BX_CPU_THIS_PTR vmcs.host_state.efer_msr);
 #endif
+#endif
+#if BX_SUPPORT_CET
+  BXRS_HEX_PARAM_FIELD(host, ia32_s_cet_msr, BX_CPU_THIS_PTR vmcs.host_state.msr_ia32_s_cet);
+  BXRS_HEX_PARAM_FIELD(host, SSP, BX_CPU_THIS_PTR vmcs.host_state.ssp);
+  BXRS_HEX_PARAM_FIELD(host, interrupt_ssp_table_address, BX_CPU_THIS_PTR vmcs.host_state.interrupt_ssp_table_address);
 #endif
 }
 

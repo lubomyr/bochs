@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: crregs.h 13603 2019-11-12 22:02:02Z sshwarts $
+// $Id: crregs.h 13738 2019-12-28 13:11:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2007-2017 Stanislav Shwartsman
+//   Copyright (c) 2007-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -108,6 +108,7 @@ struct bx_cr0_t {
 #define BX_CR4_SMEP_MASK       (1 << 20)
 #define BX_CR4_SMAP_MASK       (1 << 21)
 #define BX_CR4_PKE_MASK        (1 << 22)
+#define BX_CR4_CET_MASK        (1 << 23)
 
 struct bx_cr4_t {
   Bit32u  val32; // 32bit value of register
@@ -136,6 +137,7 @@ struct bx_cr4_t {
   IMPLEMENT_CRREG_ACCESSORS(SMEP, 20);
   IMPLEMENT_CRREG_ACCESSORS(SMAP, 21);
   IMPLEMENT_CRREG_ACCESSORS(PKE, 22);
+  IMPLEMENT_CRREG_ACCESSORS(CET, 23);
 
   BX_CPP_INLINE Bit32u get32() const { return val32; }
   BX_CPP_INLINE void set32(Bit32u val) { val32 = val; }
@@ -236,12 +238,15 @@ struct bx_efer_t {
 
 #if BX_CPU_LEVEL >= 6
 
+const unsigned XSAVE_FPU_STATE_LEN          = 160;
 const unsigned XSAVE_SSE_STATE_LEN          = 256;
 const unsigned XSAVE_YMM_STATE_LEN          = 256;
 const unsigned XSAVE_OPMASK_STATE_LEN       = 64;
 const unsigned XSAVE_ZMM_HI256_STATE_LEN    = 512;
 const unsigned XSAVE_HI_ZMM_STATE_LEN       = 1024;
 const unsigned XSAVE_PKRU_STATE_LEN         = 64;
+const unsigned XSAVE_CET_U_STATE_LEN        = 16;
+const unsigned XSAVE_CET_S_STATE_LEN        = 24;
 
 const unsigned XSAVE_SSE_STATE_OFFSET       = 160;
 const unsigned XSAVE_YMM_STATE_OFFSET       = 576;
@@ -263,7 +268,10 @@ struct xcr0_t {
     BX_XCR0_ZMM_HI256_BIT = 6,
     BX_XCR0_HI_ZMM_BIT = 7,
     BX_XCR0_PT_BIT = 8,
-    BX_XCR0_PKRU_BIT = 9
+    BX_XCR0_PKRU_BIT = 9,
+    BX_XCR0_CET_U_BIT = 11,
+    BX_XCR0_CET_S_BIT = 12,
+    BX_XCR0_LAST
   };
 
 #define BX_XCR0_FPU_MASK       (1 << xcr0_t::BX_XCR0_FPU_BIT)
@@ -276,6 +284,8 @@ struct xcr0_t {
 #define BX_XCR0_HI_ZMM_MASK    (1 << xcr0_t::BX_XCR0_HI_ZMM_BIT)
 #define BX_XCR0_PT_MASK        (1 << xcr0_t::BX_XCR0_PT_BIT)
 #define BX_XCR0_PKRU_MASK      (1 << xcr0_t::BX_XCR0_PKRU_BIT)
+#define BX_XCR0_CET_U_MASK     (1 << xcr0_t::BX_XCR0_CET_U_BIT)
+#define BX_XCR0_CET_S_MASK     (1 << xcr0_t::BX_XCR0_CET_S_BIT)
 
   IMPLEMENT_CRREG_ACCESSORS(FPU, BX_XCR0_FPU_BIT);
   IMPLEMENT_CRREG_ACCESSORS(SSE, BX_XCR0_SSE_BIT);
@@ -291,6 +301,28 @@ struct xcr0_t {
   BX_CPP_INLINE Bit32u get32() const { return val32; }
   BX_CPP_INLINE void set32(Bit32u val) { val32 = val; }
 };
+
+#if BX_USE_CPU_SMF
+typedef bx_bool (*XSaveStateInUsePtr_tR)(void);
+typedef void (*XSavePtr_tR)(bxInstruction_c *i, bx_address offset);
+typedef void (*XRestorPtr_tR)(bxInstruction_c *i, bx_address offset);
+typedef void (*XRestorInitPtr_tR)(void);
+#else
+typedef bx_bool (BX_CPU_C::*XSaveStateInUsePtr_tR)(void);
+typedef void (BX_CPU_C::*XSavePtr_tR)(bxInstruction_c *i, bx_address offset);
+typedef void (BX_CPU_C::*XRestorPtr_tR)(bxInstruction_c *i, bx_address offset);
+typedef void (BX_CPU_C::*XRestorInitPtr_tR)(void);
+#endif
+
+struct XSaveRestoreStateHelper {
+  unsigned len;
+  unsigned offset;
+  XSaveStateInUsePtr_tR xstate_in_use_method;
+  XSavePtr_tR xsave_method;
+  XRestorPtr_tR xrstor_method;
+  XRestorInitPtr_tR xrstor_init_method;
+};
+
 #endif
 
 #undef IMPLEMENT_CRREG_ACCESSORS

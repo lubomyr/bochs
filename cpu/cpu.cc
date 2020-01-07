@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpu.cc 13568 2019-08-09 19:57:13Z sshwarts $
+// $Id: cpu.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2018  The Bochs Project
@@ -184,6 +184,8 @@ void BX_CPU_C::cpu_run_trace(void)
 
 #endif
 
+#include "decoder/ia_opcodes.h"
+
 bxICacheEntry_c* BX_CPU_C::getICacheEntry(void)
 {
   bx_address eipBiased = RIP + BX_CPU_THIS_PTR eipPageBias;
@@ -205,6 +207,18 @@ bxICacheEntry_c* BX_CPU_C::getICacheEntry(void)
     INC_ICACHE_STAT(iCacheMisses);
     entry = serveICacheMiss((Bit32u) eipBiased, pAddr);
   }
+
+#if BX_SUPPORT_CET
+  if (WaitingForEndbranch(CPL)) {
+    bxInstruction_c *i = entry->i;
+    if (i->getIaOpcode() != (long64_mode() ? BX_IA_ENDBRANCH64 : BX_IA_ENDBRANCH32) && i->getIaOpcode() != BX_IA_INT3) {
+      if (LegacyEndbranchTreatment(CPL)) {
+        BX_ERROR(("Endbranch is expected for CPL=%d", CPL));
+        exception(BX_CP_EXCEPTION, BX_CP_ENDBRANCH);
+      }
+    }
+  }
+#endif
 
   return entry;
 }
@@ -575,7 +589,7 @@ void BX_CPU_C::prefetch(void)
        if (EIP == (Bit32u) BX_CPU_THIS_PTR prev_rip) {
          Bit32u dr6_bits = code_breakpoint_match(laddr);
          if (dr6_bits & BX_DEBUG_TRAP_HIT) {
-           BX_ERROR(("#DB: x86 code breakpoint catched"));
+           BX_ERROR(("#DB: x86 code breakpoint caught"));
            BX_CPU_THIS_PTR debug_trap |= dr6_bits;
            exception(BX_DB_EXCEPTION, 0);
          }
@@ -590,10 +604,10 @@ void BX_CPU_C::prefetch(void)
   BX_CPU_THIS_PTR clear_RF();
 
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_ITLB_ENTRY_OF(laddr);
   Bit8u *fetchPtr = 0;
 
-  if ((tlbEntry->lpf == lpf) && (tlbEntry->accessBits & (0x10 << USER_PL)) != 0) {
+  if ((tlbEntry->lpf == lpf) && (tlbEntry->accessBits & (1<<USER_PL)) != 0) {
     BX_CPU_THIS_PTR pAddrFetchPage = tlbEntry->ppf;
     fetchPtr = (Bit8u*) tlbEntry->hostPageAddr;
   }  

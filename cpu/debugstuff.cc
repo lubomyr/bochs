@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: debugstuff.cc 13282 2017-08-22 21:14:39Z sshwarts $
+// $Id: debugstuff.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2009  The Bochs Project
@@ -98,7 +98,7 @@ const char* cpu_state_string(unsigned state)
      "in shutdown",
      "waiting for SIPI",
      "executing mwait",
-     "executing mwait inhibit interrups",
+     "executing mwait inhibit interrupts",
      "unknown state"
   };
 

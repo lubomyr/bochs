@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: apic.h 13602 2019-11-12 22:00:29Z sshwarts $
+// $Id: apic.h 13661 2019-12-10 21:07:19Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2002-2017 Zwane Mwaikambo, Stanislav Shwartsman
@@ -122,14 +122,15 @@ enum {
   APIC_DM_EXTINT   = 7
 };
 
-#define APIC_LVT_ENTRIES 6
 enum {
   APIC_LVT_TIMER   = 0,
   APIC_LVT_THERMAL = 1,
   APIC_LVT_PERFMON = 2,
   APIC_LVT_LINT0   = 3,
   APIC_LVT_LINT1   = 4,
-  APIC_LVT_ERROR   = 5
+  APIC_LVT_ERROR   = 5,
+  APIC_LVT_CMCI    = 6,
+  APIC_LVT_ENTRIES
 };
 
 class BOCHSAPI bx_local_apic_c : public logfunctions
@@ -288,6 +289,8 @@ public:
 int apic_bus_deliver_lowest_priority(Bit8u vector, apic_dest_t dest, bx_bool trig_mode, bx_bool broadcast);
 BOCHSAPI_MSVCONLY int apic_bus_deliver_interrupt(Bit8u vector, apic_dest_t dest, Bit8u delivery_mode, bx_bool logical_dest, bx_bool level, bx_bool trig_mode);
 int apic_bus_broadcast_interrupt(Bit8u vector, Bit8u delivery_mode, bx_bool trig_mode, int exclude_cpu);
+
+BX_CPP_INLINE bx_bool is_x2apic_msr_range(Bit32u index) { return index >= 0x800 && index <= 0x8FF; }
 
 #endif // if BX_SUPPORT_APIC
 

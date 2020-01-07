@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dbg_main.cc 13619 2019-11-26 19:04:55Z sshwarts $
+// $Id: dbg_main.cc 13702 2019-12-20 07:57:59Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -556,16 +556,18 @@ void bx_dbg_exception(unsigned cpu, Bit8u vector, Bit16u error_code)
      "(#AC) alignment check",
      "(#MC) machine check",
      "(#XF) SIMD floating point exception",
+     "(#VE) Virtualization Exception",
+     "(#CP) Shadow Stack Protection",
   };
 
   if (BX_CPU(dbg_cpu)->trace || bx_dbg.exceptions)
   {
-    if (vector <= BX_XM_EXCEPTION) {
-      dbg_printf("CPU %d: Exception 0x%02x - %s occured (error_code=0x%04x)\n",
+    if (vector <= BX_CP_EXCEPTION) {
+      dbg_printf("CPU %d: Exception 0x%02x - %s occurred (error_code=0x%04x)\n",
         cpu, vector, exception[vector], error_code);
     }
     else {
-      dbg_printf("CPU %d: Exception 0x%02x occured (error_code=0x%04x)\n",
+      dbg_printf("CPU %d: Exception 0x%02x occurred (error_code=0x%04x)\n",
         cpu, vector, error_code);
     }
   }
@@ -575,7 +577,7 @@ void bx_dbg_interrupt(unsigned cpu, Bit8u vector, Bit16u error_code)
 {
   if (BX_CPU(dbg_cpu)->trace || bx_dbg.interrupts)
   {
-    dbg_printf("CPU %d: Interrupt 0x%02x occured (error_code=0x%04x)\n",
+    dbg_printf("CPU %d: Interrupt 0x%02x occurred (error_code=0x%04x)\n",
       cpu, vector, error_code);
   }
 }
@@ -634,9 +636,10 @@ void bx_dbg_lin_memory_access(unsigned cpu, bx_address lin, bx_phy_address phy, 
   if (! BX_CPU(cpu)->trace_mem)
     return;
 
+  const char *access_type[] = {"RD","WR","EX","RW","SR","SW","--","SRW"};
+
   dbg_printf("[CPU%d %s]: LIN 0x" FMT_ADDRX " PHY 0x" FMT_PHY_ADDRX " (len=%d, %s)",
-     cpu, 
-     (rw == BX_WRITE) ? "WR" : "RD",
+     cpu, access_type[rw],
      lin, phy, len, get_memtype_name(memtype));
 
   if (len == 1) {
@@ -729,9 +732,10 @@ void bx_dbg_phy_memory_access(unsigned cpu, bx_phy_address phy, unsigned len, un
 
   if (memtype > BX_MEMTYPE_INVALID) memtype = BX_MEMTYPE_INVALID;
 
+  const char *access_type[] = {"RD","WR","EX","RW","SR","SW","--","SRW"};
+
   dbg_printf("[CPU%d %s]: PHY 0x" FMT_PHY_ADDRX " (len=%d, %s)",
-     cpu, 
-     (rw == BX_WRITE) ? "WR" : "RD",
+     cpu, access_type[rw],
      phy, len, get_memtype_name(memtype));
 
   if (len == 1) {
@@ -1019,7 +1023,8 @@ void bx_dbg_info_control_regs_command(void)
   dbg_printf("    PWT=page-level write-through=%d\n", (cr3>>3) & 1);
 #if BX_CPU_LEVEL >= 5
   Bit32u cr4 = SIM->get_param_num("CR4", dbg_cpu_list)->get();
-  dbg_printf("CR4=0x%08x: %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", cr4,
+  dbg_printf("CR4=0x%08x: %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n", cr4,
+    (cr4 & (1<<23)) ? "CET" : "cet",
     (cr4 & (1<<22)) ? "PKE" : "pke",
     (cr4 & (1<<21)) ? "SMAP" : "smap",
     (cr4 & (1<<20)) ? "SMEP" : "smep",
@@ -1169,6 +1174,12 @@ void bx_dbg_info_registers_command(int which_regs_mask)
     dbg_printf("r15: %08x_%08x\n", GET32H(reg), GET32L(reg));
     reg = bx_dbg_get_rip();
     dbg_printf("rip: %08x_%08x\n", GET32H(reg), GET32L(reg));
+#if BX_SUPPORT_CET
+    if (BX_CPU(dbg_cpu)->is_cpu_extension_supported(BX_ISA_CET)) {
+      reg = BX_CPU(dbg_cpu)->get_ssp();
+      dbg_printf("ssp: %08x_%08x\n", GET32H(reg), GET32L(reg));
+    }
+#endif
 #endif
     reg = BX_CPU(dbg_cpu)->read_eflags();
     dbg_printf("eflags 0x%08x: ", (unsigned) reg);
@@ -1481,9 +1492,14 @@ void bx_dbg_xlate_address(bx_lin_address laddr)
 
 void bx_dbg_tlb_lookup(bx_lin_address laddr)
 {
-  Bit32u index = BX_TLB_INDEX_OF(laddr, 0);
   char cpu_param_name[16];
-  sprintf(cpu_param_name, "TLB.entry%d", index);
+
+  Bit32u index = BX_ITLB_INDEX_OF(laddr);
+  sprintf(cpu_param_name, "ITLB.entry%d", index);
+  bx_dbg_show_param_command(cpu_param_name, 0);
+
+  index = BX_DTLB_INDEX_OF(laddr, 0);
+  sprintf(cpu_param_name, "DTLB.entry%d", index);
   bx_dbg_show_param_command(cpu_param_name, 0);
 }
 
@@ -2254,7 +2270,15 @@ void bx_dbg_disassemble_hex_mode_switch(int mode)
 
 void bx_dbg_take_command(const char *what, unsigned n)
 {
-  if (! strcmp(what, "dma")) {
+  if (! strcmp(what, "smi")) {
+    dbg_printf("Delivering SMI to cpu0\n");
+    BX_CPU(0)->deliver_SMI();
+  }
+  else if (! strcmp(what, "nmi")) {
+    dbg_printf("Delivering NMI to cpu0\n");
+    BX_CPU(0)->deliver_NMI();
+  }
+  else if (! strcmp(what, "dma")) {
     if (n == 0) {
       dbg_printf("Error: take what n=0.\n");
       return;
@@ -2773,7 +2797,7 @@ void bx_dbg_restore_command(const char *param_name, const char *restore_path)
   dbg_printf("restoring param (%s) state from file (%s/%s)\n",
       param_name, path, param_name);
   if (! SIM->restore_bochs_param(SIM->get_bochs_root(), path, param_name)) {
-    dbg_printf("Error: error occured during restore\n");
+    dbg_printf("Error: error occurred during restore\n");
   }
   else {
     bx_sr_after_restore_state();
@@ -2782,8 +2806,7 @@ void bx_dbg_restore_command(const char *param_name, const char *restore_path)
 
 void bx_dbg_disassemble_current(const char *format)
 {
-  Bit64u addr = bx_dbg_get_laddr(bx_dbg_get_selector_value(BX_SEG_REG_CS), 
-     BX_CPU(dbg_cpu)->get_instruction_pointer());
+  Bit64u addr = BX_CPU(dbg_cpu)->get_laddr(BX_SEG_REG_CS, BX_CPU(dbg_cpu)->get_instruction_pointer());
   bx_dbg_disassemble_command(format, addr, addr);
 }
 
@@ -3608,6 +3631,15 @@ bx_bool bx_dbg_eval_condition(char *condition)
   return eval_value != 0;
 }
 
+bx_address bx_dbg_get_ssp(void)
+{
+#if BX_SUPPORT_CET
+  return BX_CPU(dbg_cpu)->get_ssp();
+#else
+  return 0;
+#endif
+}
+
 Bit8u bx_dbg_get_reg8l_value(unsigned reg)
 {
   if (reg < 8 || (BX_CPU(dbg_cpu)->long64_mode() && reg < BX_GENERAL_REGISTERS))
@@ -3859,26 +3891,27 @@ bx_address bx_dbg_get_laddr(Bit16u sel, bx_address ofs)
   bx_address laddr;
 
   if (BX_CPU(dbg_cpu)->protected_mode()) {
-    bx_descriptor_t descriptor;
-    Bit32u lowaddr, highaddr;
 
+    bx_descriptor_t descriptor;
     if (! bx_dbg_read_pmode_descriptor(sel, &descriptor))
       return 0;
 
-    // expand-down
-    if (IS_DATA_SEGMENT(descriptor.type) && IS_DATA_SEGMENT_EXPAND_DOWN(descriptor.type)) {
-      lowaddr = descriptor.u.segment.limit_scaled;
-      highaddr = descriptor.u.segment.g ? 0xffffffff : 0xffff;
-    }
-    else {
-      lowaddr = 0;
-      highaddr = descriptor.u.segment.limit_scaled;
-    }
+    if (BX_CPU(dbg_cpu)->get_cpu_mode() != BX_MODE_LONG_64) {
+      Bit32u lowaddr, highaddr;
 
-    if ((ofs < lowaddr || ofs > highaddr) &&
-        BX_CPU(dbg_cpu)->get_cpu_mode() != BX_MODE_LONG_64) {
-      dbg_printf("WARNING: Offset %08X is out of selector %04x limit (%08x...%08x)!\n",
-        ofs, sel, lowaddr, highaddr);
+      // expand-down
+      if (IS_DATA_SEGMENT(descriptor.type) && IS_DATA_SEGMENT_EXPAND_DOWN(descriptor.type)) {
+        lowaddr = descriptor.u.segment.limit_scaled;
+        highaddr = descriptor.u.segment.g ? 0xffffffff : 0xffff;
+      }
+       else {
+        lowaddr = 0;
+        highaddr = descriptor.u.segment.limit_scaled;
+      }
+
+      if (ofs < lowaddr || ofs > highaddr) {
+        dbg_printf("WARNING: Offset %08X is out of selector %04x limit (%08x...%08x)!\n", ofs, sel, lowaddr, highaddr);
+      }
     }
 
     laddr = descriptor.u.segment.base + ofs;

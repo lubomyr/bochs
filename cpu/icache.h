@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.h 13214 2017-05-03 18:20:13Z sshwarts $
+// $Id: icache.h 13654 2019-12-09 16:44:36Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2007-2015 Stanislav Shwartsman
@@ -203,9 +203,9 @@ public:
     // break all links bewteen traces
     if (++traceLinkTimeStamp == 0xffffffff) {
       flushICacheEntries();
-      return BX_TRUE;
+      return true;
     }
-    return BX_FALSE;
+    return false;
   }
 };
 

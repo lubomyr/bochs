@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmcs.cc 13451 2018-01-27 21:20:33Z sshwarts $
+// $Id: vmcs.cc 13722 2019-12-22 18:53:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2009-2017 Stanislav Shwartsman
+//   Copyright (c) 2009-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -29,6 +29,10 @@
 
 #if BX_SUPPORT_VMX
 
+#define VMCS_REVISION_ID_FIELD_ADDR              (0x0000)
+#define VMCS_VMX_ABORT_FIELD_ADDR                (0x0004)
+#define VMCS_LAUNCH_STATE_FIELD_ADDR             (0x0008)
+
 VMCS_Mapping::VMCS_Mapping(Bit32u revision): revision_id(revision), ar_format(VMCS_AR_ROTATE)
 {
   clear();
@@ -53,6 +57,10 @@ BX_CPP_INLINE Bit32u vmcs_encoding(Bit32u type, Bit32u field)
 
 void VMCS_Mapping::init_generic_mapping()
 {
+  vmcs_revision_id_field_offset = VMCS_REVISION_ID_FIELD_ADDR;
+  vmx_abort_field_offset = VMCS_VMX_ABORT_FIELD_ADDR;
+  vmcs_launch_state_field_offset = VMCS_LAUNCH_STATE_FIELD_ADDR;
+
   // try to build generic VMCS map
   // 16 types, 48 encodings (0x30), 4 bytes each field => 3072 bytes
   // reserve VMCS_DATA_OFFSET bytes in the beginning for special (hidden) VMCS fields
@@ -89,23 +97,23 @@ bx_bool VMCS_Mapping::clear_mapping(Bit32u encoding)
 bx_bool VMCS_Mapping::set_mapping(Bit32u encoding, Bit32u offset)
 {
   if (is_reserved(encoding))
-    return BX_FALSE;
+    return false;
 
   unsigned field = VMCS_FIELD(encoding);
   if (field >= VMX_HIGHEST_VMCS_ENCODING)
-    return BX_FALSE;
+    return false;
 
   vmcs_map[VMCS_FIELD_INDEX(encoding)][field] = offset;
-  return BX_TRUE;
+  return true;
 }
 
 unsigned VMCS_Mapping::vmcs_field_offset(Bit32u encoding) const
 {
   if (is_reserved(encoding)) {
     switch(encoding) {
-      case VMCS_REVISION_ID_FIELD_ENCODING:  return VMCS_REVISION_ID_FIELD_ADDR;
-      case VMCS_VMX_ABORT_FIELD_ENCODING:    return VMCS_VMX_ABORT_FIELD_ADDR;
-      case VMCS_LAUNCH_STATE_FIELD_ENCODING: return VMCS_LAUNCH_STATE_FIELD_ADDR;
+      case VMCS_REVISION_ID_FIELD_ENCODING:  return vmcs_revision_id_field_offset;
+      case VMCS_VMX_ABORT_FIELD_ENCODING:    return vmx_abort_field_offset;
+      case VMCS_LAUNCH_STATE_FIELD_ENCODING: return vmcs_launch_state_field_offset;
     }
     return 0xffffffff;
   }
@@ -458,6 +466,10 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_GUEST_IA32_SYSENTER_ESP_MSR:
     case VMCS_GUEST_IA32_SYSENTER_EIP_MSR:
       return 1;
+    case VMCS_GUEST_IA32_S_CET:
+    case VMCS_GUEST_SSP:
+    case VMCS_GUEST_INTERRUPT_SSP_TABLE_ADDR:
+      return is_cpu_extension_supported(BX_ISA_CET);
 
     /* VMCS natural width host state fields */
     /* binary 0110_11xx_xxxx_xxx0 */
@@ -474,6 +486,10 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_HOST_RSP:
     case VMCS_HOST_RIP:
       return 1;
+    case VMCS_HOST_IA32_S_CET:
+    case VMCS_HOST_SSP:
+    case VMCS_HOST_INTERRUPT_SSP_TABLE_ADDR:
+      return is_cpu_extension_supported(BX_ISA_CET);
 
     default:
       return 0;
@@ -483,6 +499,74 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
 }
 
 void BX_CPU_C::init_vmx_capabilities(void)
+{
+  // initialization order is important !
+#if BX_SUPPORT_VMX >= 2
+  init_ept_vpid_capabilities();
+  init_vmfunc_capabilities();
+#endif
+  init_pin_based_vmexec_ctrls();
+  init_secondary_proc_based_vmexec_ctrls();
+  init_primary_proc_based_vmexec_ctrls();
+  init_vmexit_ctrls();
+  init_vmentry_ctrls();
+}
+
+#if BX_SUPPORT_VMX >= 2
+void BX_CPU_C::init_ept_vpid_capabilities(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
+
+  // EPT/VPID capabilities
+  // -----------------------------------------------------------
+  //  [0] - BX_EPT_ENTRY_EXECUTE_ONLY support
+  //  [6] - 4-levels EPT page walk length
+  //  [8] - allow UC EPT paging structure memory type
+  // [14] - allow WB EPT paging structure memory type
+  // [16] - EPT 2M pages support
+  // [17] - EPT 1G pages support
+  // [20] - INVEPT instruction supported
+  // [21] - EPT A/D bits supported
+  // [22] - advanced VM-exit information for EPT violations (not implemented yet)
+  // [23] - Enable Shadow Stack control bit is supported in EPTP (CET)
+  // [25] - INVEPT single-context invalidation supported
+  // [26] - INVEPT all-context invalidation supported
+  // [32] - INVVPID instruction supported
+  // [40] - individual-address INVVPID is supported
+  // [41] - single-context INVVPID is supported
+  // [42] - all-context INVVPID is supported
+  // [43] - single-context-retaining-globals INVVPID is supported
+
+  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT)) {
+    cap->vmx_ept_vpid_cap_supported_bits = BX_CONST64(0x06114141);
+    if (is_cpu_extension_supported(BX_ISA_1G_PAGES))
+      cap->vmx_ept_vpid_cap_supported_bits |= (1 << 17);
+    if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT_ACCESS_DIRTY))
+      cap->vmx_ept_vpid_cap_supported_bits |= (1 << 21);
+    if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET))
+      cap->vmx_ept_vpid_cap_supported_bits |= (1 << 23);
+  }
+  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_VPID))
+    cap->vmx_ept_vpid_cap_supported_bits |= BX_CONST64(0x00000f01) << 32;
+}
+
+void BX_CPU_C::init_vmfunc_capabilities(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
+
+  // vm functions
+  // -----------------------------------------------------------
+  //    [00] EPTP switching
+  // [63-01] reserved
+
+  cap->vmx_vmfunc_supported_bits = 0;
+
+  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPTP_SWITCHING))
+    cap->vmx_vmfunc_supported_bits |= VMX_VMFUNC_EPTP_SWITCHING_MASK;
+}
+#endif
+
+void BX_CPU_C::init_pin_based_vmexec_ctrls(void)
 {
   struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
 
@@ -495,6 +579,7 @@ void BX_CPU_C::init_vmx_capabilities(void)
   // 1 [04] Reserved (must be '1)
   //   [05] Virtual NMI (require Virtual NMI support)
   //   [06] Activate VMX Preemption Timer (require VMX Preemption Timer support)
+  //   [07] Process Posted interrupts
 
   cap->vmx_pin_vmexec_ctrl_supported_bits =
        VMX_VM_EXEC_CTRL1_EXTERNAL_INTERRUPT_VMEXIT |
@@ -505,6 +590,11 @@ void BX_CPU_C::init_vmx_capabilities(void)
   if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_PREEMPTION_TIMER))
     cap->vmx_pin_vmexec_ctrl_supported_bits |= VMX_VM_EXEC_CTRL1_VMX_PREEMPTION_TIMER_VMEXIT;
 #endif
+}
+
+void BX_CPU_C::init_primary_proc_based_vmexec_ctrls(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
 
   // proc based vm exec controls
   // -----------------------------------------------------------
@@ -574,6 +664,15 @@ void BX_CPU_C::init_vmx_capabilities(void)
         VMX_VM_EXEC_CTRL2_CR3_WRITE_VMEXIT | VMX_VM_EXEC_CTRL2_CR3_READ_VMEXIT;
   }
 #endif
+
+  // enable secondary vm exec controls if there are secondary proc-based vmexec controls present
+  if (cap->vmx_vmexec_ctrl2_supported_bits != 0)
+    cap->vmx_proc_vmexec_ctrl_supported_bits |= VMX_VM_EXEC_CTRL2_SECONDARY_CONTROLS;
+}
+
+void BX_CPU_C::init_secondary_proc_based_vmexec_ctrls(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
 
   // secondary proc based vm exec controls
   // -----------------------------------------------------------
@@ -672,9 +771,16 @@ void BX_CPU_C::init_vmx_capabilities(void)
     cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_TSC_SCALING;
   }
 
-  // enable secondary vm exec controls if needed
-  if (cap->vmx_vmexec_ctrl2_supported_bits != 0)
-    cap->vmx_proc_vmexec_ctrl_supported_bits |= VMX_VM_EXEC_CTRL2_SECONDARY_CONTROLS;
+#if BX_SUPPORT_VMX >= 2
+  // enable vm functions secondary vmexec control if there are supported vmfunctions
+  if (cap->vmx_vmfunc_supported_bits != 0)
+    cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_VMFUNC_ENABLE;
+#endif
+}
+
+void BX_CPU_C::init_vmexit_ctrls(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
 
   // vmexit controls
   // -----------------------------------------------------------
@@ -714,6 +820,15 @@ void BX_CPU_C::init_vmx_capabilities(void)
   if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_PREEMPTION_TIMER))
     cap->vmx_vmexit_ctrl_supported_bits |= VMX_VMEXIT_CTRL1_STORE_VMX_PREEMPTION_TIMER;
 #endif
+#if BX_SUPPORT_CET
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET))
+    cap->vmx_vmexit_ctrl_supported_bits |= VMX_VMEXIT_CTRL1_LOAD_HOST_CET_STATE;
+#endif
+}
+
+void BX_CPU_C::init_vmentry_ctrls(void)
+{
+  struct bx_VMX_Cap *cap = &BX_CPU_THIS_PTR vmx_cap;
 
   // vmentry controls
   // -----------------------------------------------------------
@@ -744,53 +859,10 @@ void BX_CPU_C::init_vmx_capabilities(void)
   if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EFER))
     cap->vmx_vmentry_ctrl_supported_bits |= VMX_VMENTRY_CTRL1_LOAD_EFER_MSR;
 #endif
-
-#if BX_SUPPORT_VMX >= 2
-
-  // EPT/VPID capabilities
-  // -----------------------------------------------------------
-  //  [0] - BX_EPT_ENTRY_EXECUTE_ONLY support
-  //  [6] - 4-levels EPT page walk length
-  //  [8] - allow UC EPT paging structure memory type
-  // [14] - allow WB EPT paging structure memory type
-  // [16] - EPT 2M pages support
-  // [17] - EPT 1G pages support
-  // [20] - INVEPT instruction supported
-  // [21] - EPT A/D bits supported
-  // [22] - advanced VM-exit information for EPT violations (not implemented yet)
-  // [25] - INVEPT single-context invalidation supported
-  // [26] - INVEPT all-context invalidation supported
-  // [32] - INVVPID instruction supported
-  // [40] - individual-address INVVPID is supported
-  // [41] - single-context INVVPID is supported
-  // [42] - all-context INVVPID is supported
-  // [43] - single-context-retaining-globals INVVPID is supported
-
-  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT)) {
-    cap->vmx_ept_vpid_cap_supported_bits = BX_CONST64(0x06114141);
-    if (is_cpu_extension_supported(BX_ISA_1G_PAGES))
-      cap->vmx_ept_vpid_cap_supported_bits |= (1 << 17);
-    if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT_ACCESS_DIRTY))
-      cap->vmx_ept_vpid_cap_supported_bits |= (1 << 21);
-  }
-  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_VPID))
-    cap->vmx_ept_vpid_cap_supported_bits |= BX_CONST64(0x00000f01) << 32;
-
-  // vm functions
-  // -----------------------------------------------------------
-  //    [00] EPTP switching
-  // [63-01] reserved
-
-  cap->vmx_vmfunc_supported_bits = 0;
-
-  if (BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPTP_SWITCHING))
-    cap->vmx_vmfunc_supported_bits |= VMX_VMFUNC_EPTP_SWITCHING_MASK;
-
-  // enable vm functions secondary vmexec control if needed
-  if (cap->vmx_vmfunc_supported_bits != 0)
-    cap->vmx_vmexec_ctrl2_supported_bits |= VMX_VM_EXEC_CTRL3_VMFUNC_ENABLE;
-
+#if BX_SUPPORT_CET
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET))
+    cap->vmx_vmentry_ctrl_supported_bits |= VMX_VMENTRY_CTRL1_LOAD_GUEST_CET_STATE;
 #endif
 }
 
-#endif
+#endif // BX_SUPPORT_VMX

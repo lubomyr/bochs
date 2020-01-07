@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpuid.cc 13586 2019-10-26 20:09:30Z sshwarts $
+// $Id: cpuid.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2014-2019 Stanislav Shwartsman
@@ -46,7 +46,7 @@ static const char *cpu_feature_name[] =
   "legacy_syscall_sysret",  // BX_ISA_SYSCALL_SYSRET_LEGACY
   "sysenter_sysexit",       // BX_ISA_SYSENTER_SYSEXIT
   "clflush",                // BX_ISA_CLFLUSH
-  "clflushout",             // BX_ISA_CLFLUSHOPT
+  "clflushopt",             // BX_ISA_CLFLUSHOPT
   "clwb",                   // BX_ISA_CLWB
   "cldemote",               // BX_ISA_CLDEMOTE
   "sse",                    // BX_ISA_SSE
@@ -110,7 +110,7 @@ static const char *cpu_feature_name[] =
   "avx512ivpopcnt",         // BX_ISA_AVX512_VPOPCNTDQ
   "avx512ivnni",            // BX_ISA_AVX512_VNNI
   "avx512ibitalg",          // BX_ISA_AVX512_BITALG
-  "avx512vp2intersect"      // BX_ISA_AVX512_VP2INTERSECT
+  "avx512vp2intersect",     // BX_ISA_AVX512_VP2INTERSECT
   "xapic",                  // BX_ISA_XAPIC
   "x2apic",                 // BX_ISA_X2APIC
   "xapicext",               // BX_ISA_XAPICEXT
@@ -126,6 +126,7 @@ static const char *cpu_feature_name[] =
   "tce",                    // BX_ISA_TCE
   "clzero",                 // BX_ISA_CLZERO
   "sca_mitigations",        // BX_ISA_SCA_MITIGATIONS
+  "cet",                    // BX_ISA_CET
 };
 
 const char *get_cpu_feature_name(unsigned feature) { return cpu_feature_name[feature]; }
@@ -320,7 +321,7 @@ void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *
       leaf->ebx = 0;
       if (is_cpu_extension_supported(BX_ISA_XSAVES)) {
         xcr0_t xcr0_xss = cpu->xcr0;
-        xcr0_xss.val32 |= cpu->msr.msr_xss;
+        xcr0_xss.val32 |= cpu->msr.ia32_xss;
 #if BX_SUPPORT_AVX
         if (xcr0_xss.get_YMM())
           leaf->ebx = XSAVE_YMM_STATE_OFFSET + XSAVE_YMM_STATE_LEN;
@@ -343,7 +344,10 @@ void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *
       //             IA32_XSS[n]    can be set to 1 only if ECX[n] is 1
       // EDX[31:0] - Reports the supported bits of the upper 32 bits of the IA32_XSS MSR.
       //             IA32_XSS[n+32] can be set to 1 only if EDX[n] is 1
-      leaf->ecx = 0; // no supported bits in MSR_XSS for now
+      leaf->ecx = 0;
+#if BX_SUPPPORT_CET
+      leaf->ecx |= BX_XCR0_CET_U_MASK | BX_XCR0_CET_S_MASK;
+#endif
       leaf->edx = 0;
       break;
 
@@ -393,7 +397,7 @@ void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *
       break;
 
 #if BX_SUPPPORT_PKEYS
-    case 9: // Ptotection keys
+    case 9: // Protection keys
       if (cpu->xcr0_suppmask & BX_XCR0_PKRU_MASK) {
         leaf->eax = XSAVE_PKRU_STATE_LEN;
         leaf->ebx = XSAVE_PKRU_STATE_OFFSET;
@@ -402,6 +406,26 @@ void bx_cpuid_t::get_std_cpuid_xsave_leaf(Bit32u subfunction, cpuid_function_t *
       }
       break;
 #endif
+
+#if BX_SUPPPORT_CET
+    case 10:
+      if (cpu->xcr0_suppmask & BX_XCR0_CET_U_MASK) {
+        leaf->eax = XSAVE_CET_U_STATE_LEN;
+        leaf->ebx = 0;  // doesn't map to a valid bit in XCR0 register
+        leaf->ecx = 1;  // managed through IA32_XSS register
+        leaf->edx = 0;
+      }
+      break;
+    case 11:
+      if (cpu->xcr0_suppmask & BX_XCR0_CET_S_MASK) {
+        leaf->eax = XSAVE_CET_S_STATE_LEN;
+        leaf->ebx = 0;  // doesn't map to a valid bit in XCR0 register
+        leaf->ecx = 1;  // managed through IA32_XSS register
+        leaf->edx = 0;
+      }
+      break;
+#endif
+
     }
   }
 }

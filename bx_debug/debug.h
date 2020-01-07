@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: debug.h 13281 2017-08-22 21:03:58Z sshwarts $
+// $Id: debug.h 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2016  The Bochs Project
@@ -78,6 +78,7 @@ Bit16u bx_dbg_get_selector_value(unsigned int seg_no);
 Bit16u bx_dbg_get_ip (void);
 Bit32u bx_dbg_get_eip(void);
 bx_address bx_dbg_get_rip(void);
+bx_address bx_dbg_get_ssp(void);
 Bit8u bx_dbg_get_reg8l_value(unsigned reg);
 Bit8u bx_dbg_get_reg8h_value(unsigned reg);
 Bit16u bx_dbg_get_reg16_value(unsigned reg);

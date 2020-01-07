@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: svga_cirrus.cc 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: svga_cirrus.cc 13755 2020-01-01 14:16:29Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2004 Makoto Suzuki (suzu)
 //                     Volker Ruppert (vruppert)
 //                     Robin Kay (komadori)
-//  Copyright (C) 2004-2019  The Bochs Project
+//  Copyright (C) 2004-2020  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -342,18 +342,10 @@ void bx_svga_cirrus_c::svga_init_members()
   BX_CIRRUS_THIS disp_ptr = BX_CIRRUS_THIS s.memory;
   BX_CIRRUS_THIS memsize_mask = BX_CIRRUS_THIS s.memsize - 1;
 
-  // TODO: This should be done by the VGABIOS
-  BX_CIRRUS_THIS sequencer.reg[0x0b] = 0x4a;
-  BX_CIRRUS_THIS sequencer.reg[0x1b] = 0x2b;
+  // VCLK defaults - should be set up by the VGABIOS
   BX_CIRRUS_THIS s.vclk[0] = 25227000;
-  BX_CIRRUS_THIS sequencer.reg[0x0c] = 0x5b;
-  BX_CIRRUS_THIS sequencer.reg[0x1c] = 0x2f;
   BX_CIRRUS_THIS s.vclk[1] = 28325000;
-  BX_CIRRUS_THIS sequencer.reg[0x0d] = 0x42;
-  BX_CIRRUS_THIS sequencer.reg[0x1d] = 0x1f;
   BX_CIRRUS_THIS s.vclk[2] = 31500000;
-  BX_CIRRUS_THIS sequencer.reg[0x0e] = 0x7e;
-  BX_CIRRUS_THIS sequencer.reg[0x1e] = 0x33;
   BX_CIRRUS_THIS s.vclk[3] = 36082000;
 }
 
@@ -2007,6 +1999,7 @@ void bx_svga_cirrus_c::svga_write_control(Bit32u address, unsigned index, Bit8u 
       break;
     case 0x34: // BLT TRANSPARENT COLOR 0x00ff
     case 0x35: // BLT TRANSPARENT COLOR 0xff00
+      break;
     case 0x38: // BLT TRANSPARENT COLOR MASK 0x00ff
     case 0x39: // BLT TRANSPARENT COLOR MASK 0xff00
     default:
@@ -2870,8 +2863,8 @@ void bx_svga_cirrus_c::svga_simplebitblt()
 {
   Bit8u color[4];
   Bit8u work_colorexp[2048];
-  Bit16u w, x, y;
-  Bit8u *dst;
+  Bit16u w, x, y, pxcolor, trcolor;
+  Bit8u *src, *dst;
   unsigned bits, bits_xor, bitmask;
   int pattern_x, srcskipleft;
 
@@ -2927,8 +2920,45 @@ void bx_svga_cirrus_c::svga_simplebitblt()
       }
       return;
     }
-  }
-  if (BX_CIRRUS_THIS bitblt.bltmode & ~CIRRUS_BLTMODE_BACKWARDS) {
+  } else if (BX_CIRRUS_THIS bitblt.bltmode & CIRRUS_BLTMODE_TRANSPARENTCOMP) {
+    if (BX_CIRRUS_THIS bitblt.pixelwidth == 1) {
+      trcolor = BX_CIRRUS_THIS control.reg[0x34];
+      for (y = 0; y < BX_CIRRUS_THIS bitblt.bltheight; y++) {
+        src = (Bit8u*)BX_CIRRUS_THIS bitblt.src;
+        dst = BX_CIRRUS_THIS bitblt.dst;
+        for (x = 0; x < BX_CIRRUS_THIS bitblt.bltwidth; x++) {
+          if (*src != trcolor) {
+            (*BX_CIRRUS_THIS bitblt.rop_handler)(dst, src, 0, 0, 1, 1);
+          }
+          src++;
+          dst++;
+        }
+        BX_CIRRUS_THIS bitblt.src += BX_CIRRUS_THIS bitblt.srcpitch;
+        BX_CIRRUS_THIS bitblt.dst += BX_CIRRUS_THIS bitblt.dstpitch;
+      }
+      return;
+    } else if (BX_CIRRUS_THIS bitblt.pixelwidth == 2) {
+      trcolor = BX_CIRRUS_THIS control.reg[0x34] | (BX_CIRRUS_THIS control.reg[0x35] << 8);
+      for (y = 0; y < BX_CIRRUS_THIS bitblt.bltheight; y++) {
+        src = (Bit8u*)BX_CIRRUS_THIS bitblt.src;
+        dst = BX_CIRRUS_THIS bitblt.dst;
+        for (x = 0; x < BX_CIRRUS_THIS bitblt.bltwidth; x+=2) {
+          pxcolor = src[0] | (src[1] << 8);
+          if (pxcolor != trcolor) {
+            (*BX_CIRRUS_THIS bitblt.rop_handler)(dst, src, 0, 0, 2, 1);
+          }
+          src += 2;
+          dst += 2;
+        }
+        BX_CIRRUS_THIS bitblt.src += BX_CIRRUS_THIS bitblt.srcpitch;
+        BX_CIRRUS_THIS bitblt.dst += BX_CIRRUS_THIS bitblt.dstpitch;
+      }
+      return;
+    } else {
+      BX_ERROR(("SIMPLE BLT: bltmode TRANSPARENTCOMP: depth > 16 bpp unsupported"));
+      return;
+    }
+  } else if (BX_CIRRUS_THIS bitblt.bltmode & ~CIRRUS_BLTMODE_BACKWARDS) {
     BX_ERROR(("SIMPLE BLT: unknown bltmode %02x",BX_CIRRUS_THIS bitblt.bltmode));
     return;
   }

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: xsave.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: xsave.cc 13743 2019-12-28 15:20:38Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2008-2018 Stanislav Shwartsman
+//   Copyright (c) 2008-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -24,11 +24,22 @@
 #define NEED_CPU_REG_SHORTCUTS 1
 #include "bochs.h"
 #include "cpu.h"
+#include "msr.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
 #include "decoder/ia_opcodes.h"
 
 const Bit64u XSAVEC_COMPACTION_ENABLED = BX_CONST64(0x8000000000000000);
+
+#if BX_CPU_LEVEL >= 6
+extern XSaveRestoreStateHelper xsave_restore[];
+#endif
+
+#if BX_USE_CPU_SMF == 0
+#define CALL_XSAVE_FN(ptrToFunc)  (this->*(ptrToFunc))
+#else
+#define CALL_XSAVE_FN(ptrToFunc)  (ptrToFunc)
+#endif
 
 /* 0F AE /4 */
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVE(bxInstruction_c *i)
@@ -59,10 +70,6 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVE(bxInstruction_c *i)
 
   bx_address asize_mask = i->asize_mask();
 
-  //
-  // We will go feature-by-feature and not run over all XCR0 bits
-  //
-
   Bit64u xstate_bv = read_virtual_qword(i->seg(), (eaddr + 512) & asize_mask);
 
   Bit32u requested_feature_bitmap = BX_CPU_THIS_PTR xcr0.get32() & EAX;
@@ -89,77 +96,28 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVE(bxInstruction_c *i)
   }
 
   /////////////////////////////////////////////////////////////////////////////
-  if ((requested_feature_bitmap & BX_XCR0_SSE_MASK) != 0)
+  for (unsigned feature = xcr0_t::BX_XCR0_SSE_BIT; feature < xcr0_t::BX_XCR0_LAST; feature++)
   {
-    if (! xsaveopt || (xinuse & BX_XCR0_SSE_MASK) != 0)
-      xsave_sse_state(i, eaddr+XSAVE_SSE_STATE_OFFSET);
+    Bit32u feature_mask = (1 << feature);
 
-    if (xinuse & BX_XCR0_SSE_MASK)
-      xstate_bv |=  BX_XCR0_SSE_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_SSE_MASK;
+    if ((requested_feature_bitmap & feature_mask) != 0)
+    {
+      if (! xsave_restore[feature].len) {
+        BX_ERROR(("%s: feature #%d requested to save but not implemented !", i->getIaOpcodeNameShort(), feature));
+        continue;
+      }
+
+      if (! xsaveopt || (xinuse & feature_mask) != 0) {
+        BX_ASSERT(xsave_restore[feature].xsave_method);
+        CALL_XSAVE_FN(xsave_restore[feature].xsave_method)(i, eaddr+xsave_restore[feature].offset);
+      }
+
+      if (xinuse & feature_mask)
+        xstate_bv |=  Bit64u(feature_mask);
+      else
+        xstate_bv &= ~Bit64u(feature_mask);
+    }
   }
-
-#if BX_SUPPORT_AVX
-  if ((requested_feature_bitmap & BX_XCR0_YMM_MASK) != 0)
-  {
-    if (! xsaveopt || (xinuse & BX_XCR0_YMM_MASK) != 0)
-      xsave_ymm_state(i, eaddr+XSAVE_YMM_STATE_OFFSET);
-
-    if (xinuse & BX_XCR0_YMM_MASK)
-      xstate_bv |=  BX_XCR0_YMM_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_YMM_MASK;
-  }
-#endif
-
-#if BX_SUPPORT_EVEX
-  if ((requested_feature_bitmap & BX_XCR0_OPMASK_MASK) != 0)
-  {
-    if (! xsaveopt || (xinuse & BX_XCR0_OPMASK_MASK) != 0)
-      xsave_opmask_state(i, eaddr+XSAVE_OPMASK_STATE_OFFSET);
-
-    if (xinuse & BX_XCR0_OPMASK_MASK)
-      xstate_bv |=  BX_XCR0_OPMASK_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_OPMASK_MASK;
-  }
-
-  if ((requested_feature_bitmap & BX_XCR0_ZMM_HI256_MASK) != 0)
-  {
-    if (! xsaveopt || (xinuse & BX_XCR0_ZMM_HI256_MASK) != 0)
-      xsave_zmm_hi256_state(i, eaddr+XSAVE_ZMM_HI256_STATE_OFFSET);
-
-    if (xinuse & BX_XCR0_ZMM_HI256_MASK)
-      xstate_bv |=  BX_XCR0_ZMM_HI256_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_ZMM_HI256_MASK;
-  }
-
-  if ((requested_feature_bitmap & BX_XCR0_HI_ZMM_MASK) != 0)
-  {
-    if (! xsaveopt || (xinuse & BX_XCR0_HI_ZMM_MASK) != 0)
-      xsave_hi_zmm_state(i, eaddr+XSAVE_HI_ZMM_STATE_OFFSET);
-
-    if (xinuse & BX_XCR0_HI_ZMM_MASK)
-      xstate_bv |=  BX_XCR0_HI_ZMM_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_HI_ZMM_MASK;
-  }
-#endif
-
-#if BX_SUPPORT_PKEYS
-  if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0)
-  {
-    if (! xsaveopt || (xinuse & BX_XCR0_PKRU_MASK) != 0)
-      xsave_pkru_state(i, eaddr+XSAVE_PKRU_STATE_OFFSET);
-
-    if (xinuse & BX_XCR0_PKRU_MASK)
-      xstate_bv |=  BX_XCR0_PKRU_MASK;
-    else
-      xstate_bv &= ~BX_XCR0_PKRU_MASK;
-  }
-#endif
 
   // always update header to 'dirty' state
   write_virtual_qword(i->seg(), (eaddr + 512) & asize_mask, xstate_bv);
@@ -190,13 +148,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVEC(bxInstruction_c *i)
 
       VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
       Bit64u requested_features = (((Bit64u) EDX) << 32) | EAX;
-      if (requested_features & BX_CPU_THIS_PTR msr.msr_xss & vm->xss_exiting_bitmap)
+      if (requested_features & BX_CPU_THIS_PTR msr.ia32_xss & vm->xss_exiting_bitmap)
         VMexit_Instruction(i, VMX_VMEXIT_XSAVES);
     }
 #endif
   }
 
-  BX_DEBUG(("%s: save processor state XCR0=0x%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32()));
+  BX_DEBUG(("%s: save processor state XCR0=0x%08x XSS=%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   bx_address laddr = get_laddr(i->seg(), eaddr);
@@ -215,13 +173,11 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVEC(bxInstruction_c *i)
     exception(BX_GP_EXCEPTION, 0);
   }
 
-  //
-  // We will go feature-by-feature and not run over all XCR0 bits
-  //
+  bx_address asize_mask = i->asize_mask();
 
-  Bit32u xcr0 = BX_CPU_THIS_PTR xcr0.get32();
+  Bit64u xcr0 = (Bit64u) BX_CPU_THIS_PTR xcr0.get32();
   if (xsaves)
-    xcr0 |= BX_CPU_THIS_PTR msr.msr_xss;
+    xcr0 |= BX_CPU_THIS_PTR msr.ia32_xss;
 
   Bit32u requested_feature_bitmap = xcr0 & EAX;
   Bit32u xinuse = get_xinuse_vector(requested_feature_bitmap);
@@ -240,61 +196,30 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVEC(bxInstruction_c *i)
     // write cannot cause any boundary cross because XSAVE image is 64-byte aligned
     write_virtual_dword(i->seg(), eaddr + 24, BX_MXCSR_REGISTER);
     write_virtual_dword(i->seg(), eaddr + 28, MXCSR_MASK);
+  }
 
-    if (xinuse & BX_XCR0_SSE_MASK) {
-      xsave_sse_state(i, eaddr+XSAVE_SSE_STATE_OFFSET);
+  Bit32u offset = XSAVE_SSE_STATE_OFFSET;
+
+  /////////////////////////////////////////////////////////////////////////////
+  for (unsigned feature = xcr0_t::BX_XCR0_SSE_BIT; feature < xcr0_t::BX_XCR0_LAST; feature++)
+  {
+    Bit32u feature_mask = (1 << feature);
+
+    if ((requested_feature_bitmap & feature_mask) != 0)
+    {
+      if (! xsave_restore[feature].len) {
+        BX_ERROR(("%s: feature #%d requested to save but not implemented !", i->getIaOpcodeNameShort(), feature));
+        continue;
+      }
+
+      if (xinuse & feature_mask) {
+        BX_ASSERT(xsave_restore[feature].xsave_method);
+        CALL_XSAVE_FN(xsave_restore[feature].xsave_method)(i, eaddr+offset);
+      }
+
+      offset += xsave_restore[feature].len;
     }
   }
-
-  Bit32u offset = XSAVE_YMM_STATE_OFFSET;
-
-#if BX_SUPPORT_AVX
-  if ((requested_feature_bitmap & BX_XCR0_YMM_MASK) != 0)
-  {
-    if (xinuse & BX_XCR0_YMM_MASK)
-      xsave_ymm_state(i, eaddr+offset);
-
-    offset += XSAVE_YMM_STATE_LEN;
-  }
-#endif
-
-#if BX_SUPPORT_EVEX
-  if ((requested_feature_bitmap & BX_XCR0_OPMASK_MASK) != 0)
-  {
-    if (xinuse & BX_XCR0_OPMASK_MASK)
-      xsave_opmask_state(i, eaddr+offset);
-
-    offset += XSAVE_OPMASK_STATE_LEN;
-  }
-
-  if ((requested_feature_bitmap & BX_XCR0_ZMM_HI256_MASK) != 0)
-  {
-    if (xinuse & BX_XCR0_ZMM_HI256_MASK)
-      xsave_zmm_hi256_state(i, eaddr+offset);
-
-    offset += XSAVE_ZMM_HI256_STATE_LEN;
-  }
-
-  if ((requested_feature_bitmap & BX_XCR0_HI_ZMM_MASK) != 0)
-  {
-    if (xinuse & BX_XCR0_HI_ZMM_MASK)
-      xsave_hi_zmm_state(i, eaddr+offset);
-
-    offset += XSAVE_HI_ZMM_STATE_LEN;
-  }
-#endif
-
-#if BX_SUPPORT_PKEYS
-  if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0)
-  {
-    if (xinuse & BX_XCR0_PKRU_MASK)
-      xsave_pkru_state(i, eaddr+offset);
-
-    offset += XSAVE_PKRU_STATE_LEN;
-  }
-#endif
-
-  bx_address asize_mask = i->asize_mask();
 
   // always update header to 'dirty' state
   write_virtual_qword(i->seg(), (eaddr + 512) & asize_mask, xstate_bv);
@@ -326,13 +251,13 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
 
       VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
       Bit64u requested_features = (((Bit64u) EDX) << 32) | EAX;
-      if (requested_features & BX_CPU_THIS_PTR msr.msr_xss & vm->xss_exiting_bitmap)
+      if (requested_features & BX_CPU_THIS_PTR msr.ia32_xss & vm->xss_exiting_bitmap)
         VMexit_Instruction(i, VMX_VMEXIT_XRSTORS);
     }
 #endif
   }
 
-  BX_DEBUG(("%s: restore processor state XCR0=0x%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32()));
+  BX_DEBUG(("%s: restore processor state XCR0=0x%08x XSS=%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   bx_address laddr = get_laddr(i->seg(), eaddr);
@@ -358,7 +283,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
   Bit64u header3 = read_virtual_qword(i->seg(), (eaddr + 528) & asize_mask);
 
   if (header3 != 0) {
-    BX_ERROR(("%s: Reserved header state is not '0", i->getIaOpcodeNameShort()));
+    BX_ERROR(("%s: Reserved header3 state is not '0", i->getIaOpcodeNameShort()));
     exception(BX_GP_EXCEPTION, 0);
   }
 
@@ -366,29 +291,34 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
 
   if (! BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVEC) || ! compaction) {
     if (xcomp_bv != 0) {
-      BX_ERROR(("%s: Reserved header state is not '0", i->getIaOpcodeNameShort()));
+      BX_ERROR(("%s: Reserved header2 state is not '0", i->getIaOpcodeNameShort()));
       exception(BX_GP_EXCEPTION, 0);
     }
   }
 
-  Bit32u xcr0 = BX_CPU_THIS_PTR xcr0.get32();
+  Bit64u xcr0 = (Bit64u) BX_CPU_THIS_PTR xcr0.get32();
   if (xrstors)
-    xcr0 |= BX_CPU_THIS_PTR msr.msr_xss;
+    xcr0 |= BX_CPU_THIS_PTR msr.ia32_xss;
 
   if (! compaction) {
-    if ((~xcr0 & xstate_bv) != 0 || (GET32H(xstate_bv) << 1) != 0) {
+    if (xrstors) {
+      BX_ERROR(("XRSTORS require compaction XCOMP_BV[63] to be set"));
+      exception(BX_GP_EXCEPTION, 0);
+    }
+
+    if ((~xcr0 & xstate_bv) != 0) {
       BX_ERROR(("%s: Invalid xsave_bv state", i->getIaOpcodeNameShort()));
       exception(BX_GP_EXCEPTION, 0);
     }
   }
   else {
-    if ((~xcr0 & xcomp_bv) != 0 || (GET32H(xcomp_bv) << 1) != 0) {
+    if ((~xcr0 & xcomp_bv & ~XSAVEC_COMPACTION_ENABLED) != 0) {
       BX_ERROR(("%s: Invalid xcomp_bv state", i->getIaOpcodeNameShort()));
       exception(BX_GP_EXCEPTION, 0);
     }
     
     if (xstate_bv & ~xcomp_bv) {
-      BX_ERROR(("%s: Invalid xcomp_bv state", i->getIaOpcodeNameShort()));
+      BX_ERROR(("%s: xstate_bv set a bit which is not in xcomp_bv state", i->getIaOpcodeNameShort()));
       exception(BX_GP_EXCEPTION, 0);
     }
 
@@ -399,14 +329,10 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
     Bit64u header8 = read_virtual_qword(i->seg(), (eaddr + 568) & asize_mask);
 
     if (header4 | header5 | header6 | header7 | header8) {
-      BX_ERROR(("%s: Reserved header state is not '0", i->getIaOpcodeNameShort()));
+      BX_ERROR(("%s: Reserved header4_header7 state is not '0", i->getIaOpcodeNameShort()));
       exception(BX_GP_EXCEPTION, 0);
     }
   }
-
-  //
-  // We will go feature-by-feature and not run over all XCR0 bits
-  //
 
   Bit32u requested_feature_bitmap = xcr0 & EAX;
 
@@ -442,120 +368,64 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
   if (compaction) {
     Bit32u offset = XSAVE_YMM_STATE_OFFSET;
 
-#if BX_SUPPORT_AVX
     /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_YMM_MASK) != 0)
+    for (unsigned feature = xcr0_t::BX_XCR0_YMM_BIT; feature < xcr0_t::BX_XCR0_LAST; feature++)
     {
-      if (xstate_bv & BX_XCR0_YMM_MASK)
-        xrstor_ymm_state(i, eaddr+offset);
-      else
-        xrstor_init_ymm_state();
+      Bit32u feature_mask = (1 << feature);
+    
+      if ((requested_feature_bitmap & feature_mask) != 0)
+      {
+        if (! xsave_restore[feature].len) {
+          BX_ERROR(("%s: feature #%d requested to restore but not implemented !", i->getIaOpcodeNameShort(), feature));
+          continue;
+        }
 
-      offset += XSAVE_YMM_STATE_LEN;
+        if (xstate_bv & feature_mask) {
+          BX_ASSERT(xsave_restore[feature].xrstor_method);
+          CALL_XSAVE_FN(xsave_restore[feature].xrstor_method)(i, eaddr+offset);
+        }
+        else {
+          BX_ASSERT(xsave_restore[feature].xrstor_init_method);
+          CALL_XSAVE_FN(xsave_restore[feature].xrstor_init_method)();
+        }
+
+        offset += xsave_restore[feature].len;
+      }
     }
-#endif
-
-#if BX_SUPPORT_EVEX
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_OPMASK_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_OPMASK_MASK)
-        xrstor_opmask_state(i, eaddr+offset);
-      else
-        xrstor_init_opmask_state();
-
-      offset += XSAVE_OPMASK_STATE_LEN;
-    }
-
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_ZMM_HI256_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_ZMM_HI256_MASK)
-        xrstor_zmm_hi256_state(i, eaddr+offset);
-      else
-        xrstor_init_zmm_hi256_state();
-
-      offset += XSAVE_ZMM_HI256_STATE_LEN;
-    }
-
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_HI_ZMM_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_HI_ZMM_MASK)
-        xrstor_hi_zmm_state(i, eaddr+offset);
-      else
-        xrstor_init_hi_zmm_state();
-
-      offset += XSAVE_HI_ZMM_STATE_LEN;
-    }
-#endif
-
-#if BX_SUPPORT_PKEYS
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_PKRU_MASK)
-        xrstor_pkru_state(i, eaddr+offset);
-      else
-        xrstor_init_pkru_state();
-
-      offset += XSAVE_PKRU_STATE_LEN;
-    }
-#endif
   }
   else {
-#if BX_SUPPORT_AVX
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_YMM_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_YMM_MASK)
-        xrstor_ymm_state(i, eaddr+XSAVE_YMM_STATE_OFFSET);
-      else
-        xrstor_init_ymm_state();
-    }
-#endif
-
-#if BX_SUPPORT_EVEX
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_OPMASK_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_OPMASK_MASK)
-        xrstor_opmask_state(i, eaddr+XSAVE_OPMASK_STATE_OFFSET);
-      else
-        xrstor_init_opmask_state();
-    }
 
     /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_ZMM_HI256_MASK) != 0)
+    for (unsigned feature = xcr0_t::BX_XCR0_YMM_BIT; feature < xcr0_t::BX_XCR0_LAST; feature++)
     {
-      if (xstate_bv & BX_XCR0_ZMM_HI256_MASK)
-        xrstor_zmm_hi256_state(i, eaddr+XSAVE_ZMM_HI256_STATE_OFFSET);
-      else
-        xrstor_init_zmm_hi256_state();
-    }
+      Bit32u feature_mask = (1 << feature);
+    
+      if ((requested_feature_bitmap & feature_mask) != 0)
+      {
+        if (! xsave_restore[feature].len) {
+          BX_ERROR(("%s: feature #%d requested to restore but not implemented !", i->getIaOpcodeNameShort(), feature));
+          continue;
+        }
 
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_HI_ZMM_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_HI_ZMM_MASK)
-        xrstor_hi_zmm_state(i, eaddr+XSAVE_HI_ZMM_STATE_OFFSET);
-      else
-        xrstor_init_hi_zmm_state();
+        if (xstate_bv & feature_mask) {
+          BX_ASSERT(xsave_restore[feature].xrstor_method);
+          CALL_XSAVE_FN(xsave_restore[feature].xrstor_method)(i, eaddr+xsave_restore[feature].offset);
+        }
+        else {
+          BX_ASSERT(xsave_restore[feature].xrstor_init_method);
+          CALL_XSAVE_FN(xsave_restore[feature].xrstor_init_method)();
+        }
+      }
     }
-#endif
+  }
 
 #if BX_SUPPORT_PKEYS
-    /////////////////////////////////////////////////////////////////////////////
-    if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0)
-    {
-      if (xstate_bv & BX_XCR0_PKRU_MASK)
-        xrstor_pkru_state(i, eaddr+XSAVE_PKRU_STATE_OFFSET);
-      else
-        xrstor_init_pkru_state();
-    }
+  // take effect of changing the PKRU state
+  if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0) {
+    set_PKRU(TMP32);
+  }
 #endif
 
-  }
 #endif // BX_CPU_LEVEL >= 6
 
   BX_NEXT_INSTR(i);
@@ -731,14 +601,14 @@ bx_bool BX_CPU_C::xsave_x87_state_xinuse(void)
       BX_CPU_THIS_PTR the_i387.get_tag_word() != 0xFFFF ||
       BX_CPU_THIS_PTR the_i387.foo != 0 ||
       BX_CPU_THIS_PTR the_i387.fip != 0 || BX_CPU_THIS_PTR the_i387.fcs != 0 ||
-      BX_CPU_THIS_PTR the_i387.fdp != 0 || BX_CPU_THIS_PTR the_i387.fds != 0) return BX_TRUE;
+      BX_CPU_THIS_PTR the_i387.fdp != 0 || BX_CPU_THIS_PTR the_i387.fds != 0) return true;
 
   for (unsigned index=0;index<8;index++) {
     floatx80 reg = BX_FPU_REG(index);
-    if (reg.exp != 0 || reg.fraction != 0) return BX_TRUE;
+    if (reg.exp != 0 || reg.fraction != 0) return true;
   }
 
-  return BX_FALSE;
+  return false;
 }
 
 // SSE state management //
@@ -784,11 +654,11 @@ bx_bool BX_CPU_C::xsave_sse_state_xinuse(void)
     // set XMM8-XMM15 only in 64-bit mode
     if (index < 8 || long64_mode()) {
       const BxPackedXmmRegister *reg = &BX_XMM_REG(index);
-      if (! is_clear(reg)) return BX_TRUE;
+      if (! is_clear(reg)) return true;
     }
   }
 
-  return BX_FALSE;
+  return false;
 }
 
 #if BX_SUPPORT_AVX
@@ -836,11 +706,11 @@ bx_bool BX_CPU_C::xsave_ymm_state_xinuse(void)
     // set YMM8-YMM15 only in 64-bit mode
     if (index < 8 || long64_mode()) {
       const BxPackedXmmRegister *reg = &BX_READ_AVX_REG_LANE(index, 1);
-      if (! is_clear(reg)) return BX_TRUE;
+      if (! is_clear(reg)) return true;
     }
   }
 
-  return BX_FALSE;
+  return false;
 }
 
 #if BX_SUPPORT_EVEX
@@ -879,58 +749,76 @@ void BX_CPU_C::xrstor_init_opmask_state(void)
 bx_bool BX_CPU_C::xsave_opmask_state_xinuse(void)
 {
   for(unsigned index=0; index < 8; index++) {
-    if (BX_READ_OPMASK(index)) return BX_TRUE;
+    if (BX_READ_OPMASK(index)) return true;
   }
 
-  return BX_FALSE;
+  return false;
 }
 
 // ZMM_HI256 (upper part of zmm0..zmm15 registers) state management //
 
+// In 64-bit mode, ZMM_Hi256 state is in its initial configuration if each of ZMM0_H-ZMM15_H is 0.
+// Outside 64-bit mode, ZMM_Hi256 state is in its initial configuration if each of ZMM0_H-ZMM7_H is 0.
+// An execution of XRSTOR or XRSTORS outside 64-bit mode does not update ZMM8_H-ZMM15_H.
+
 void BX_CPU_C::xsave_zmm_hi256_state(bxInstruction_c *i, bx_address offset)
 {
+  unsigned num_regs = long64_mode() ? 16 : 8;
+
   bx_address asize_mask = i->asize_mask();
 
   // save upper part of ZMM registers to XSAVE area
-  for(unsigned index=0; index < 16; index++) {
+  for(unsigned index=0; index < num_regs; index++) {
     write_virtual_ymmword(i->seg(), (offset+index*32) & asize_mask, &BX_READ_ZMM_REG_HI(index));
   }
 }
 
 void BX_CPU_C::xrstor_zmm_hi256_state(bxInstruction_c *i, bx_address offset)
 {
+  unsigned num_regs = long64_mode() ? 16 : 8;
+
   bx_address asize_mask = i->asize_mask();
 
   // load upper part of ZMM registers from XSAVE area
-  for(unsigned index=0; index < 16; index++) {
+  for(unsigned index=0; index < num_regs; index++) {
     read_virtual_ymmword(i->seg(), (offset+index*32) & asize_mask, &BX_READ_ZMM_REG_HI(index));
   }
 }
 
 void BX_CPU_C::xrstor_init_zmm_hi256_state(void)
 {
+  unsigned num_regs = long64_mode() ? 16 : 8;
+
   // initialize upper part of ZMM registers with reset values
-  for(unsigned index=0; index < 16; index++) {
+  for(unsigned index=0; index < num_regs; index++) {
     BX_CLEAR_AVX_HIGH256(index);
   }
 }
 
 bx_bool BX_CPU_C::xsave_zmm_hi256_state_xinuse(void)
 {
-  for(unsigned index=0; index < 16; index++) {
+  unsigned num_regs = long64_mode() ? 16 : 8;
+
+  for(unsigned index=0; index < num_regs; index++) {
     for (unsigned n=2; n < 4; n++) {
       const BxPackedXmmRegister *reg = &BX_READ_AVX_REG_LANE(index, n);
-      if (! is_clear(reg)) return BX_TRUE;
+      if (! is_clear(reg)) return true;
     }
   }
 
-  return BX_FALSE;
+  return false;
 }
 
 // HI_ZMM (zmm15..zmm31) state management //
 
+// In 64-bit mode, Hi16_ZMM state is in its initial configuration if each of ZMM16-ZMM31 is 0.
+// Outside 64-bit mode, Hi16_ZMM state is always in its initial configuration.
+// An execution of XRSTOR or XRSTORS outside 64-bit mode does not update ZMM16-ZMM31.
+
 void BX_CPU_C::xsave_hi_zmm_state(bxInstruction_c *i, bx_address offset)
 {
+  if (!long64_mode()) return;
+
   bx_address asize_mask = i->asize_mask();
 
   // save high ZMM state to XSAVE area
@@ -941,6 +829,8 @@ void BX_CPU_C::xsave_hi_zmm_state(bxInstruction_c *i, bx_address offset)
 
 void BX_CPU_C::xrstor_hi_zmm_state(bxInstruction_c *i, bx_address offset)
 {
+  if (!long64_mode()) return;
+
   bx_address asize_mask = i->asize_mask();
 
   // load high ZMM state from XSAVE area
@@ -951,6 +841,8 @@ void BX_CPU_C::xrstor_hi_zmm_state(bxInstruction_c *i, bx_address offset)
 
 void BX_CPU_C::xrstor_init_hi_zmm_state(void)
 {
+  if (!long64_mode()) return;
+
   // initialize high ZMM registers with reset values
   for(unsigned index=16; index < 32; index++) {
     BX_CLEAR_AVX_REG(index);
@@ -959,14 +851,16 @@ void BX_CPU_C::xrstor_init_hi_zmm_state(void)
 
 bx_bool BX_CPU_C::xsave_hi_zmm_state_xinuse(void)
 {
+  if (!long64_mode()) return true;
+
   for(unsigned index=16; index < 32; index++) {
     for (unsigned n=0; n < 4; n++) {
       const BxPackedXmmRegister *reg = &BX_READ_AVX_REG_LANE(index, n);
-      if (! is_clear(reg)) return BX_TRUE;
+      if (! is_clear(reg)) return true;
     }
   }
 
-  return BX_FALSE;
+  return false;
 }
 #endif // BX_SUPPORT_EVEX
 
@@ -974,7 +868,6 @@ bx_bool BX_CPU_C::xsave_hi_zmm_state_xinuse(void)
 
 #if BX_SUPPORT_PKEYS
 // PKRU state management //
-
 void BX_CPU_C::xsave_pkru_state(bxInstruction_c *i, bx_address offset)
 {
   write_virtual_qword(i->seg(), offset, (Bit64u) BX_CPU_THIS_PTR pkru);
@@ -982,13 +875,16 @@ void BX_CPU_C::xsave_pkru_state(bxInstruction_c *i, bx_address offset)
 
 void BX_CPU_C::xrstor_pkru_state(bxInstruction_c *i, bx_address offset)
 {
-  Bit32u pkru = read_virtual_dword(i->seg(), offset);
-  set_PKRU(pkru);
+  // just write the pkru to TMP register for now and don't call set_PKRU
+  // calling it will take immediate effect on all future memory accesses including load of other XRSTOR components
+  TMP32 = read_virtual_dword(i->seg(), offset);
 }
 
 void BX_CPU_C::xrstor_init_pkru_state(void)
 {
-  set_PKRU(0);
+  // just write the pkru to TMP register for now and don't call set_PKRU
+  // calling it will take immediate effect on all future memory accesses including load of other XRSTOR components
+  TMP32 = 0;
 }
 
 bx_bool BX_CPU_C::xsave_pkru_state_xinuse(void)
@@ -997,45 +893,106 @@ bx_bool BX_CPU_C::xsave_pkru_state_xinuse(void)
 }
 #endif
 
+#if BX_SUPPORT_CET
+// CET U state management //
+void BX_CPU_C::xsave_cet_u_state(bxInstruction_c *i, bx_address offset)
+{
+  bx_address asize_mask = i->asize_mask();
+
+  write_virtual_qword(i->seg(), offset, BX_CPU_THIS_PTR msr.ia32_cet_control[1]);
+  write_virtual_qword(i->seg(), (offset + 8) & asize_mask, BX_CPU_THIS_PTR msr.ia32_pl_ssp[3]);
+}
+
+void BX_CPU_C::xrstor_cet_u_state(bxInstruction_c *i, bx_address offset)
+{
+  bx_address asize_mask = i->asize_mask();
+
+  Bit64u ctrl = read_virtual_qword(i->seg(), offset);
+  Bit64u ia32_pl3_ssp = read_virtual_qword(i->seg(), (offset + 8) & asize_mask);
+
+  // XRSTOR on CET state does all reserved bits and canonicality check like WRMSR would do
+  wrmsr(BX_MSR_IA32_U_CET, ctrl);
+  wrmsr(BX_MSR_IA32_PL3_SSP, ia32_pl3_ssp);
+}
+
+void BX_CPU_C::xrstor_init_cet_u_state(void)
+{
+  BX_CPU_THIS_PTR msr.ia32_cet_control[1] = 0;
+  BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = 0;
+}
+
+bx_bool BX_CPU_C::xsave_cet_u_state_xinuse(void)
+{
+  return BX_CPU_THIS_PTR msr.ia32_cet_control[1] == 0 &&
+         BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] == 0;
+}
+
+// CET S state management //
+void BX_CPU_C::xsave_cet_s_state(bxInstruction_c *i, bx_address offset)
+{
+  bx_address asize_mask = i->asize_mask();
+
+  write_virtual_qword(i->seg(),  offset,                    BX_CPU_THIS_PTR msr.ia32_pl_ssp[0]);
+  write_virtual_qword(i->seg(), (offset +  8) & asize_mask, BX_CPU_THIS_PTR msr.ia32_pl_ssp[1]);
+  write_virtual_qword(i->seg(), (offset + 16) & asize_mask, BX_CPU_THIS_PTR msr.ia32_pl_ssp[2]);
+}
+
+void BX_CPU_C::xrstor_cet_s_state(bxInstruction_c *i, bx_address offset)
+{
+  bx_address asize_mask = i->asize_mask();
+
+  Bit64u ia32_pl0_ssp = read_virtual_qword(i->seg(),  offset);
+  Bit64u ia32_pl1_ssp = read_virtual_qword(i->seg(), (offset +  8) & asize_mask);
+  Bit64u ia32_pl2_ssp = read_virtual_qword(i->seg(), (offset + 16) & asize_mask);
+
+  // XRSTOR on CET state does all reserved bits and canonicality check like WRMSR would do
+  wrmsr(BX_MSR_IA32_PL0_SSP, ia32_pl0_ssp);
+  wrmsr(BX_MSR_IA32_PL1_SSP, ia32_pl1_ssp);
+  wrmsr(BX_MSR_IA32_PL2_SSP, ia32_pl2_ssp);
+}
+
+void BX_CPU_C::xrstor_init_cet_s_state(void)
+{
+  for (unsigned n=0;n<3;n++)
+    BX_CPU_THIS_PTR msr.ia32_pl_ssp[n] = 0;
+}
+
+bx_bool BX_CPU_C::xsave_cet_s_state_xinuse(void)
+{
+  for (unsigned n=0;n<3;n++)
+    return BX_CPU_THIS_PTR msr.ia32_pl_ssp[n] != 0;
+
+  return false;
+}
+#endif
+
 Bit32u BX_CPU_C::get_xinuse_vector(Bit32u requested_feature_bitmap)
 {
   Bit32u xinuse = 0;
 
-  if (requested_feature_bitmap & BX_XCR0_FPU_MASK) {
-    if (xsave_x87_state_xinuse()) 
-      xinuse |= BX_XCR0_FPU_MASK;
+  /////////////////////////////////////////////////////////////////////////////
+  for (unsigned feature = xcr0_t::BX_XCR0_FPU_BIT; feature < xcr0_t::BX_XCR0_LAST; feature++)
+  {
+    Bit32u feature_mask = (1 << feature);
+  
+    if ((requested_feature_bitmap & feature_mask) != 0)
+    {
+      if (! xsave_restore[feature].len) {
+        BX_ERROR(("get_xinuse_vector(0x%08x): feature #%d requested but not implemented !", requested_feature_bitmap, feature));
+        continue;
+      }
+
+      BX_ASSERT(xsave_restore[feature].xstate_in_use_method);
+      if (CALL_XSAVE_FN(xsave_restore[feature].xstate_in_use_method)())
+        xinuse |= feature_mask;
+    }
   }
+
+  /////////////////////////////////////////////////////////////////////////////
   if (requested_feature_bitmap & BX_XCR0_SSE_MASK) {
-    if (xsave_sse_state_xinuse() || BX_MXCSR_REGISTER != MXCSR_RESET)
+    if (BX_MXCSR_REGISTER != MXCSR_RESET)
       xinuse |= BX_XCR0_SSE_MASK;
   }
-#if BX_SUPPORT_AVX
-  if (requested_feature_bitmap & BX_XCR0_YMM_MASK) {
-    if (xsave_ymm_state_xinuse()) 
-      xinuse |= BX_XCR0_YMM_MASK;
-  }
-#if BX_SUPPORT_EVEX
-  if (requested_feature_bitmap & BX_XCR0_OPMASK_MASK) {
-    if (xsave_opmask_state_xinuse()) 
-      xinuse |= BX_XCR0_OPMASK_MASK;
-  }
-  if (requested_feature_bitmap & BX_XCR0_ZMM_HI256_MASK) {
-    if (xsave_zmm_hi256_state_xinuse()) 
-      xinuse |= BX_XCR0_ZMM_HI256_MASK;
-  }
-  if (requested_feature_bitmap & BX_XCR0_HI_ZMM_MASK) {
-    if (xsave_hi_zmm_state_xinuse()) 
-      xinuse |= BX_XCR0_HI_ZMM_MASK;
-  }
-#endif
-#endif
-
-#if BX_SUPPORT_PKEYS
-  if (requested_feature_bitmap & BX_XCR0_PKRU_MASK) {
-    if (xsave_pkru_state_xinuse()) 
-      xinuse |= BX_XCR0_PKRU_MASK;
-  }
-#endif
 
   return xinuse;
 }
