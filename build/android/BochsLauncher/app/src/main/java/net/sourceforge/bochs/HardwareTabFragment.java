@@ -2,6 +2,7 @@ package net.sourceforge.bochs;
 
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -67,22 +68,22 @@ public class HardwareTabFragment extends Fragment {
         if (cpuModels.size() == 0)
             readCpuList();
 
-        Spinner spCpuModel = (Spinner) rootView.findViewById(R.id.hardwareSpinnerCpuModel);
-        Spinner spChipsetModel = (Spinner) rootView.findViewById(R.id.hardwareSpinnerChipset);
-        tvCpuDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewCpuDesc);
-        spVga = (Spinner) rootView.findViewById(R.id.hardwareSpinnerVga);
-        tvVgaDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewVgaDesc);
-        spSound = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSound);
-        tvSoundDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewSoundDesc);
-        spEthernet = (Spinner) rootView.findViewById(R.id.hardwareSpinnerEthernet);
-        tvEthernetDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewEthernetDesc);
-        SeekBar sbMemory = (SeekBar) rootView.findViewById(R.id.hardwareSeekBarMemory);
-        tvMemory = (TextView) rootView.findViewById(R.id.hardwareTextViewMemory);
-        spSlot[0] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot1);
-        spSlot[1] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot2);
-        spSlot[2] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot3);
-        spSlot[3] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot4);
-        spSlot[4] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot5);
+        Spinner spCpuModel = rootView.findViewById(R.id.hardwareSpinnerCpuModel);
+        final Spinner spChipsetModel = rootView.findViewById(R.id.hardwareSpinnerChipset);
+        tvCpuDescription = rootView.findViewById(R.id.hardwareTextViewCpuDesc);
+        spVga = rootView.findViewById(R.id.hardwareSpinnerVga);
+        tvVgaDescription = rootView.findViewById(R.id.hardwareTextViewVgaDesc);
+        spSound = rootView.findViewById(R.id.hardwareSpinnerSound);
+        tvSoundDescription = rootView.findViewById(R.id.hardwareTextViewSoundDesc);
+        spEthernet = rootView.findViewById(R.id.hardwareSpinnerEthernet);
+        tvEthernetDescription = rootView.findViewById(R.id.hardwareTextViewEthernetDesc);
+        SeekBar sbMemory = rootView.findViewById(R.id.hardwareSeekBarMemory);
+        tvMemory = rootView.findViewById(R.id.hardwareTextViewMemory);
+        spSlot[0] = rootView.findViewById(R.id.hardwareSpinnerSlot1);
+        spSlot[1] = rootView.findViewById(R.id.hardwareSpinnerSlot2);
+        spSlot[2] = rootView.findViewById(R.id.hardwareSpinnerSlot3);
+        spSlot[3] = rootView.findViewById(R.id.hardwareSpinnerSlot4);
+        spSlot[4] = rootView.findViewById(R.id.hardwareSpinnerSlot5);
         SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
         SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
@@ -102,8 +103,6 @@ public class HardwareTabFragment extends Fragment {
         int selectedChipset = getChipsetSelectorList().indexOf(Config.chipset);
         spChipsetModel.setSelection(selectedChipset);
         tvCpuDescription.setText(cpuModels.get(selectedCpuModel).getDescription());
-        //rbI430fx.setChecked(Config.chipset.equals("i430fx"));
-        //rbI440fx.setChecked(Config.chipset.equals("i440fx"));
         sbMemory.setProgress((Config.megs / memoryStep) - minValueMemory);
         tvMemory.setText(String.format("%s mb", Config.megs));
         Integer[] selectedSlot = new Integer[5];
@@ -134,6 +133,7 @@ public class HardwareTabFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
                 Config.chipset = getChipsetSelectorList().get(p3);
+                checkVga();
             }
 
             @Override
@@ -145,33 +145,50 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvVgaDescription.setText(vgaCards.get(p3).getDescription());
+                VgaCard vgaCard = vgaCards.get(p3);
+                tvVgaDescription.setText(vgaCard.getName());
+                Config.vgaExtension = vgaCard.getVgaExtension();
+                Config.vgaRomImage = vgaCard.getVgaRomImage();
+                if (vgaCard.getVgaExtension().equals("voodoo")) {
+                    Config.useVoodoo = true;
+                    Config.voodooModel = vgaCard.getValue();
+                    setFreePciSlot("pcivga");
+                    setFreePciSlot("cirrus");
+                    setFreePciSlot("voodoo");
+                }
+                if (vgaCard.getChipset() != null) {
+                    spChipsetModel.setSelection(getChipsetSelectorList().indexOf(vgaCard.getChipset()));
+                }
                 switch (p3) {
                     case 0:
-                        Config.vgaExtension = "vbe";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest";
                         setFreePciSlot("pcivga");
                         setFreePciSlot("cirrus");
                         break;
                     case 1:
-                        Config.vgaExtension = "vbe";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest";
                         setFreePciSlot("cirrus");
                         spSlot[0].setSelection(slotList[0].indexOf("pcivga"));
                         slotAdapter[0].notifyDataSetChanged();
                         break;
                     case 2:
-                        Config.vgaExtension = "cirrus";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest-cirrus";
                         setFreePciSlot("pcivga");
                         setFreePciSlot("cirrus");
                         break;
                     case 3:
-                        Config.vgaExtension = "cirrus";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest-cirrus";
                         setFreePciSlot("pcivga");
                         spSlot[0].setSelection(slotList[0].indexOf("cirrus"));
                         slotAdapter[0].notifyDataSetChanged();
+                        break;
+                    case 4:
+                    case 5:
+                        Config.slot[0] = "voodoo";
+                        spSlot[0].setSelection(slotList[0].indexOf("voodoo"));
+                        slotAdapter[0].notifyDataSetChanged();
+                        break;
+                    case 6:
+                    case 7:
+                        Config.slot[4] = "voodoo";
+                        spSlot[4].setSelection(slotList[4].indexOf("voodoo"));
+                        slotAdapter[4].notifyDataSetChanged();
                         break;
                 }
             }
@@ -255,7 +272,7 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
-        for (int i=0; i<=4; i++) {
+        for (int i = 0; i <= 4; i++) {
             final int finalI = i;
             spSlot[i].setOnItemSelectedListener(new OnItemSelectedListener() {
 
@@ -294,16 +311,6 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
-/*        OnClickListener hwOnClick = new OnClickListener() {
-
-            @Override
-            public void onClick(View p1) {
-                Config.chipset = (p1.getId() == R.id.hardwareRadioButtonI430fx) ? "i430fx" : "i440fx";
-            }
-        };*/
-
-        //rbI430fx.setOnClickListener(hwOnClick);
-        //rbI440fx.setOnClickListener(hwOnClick);
     }
 
     private void readCpuList() {
@@ -321,7 +328,7 @@ public class HardwareTabFragment extends Fragment {
             for (int i = 0; i < cpulist.length(); i++) {
                 JSONObject model = cpulist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
+                String description = model.getString("name");
                 String required = model.getString("required");
                 cpuModels.add(new CpuModel(value, description, required));
             }
@@ -335,21 +342,24 @@ public class HardwareTabFragment extends Fragment {
             for (int i = 0; i < vgalist.length(); i++) {
                 JSONObject model = vgalist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
-                vgaCards.add(new VgaCard(value, description));
+                String name = model.getString("name");
+                String vgaExtension = model.getString("vgaExtension");
+                String vgaRomImage = model.getString("vgaRomImage");
+                String chipset = model.has("chipset") ? model.getString("chipset") : null;
+                vgaCards.add(new VgaCard(value, name, vgaExtension, vgaRomImage, chipset));
             }
             JSONArray soundlist = dataJsonObj.getJSONArray("soundlist");
             for (int i = 0; i < soundlist.length(); i++) {
                 JSONObject model = soundlist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
+                String description = model.getString("name");
                 soundCards.add(new SoundCard(value, description));
             }
             JSONArray ethernetlist = dataJsonObj.getJSONArray("ethernetlist");
             for (int i = 0; i < ethernetlist.length(); i++) {
                 JSONObject model = ethernetlist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
+                String description = model.getString("name");
                 ethernetCards.add(new EthernetCard(value, description));
             }
         } catch (JSONException e) {
@@ -376,7 +386,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getVgaCardSelectorList() {
         List<String> result = new ArrayList<>();
         for (VgaCard vc : vgaCards) {
-            result.add(vc.getValue());
+            result.add(vc.getName());
         }
         return result;
     }
@@ -415,6 +425,15 @@ public class HardwareTabFragment extends Fragment {
         return false;
     }
 
+    private int getPciSlotIndexFor(String str) {
+        for (int i = 0; i < Config.slot.length; i++) {
+            if (Config.slot[i].equals(str)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private void setFreePciSlot(String str) {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals(str)) {
@@ -426,10 +445,23 @@ public class HardwareTabFragment extends Fragment {
     }
 
     private void checkVga() {
-        if (Config.vgaExtension.equals("vbe")) {
-            spVga.setSelection(checkPciSlotFor("pcivga") ? 1 : 0);
-        } else if (Config.vgaExtension.equals("cirrus")) {
-            spVga.setSelection(checkPciSlotFor("cirrus") ? 3 : 2);
+        switch (Config.vgaExtension) {
+            case "vbe":
+                spVga.setSelection(checkPciSlotFor("pcivga") ? 1 : 0);
+                break;
+            case "cirrus":
+                spVga.setSelection(checkPciSlotFor("cirrus") ? 3 : 2);
+                break;
+            case "voodoo":
+                if (Config.voodooModel.equals("banshee")) {
+                    spVga.setSelection((Config.slot[4].equals("voodoo")
+                            && Config.chipset.equals("i440bx")) ? 6 : 4);
+                }
+                else if (Config.voodooModel.equals("voodoo3")) {
+                    spVga.setSelection((Config.slot[4].equals("voodoo")
+                            && Config.chipset.equals("i440bx")) ? 7 : 5);
+                }
+                break;
         }
     }
 

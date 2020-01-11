@@ -1,27 +1,27 @@
 package net.sourceforge.bochs.entity;
 
 public class VoodooModel {
-    private String value;
-    private String description;
+    private String name;
+    private String model;
 
-    public VoodooModel(String value, String description) {
-        this.value = value;
-        this.description = description;
+    public VoodooModel(String name, String model) {
+        this.name = name;
+        this.model = model;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
+    public String getName() {
+        return name;
     }
 
-    public String getDescription() {
-        return description;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public void setValue(String value) {
-        this.value = value;
+    public String getModel() {
+        return model;
     }
 
-    public String getValue() {
-        return value;
+    public void setModel(String model) {
+        this.model = model;
     }
 }

@@ -20,18 +20,19 @@ class Config {
     static boolean useRtl8029 = false;
     static boolean useE1000 = false;
     static boolean useVoodoo = false;
-    static Boolean floppy[] = new Boolean[floppyNum];
-    static String floppyImage[] = new String[floppyNum];
-    static Boolean ata[] = new Boolean[ataNum];
-    static String ataImage[] = new String[ataNum];
-    static String ataType[] = new String[ataNum];
-    static String ataMode[] = new String[ataNum];
+    static Boolean[] floppy = new Boolean[floppyNum];
+    static String[] floppyImage = new String[floppyNum];
+    static Boolean[] ata = new Boolean[ataNum];
+    static String[] ataImage = new String[ataNum];
+    static String[] ataType = new String[ataNum];
+    static String[] ataMode = new String[ataNum];
     static String boot = DISK;
 
     static String romImage = "BIOS-bochs-latest";
     static String vgaRomImage = "VGABIOS-lgpl-latest-cirrus";
     static int megs = 32;
     static String vgaExtension = "cirrus";
+    static String voodooModel = "voodoo1";
     static int vgaUpdateFreq = 15;
     static String chipset = "i440fx";
     static String[] slot = {"", "", "", "", ""};
@@ -100,7 +101,7 @@ class Config {
                 if (str.contains("file=")) {
                     String str2 = str.substring(str.indexOf("file="), str.length() - 1);
                     romImage = str2.contains(",") ?
-                            str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                            str2.substring(5, str2.indexOf(",")) : str2.substring(5);
                 }
             }
 
@@ -108,7 +109,7 @@ class Config {
                 if (str.contains("file=")) {
                     String str2 = str.substring(str.indexOf("file="), str.length() - 1);
                     vgaRomImage = str2.contains(",") ?
-                            str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                            str2.substring(5, str2.indexOf(",")) : str2.substring(5);
                 }
             }
 
@@ -116,12 +117,12 @@ class Config {
                 if (str.contains("extension=")) {
                     String str2 = str.substring(str.indexOf("extension="), str.length() - 1);
                     vgaExtension = str2.contains(",") ?
-                            str2.substring(10, str2.indexOf(",")) : str2.substring(10, str2.length());
+                            str2.substring(10, str2.indexOf(",")) : str2.substring(10);
                 }
                 if (str.contains("update_freq=")) {
                     String str2 = str.substring(str.indexOf("update_freq="), str.length() - 1);
                     vgaUpdateFreq = str2.contains(",") ?
-                            Integer.parseInt(str2.substring(12, str2.indexOf(","))) : Integer.parseInt(str2.substring(12, str2.length()));
+                            Integer.parseInt(str2.substring(12, str2.indexOf(","))) : Integer.parseInt(str2.substring(12));
                 }
             }
 
@@ -129,32 +130,32 @@ class Config {
                 if (str.contains("chipset=")) {
                     String str2 = str.substring(str.indexOf("chipset="), str.length() - 1);
                     chipset = str2.contains(",") ?
-                            str2.substring(8, str2.indexOf(",")) : str2.substring(8, str2.length());
+                            str2.substring(8, str2.indexOf(",")) : str2.substring(8);
                 }
                 if (str.contains("slot1=")) {
                     String str2 = str.substring(str.indexOf("slot1="), str.length() - 1);
                     slot[0] = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
                 if (str.contains("slot2=")) {
                     String str2 = str.substring(str.indexOf("slot2="), str.length() - 1);
                     slot[1] = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
                 if (str.contains("slot3=")) {
                     String str2 = str.substring(str.indexOf("slot3="), str.length() - 1);
                     slot[2] = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
                 if (str.contains("slot4=")) {
                     String str2 = str.substring(str.indexOf("slot4="), str.length() - 1);
                     slot[3] = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
                 if (str.contains("slot5=")) {
                     String str2 = str.substring(str.indexOf("slot5="), str.length() - 1);
                     slot[4] = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
             }
 
@@ -162,7 +163,7 @@ class Config {
                 if (str.contains("model=")) {
                     String str2 = str.substring(str.indexOf("model="), str.length() - 1);
                     cpuModel = str2.contains(",") ?
-                            str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
                 }
             }
 
@@ -171,12 +172,12 @@ class Config {
                 if (str.contains("mac=")) {
                     String str2 = str.substring(str.indexOf("mac="), str.length() - 1);
                     mac = str2.contains(",") ?
-                            str2.substring(4, str2.indexOf(",")) : str2.substring(4, str2.length());
+                            str2.substring(4, str2.indexOf(",")) : str2.substring(4);
                 }
                 if (str.contains("ethmod=")) {
                     String str2 = str.substring(str.indexOf("ethmod="), str.length() - 1);
                     ethmod = str2.contains(",") ?
-                            str2.substring(7, str2.indexOf(",")) : str2.substring(7, str2.length());
+                            str2.substring(7, str2.indexOf(",")) : str2.substring(7);
                 }
             }
 
@@ -185,12 +186,12 @@ class Config {
                 if (str.contains("mac=")) {
                     String str2 = str.substring(str.indexOf("mac="), str.length() - 1);
                     mac = str2.contains(",") ?
-                            str2.substring(4, str2.indexOf(",")) : str2.substring(4, str2.length());
+                            str2.substring(4, str2.indexOf(",")) : str2.substring(4);
                 }
                 if (str.contains("ethmod=")) {
                     String str2 = str.substring(str.indexOf("ethmod="), str.length() - 1);
                     ethmod = str2.contains(",") ?
-                            str2.substring(7, str2.indexOf(",")) : str2.substring(7, str2.length());
+                            str2.substring(7, str2.indexOf(",")) : str2.substring(7);
                 }
             }
 
@@ -204,6 +205,11 @@ class Config {
 
             if (str.startsWith("voodoo:")) {
                 useVoodoo = true;
+                if (str.contains("model=")) {
+                    String str2 = str.substring(str.indexOf("model="), str.length() - 1);
+                    voodooModel = str2.contains(",") ?
+                            str2.substring(6, str2.indexOf(",")) : str2.substring(6);
+                }
             }
 
             if (str.startsWith("speaker:")) {
@@ -225,7 +231,7 @@ class Config {
                 if (str.contains("sync=")) {
                     String str2 = str.substring(str.indexOf("sync="), str.length() - 1);
                     clockSync = str2.contains(",") ?
-                            str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                            str2.substring(5, str2.indexOf(",")) : str2.substring(5);
                 }
             }
         }
@@ -237,12 +243,12 @@ class Config {
         if (str.contains("1_44=")) {
             String str2 = str.substring(str.indexOf("1_44="), str.length() - 1);
             floppyImage[n] = str2.contains(",") ?
-                    str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                    str2.substring(5, str2.indexOf(",")) : str2.substring(5);
         }
         if (str.contains("image=")) {
             String str2 = str.substring(str.indexOf("image="), str.length() - 1);
             floppyImage[n] = str2.contains(",") ?
-                    str2.substring(6, str2.indexOf(",")) : str2.substring(6, str2.length());
+                    str2.substring(6, str2.indexOf(",")) : str2.substring(6);
         }
     }
 
@@ -251,17 +257,17 @@ class Config {
         if (str.contains("type=")) {
             String str2 = str.substring(str.indexOf("type="), str.length() - 1);
             ataType[n] = str2.contains(",") ?
-                    str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                    str2.substring(5, str2.indexOf(",")) : str2.substring(5);
         }
         if (str.contains("mode=")) {
             String str2 = str.substring(str.indexOf("mode="), str.length() - 1);
             ataMode[n] = str2.contains(",") ?
-                    str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                    str2.substring(5, str2.indexOf(",")) : str2.substring(5);
         }
         if (str.contains("path=")) {
             String str2 = str.substring(str.indexOf("path="), str.length() - 1);
             ataImage[n] = str2.contains(",") ?
-                    str2.substring(5, str2.indexOf(",")) : str2.substring(5, str2.length());
+                    str2.substring(5, str2.indexOf(",")) : str2.substring(5);
             ataImage[n] = ataImage[n].replace("\"", "");
         }
     }
@@ -323,7 +329,7 @@ class Config {
         if (useEs1370)
             fw.write("es1370: enabled=1, wavemode=1\n");
         if (useVoodoo)
-            fw.write("voodoo: enabled=1, model=voodoo1\n");
+            fw.write("voodoo: enabled=1, model=" + voodooModel + "\n");
         fw.write("mouse: enabled=1\n");
         fw.write("clock: sync=" + clockSync + ", time0=local\n");
         fw.write("debug: action=ignore\n");
