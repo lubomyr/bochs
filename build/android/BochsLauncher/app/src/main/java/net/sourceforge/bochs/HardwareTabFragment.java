@@ -4,18 +4,17 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
-import android.widget.RadioButton;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 
+import net.sourceforge.bochs.entity.ChipsetModel;
 import net.sourceforge.bochs.entity.CpuModel;
 import net.sourceforge.bochs.entity.EthernetCard;
 import net.sourceforge.bochs.entity.SoundCard;
@@ -41,10 +40,11 @@ public class HardwareTabFragment extends Fragment {
     private TextView tvMemory;
     private Spinner[] spSlot = new Spinner[5];
     private ArrayAdapter slotAdapter[] = new ArrayAdapter[5];
-    private List<CpuModel> cpuModel = new ArrayList<>();
-    private List<VgaCard> vgaCard = new ArrayList<>();
-    private List<SoundCard> soundCard = new ArrayList<>();
-    private List<EthernetCard> ethernetCard = new ArrayList<>();
+    private List<CpuModel> cpuModels = new ArrayList<>();
+    private List<ChipsetModel> chipsetModels = new ArrayList<>();
+    private List<VgaCard> vgaCards = new ArrayList<>();
+    private List<SoundCard> soundCards = new ArrayList<>();
+    private List<EthernetCard> ethernetCards = new ArrayList<>();
     private List<String>[] slotList = new List[5];
 
     @Override
@@ -64,12 +64,11 @@ public class HardwareTabFragment extends Fragment {
             slotList[i] = new ArrayList<>();
         updateSlotLists();
 
-        if (cpuModel.size() == 0)
+        if (cpuModels.size() == 0)
             readCpuList();
 
         Spinner spCpuModel = (Spinner) rootView.findViewById(R.id.hardwareSpinnerCpuModel);
-        RadioButton rbI430fx = (RadioButton) rootView.findViewById(R.id.hardwareRadioButtonI430fx);
-        RadioButton rbI440fx = (RadioButton) rootView.findViewById(R.id.hardwareRadioButtonI440fx);
+        Spinner spChipsetModel = (Spinner) rootView.findViewById(R.id.hardwareSpinnerChipset);
         tvCpuDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewCpuDesc);
         spVga = (Spinner) rootView.findViewById(R.id.hardwareSpinnerVga);
         tvVgaDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewVgaDesc);
@@ -84,23 +83,27 @@ public class HardwareTabFragment extends Fragment {
         spSlot[2] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot3);
         spSlot[3] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot4);
         spSlot[4] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot5);
-        SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelValues());
+        SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
+        SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
             slotAdapter[i] = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, slotList[i]);
-        SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardValues());
-        SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardValues());
-        SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardValues());
+        SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardSelectorList());
+        SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardSelectorList());
+        SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardSelectorList());
         spCpuModel.setAdapter(cpuModelAdapter);
+        spChipsetModel.setAdapter(chipsetModelAdapter);
         spVga.setAdapter(vgaAdapter);
         spSound.setAdapter(soundAdapter);
         spEthernet.setAdapter(ethernetAdapter);
         for (int i = 0; i < 5; i++)
             spSlot[i].setAdapter(slotAdapter[i]);
-        int selectedCpuModel = getCpuModelValues().indexOf(Config.cpuModel);
+        int selectedCpuModel = getCpuModelSelectorList().indexOf(Config.cpuModel);
         spCpuModel.setSelection(selectedCpuModel);
-        tvCpuDescription.setText(cpuModel.get(selectedCpuModel).getDescription());
-        rbI430fx.setChecked(Config.chipset.equals("i430fx"));
-        rbI440fx.setChecked(Config.chipset.equals("i440fx"));
+        int selectedChipset = getChipsetSelectorList().indexOf(Config.chipset);
+        spChipsetModel.setSelection(selectedChipset);
+        tvCpuDescription.setText(cpuModels.get(selectedCpuModel).getDescription());
+        //rbI430fx.setChecked(Config.chipset.equals("i430fx"));
+        //rbI440fx.setChecked(Config.chipset.equals("i440fx"));
         sbMemory.setProgress((Config.megs / memoryStep) - minValueMemory);
         tvMemory.setText(String.format("%s mb", Config.megs));
         Integer[] selectedSlot = new Integer[5];
@@ -116,9 +119,21 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                Config.cpuModel = getCpuModelValues().get(p3);
-                int num = getCpuModelValues().indexOf(Config.cpuModel);
-                tvCpuDescription.setText(cpuModel.get(num).getDescription());
+                Config.cpuModel = getCpuModelSelectorList().get(p3);
+                int num = getCpuModelSelectorList().indexOf(Config.cpuModel);
+                tvCpuDescription.setText(cpuModels.get(num).getDescription());
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p1) {
+            }
+        });
+
+        spChipsetModel.setOnItemSelectedListener(new OnItemSelectedListener() {
+
+            @Override
+            public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
+                Config.chipset = getChipsetSelectorList().get(p3);
             }
 
             @Override
@@ -130,7 +145,7 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvVgaDescription.setText(vgaCard.get(p3).getDescription());
+                tvVgaDescription.setText(vgaCards.get(p3).getDescription());
                 switch (p3) {
                     case 0:
                         Config.vgaExtension = "vbe";
@@ -170,7 +185,7 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvSoundDescription.setText(soundCard.get(p3).getDescription());
+                tvSoundDescription.setText(soundCards.get(p3).getDescription());
                 switch (p3) {
                     case 0:
                         Config.useSb16 = false;
@@ -200,7 +215,7 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvEthernetDescription.setText(ethernetCard.get(p3).getDescription());
+                tvEthernetDescription.setText(ethernetCards.get(p3).getDescription());
                 switch (p3) {
                     case 0:
                         Config.useNe2000 = false;
@@ -279,16 +294,16 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
-        OnClickListener hwOnClick = new OnClickListener() {
+/*        OnClickListener hwOnClick = new OnClickListener() {
 
             @Override
             public void onClick(View p1) {
                 Config.chipset = (p1.getId() == R.id.hardwareRadioButtonI430fx) ? "i430fx" : "i440fx";
             }
-        };
+        };*/
 
-        rbI430fx.setOnClickListener(hwOnClick);
-        rbI440fx.setOnClickListener(hwOnClick);
+        //rbI430fx.setOnClickListener(hwOnClick);
+        //rbI440fx.setOnClickListener(hwOnClick);
     }
 
     private void readCpuList() {
@@ -308,67 +323,81 @@ public class HardwareTabFragment extends Fragment {
                 String value = model.getString("value");
                 String description = model.getString("description");
                 String required = model.getString("required");
-                cpuModel.add(new CpuModel(value, description, required));
+                cpuModels.add(new CpuModel(value, description, required));
+            }
+            JSONArray chipsetlist = dataJsonObj.getJSONArray("chipsetlist");
+            for (int i = 0; i < chipsetlist.length(); i++) {
+                JSONObject model = chipsetlist.getJSONObject(i);
+                String value = model.getString("value");
+                chipsetModels.add(new ChipsetModel(value));
             }
             JSONArray vgalist = dataJsonObj.getJSONArray("vgalist");
             for (int i = 0; i < vgalist.length(); i++) {
                 JSONObject model = vgalist.getJSONObject(i);
                 String value = model.getString("value");
                 String description = model.getString("description");
-                vgaCard.add(new VgaCard(value, description));
+                vgaCards.add(new VgaCard(value, description));
             }
             JSONArray soundlist = dataJsonObj.getJSONArray("soundlist");
             for (int i = 0; i < soundlist.length(); i++) {
                 JSONObject model = soundlist.getJSONObject(i);
                 String value = model.getString("value");
                 String description = model.getString("description");
-                soundCard.add(new SoundCard(value, description));
+                soundCards.add(new SoundCard(value, description));
             }
             JSONArray ethernetlist = dataJsonObj.getJSONArray("ethernetlist");
             for (int i = 0; i < ethernetlist.length(); i++) {
                 JSONObject model = ethernetlist.getJSONObject(i);
                 String value = model.getString("value");
                 String description = model.getString("description");
-                ethernetCard.add(new EthernetCard(value, description));
+                ethernetCards.add(new EthernetCard(value, description));
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
 
-    private List<String> getCpuModelValues() {
+    private List<String> getCpuModelSelectorList() {
         List<String> result = new ArrayList<>();
-        for (CpuModel cm : cpuModel) {
+        for (CpuModel cm : cpuModels) {
             result.add(cm.getValue());
         }
         return result;
     }
 
-    private List<String> getVgaCardValues() {
+    private List<String> getChipsetSelectorList() {
         List<String> result = new ArrayList<>();
-        for (VgaCard vc : vgaCard) {
+        for (ChipsetModel cm : chipsetModels) {
+            result.add(cm.getValue());
+        }
+        return result;
+    }
+
+    private List<String> getVgaCardSelectorList() {
+        List<String> result = new ArrayList<>();
+        for (VgaCard vc : vgaCards) {
             result.add(vc.getValue());
         }
         return result;
     }
 
-    private List<String> getSoundCardValues() {
+    private List<String> getSoundCardSelectorList() {
         List<String> result = new ArrayList<>();
-        for (SoundCard sc : soundCard) {
+        for (SoundCard sc : soundCards) {
             result.add(sc.getValue());
         }
         return result;
     }
 
-    private List<String> getEthernetCardValues() {
+    private List<String> getEthernetCardSelectorList() {
         List<String> result = new ArrayList<>();
-        for (EthernetCard ec : ethernetCard) {
+        for (EthernetCard ec : ethernetCards) {
             result.add(ec.getValue());
         }
         return result;
     }
 
-    private int getfreePciSlot() {
+    private int getFreePciSlot() {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals("")) {
                 return i;

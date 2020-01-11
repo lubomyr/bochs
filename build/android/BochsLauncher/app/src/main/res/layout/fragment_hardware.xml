@@ -53,11 +53,11 @@
             android:gravity="center_vertical|center_horizontal"
             android:orientation="horizontal">
 
-            <RadioGroup
+            <LinearLayout
                 android:id="@+id/chipsetLayout"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="0.26"
+                android:layout_weight="0.30"
                 android:layout_marginLeft="2dp"
                 android:layout_marginRight="2dp"
                 android:background="@drawable/my_border"
@@ -69,27 +69,19 @@
                     android:layout_height="wrap_content"
                     android:text="@string/chipset" />
 
-                <RadioButton
-                    android:id="@+id/hardwareRadioButtonI430fx"
+                <Spinner
+                    android:id="@+id/hardwareSpinnerChipset"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="5dp"
-                    android:text="@string/i430fx" />
+                    android:padding="0dp" />
 
-                <RadioButton
-                    android:id="@+id/hardwareRadioButtonI440fx"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="5dp"
-                    android:text="@string/i440fx" />
-
-            </RadioGroup>
+            </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/memoryLayout"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.74"
+                android:layout_weight="0.70"
                 android:layout_marginLeft="2dp"
                 android:layout_marginRight="2dp"
                 android:background="@drawable/my_border"

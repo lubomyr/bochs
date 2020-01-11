@@ -1,210 +1,281 @@
 {"cpulist":[
 		{
-			"value":"bx_generic",
-			"description":"Default Bochs CPU configured with CPUID option",
-			"required":"cpu level 5"
+			"value": "bx_generic",
+			"description": "Default Bochs CPU configured with CPUID option",
+			"required": "cpu level 5"
 		},
 		
 		{
-			"value":"pentium",
-			"description":"Intel Pentium (P54C)",
-			"required":"cpu level 5"
+			"value": "pentium",
+			"description": "Intel Pentium (P54C)",
+			"required": "cpu level 5"
 		},
 
 		{
-			"value":"pentium_mmx",
-			"description":"Intel Pentium MMX",
-			"required":"cpu level 5"
+			"value": "pentium_mmx",
+			"description": "Intel Pentium MMX",
+			"required": "cpu level 5"
 		},
 
 		{
-			"value":"amd_k6_2_chomper",
-			"description":"AMD-K6(tm) 3D processor (Chomper)",
-			"required":"cpu level 5"
+			"value": "amd_k6_2_chomper",
+			"description": "AMD-K6(tm) 3D processor (Chomper)",
+			"required": "cpu level 5"
 		},
 
 		{
-			"value":"p2_klamath",
-			"description":"Intel Pentium II (Klamath)",
-			"required":"cpu level 6"
+			"value": "p2_klamath",
+			"description": "Intel Pentium II (Klamath)",
+			"required": "cpu level 6"
 		},
 
 		{
-			"value":"p3_katmai",
-			"description":"Intel Pentium III (Katmai)",
-			"required":"cpu level 6"
+			"value": "p3_katmai",
+			"description": "Intel Pentium III (Katmai)",
+			"required": "cpu level 6"
 		},
 
 		{
-			"value":"p4_willamette",
-			"description":"Intel(R) Pentium(R) 4 (Willamette)",
-			"required":"cpu level 6"
+			"value": "p4_willamette",
+			"description": "Intel(R) Pentium(R) 4 (Willamette)",
+			"required": "cpu level 6"
 		},
 
 		{
-			"value":"core_duo_t2400_yonah",
-			"description":"Intel(R) Core(TM) Duo CPU T2400 (Yonah)",
-			"required":"cpu level 6"
+			"value": "core_duo_t2400_yonah",
+			"description": "Intel(R) Core(TM) Duo CPU T2400 (Yonah)",
+			"required": "cpu level 6"
 		},
 
 		{
-			"value":"atom_n270",
-			"description":"Intel(R) Atom(TM) CPU N270",
-			"required":"cpu level 6"
+			"value": "atom_n270",
+			"description": "Intel(R) Atom(TM) CPU N270",
+			"required": "cpu level 6"
 		},
 
 		{
-			"value":"p4_prescott_celeron_336",
-			"description":"Intel(R) Celeron(R) 336 (Prescott)",
-			"required":"cpu level 6, x86-64"
+			"value": "p4_prescott_celeron_336",
+			"description": "Intel(R) Celeron(R) 336 (Prescott)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"athlon64_clawhammer",
-			"description":"AMD Athlon(tm) 64 Processor 2800+ (Clawhammer)",
-			"required":"cpu level 6, x86-64"
+			"value": "athlon64_clawhammer",
+			"description": "AMD Athlon(tm) 64 Processor 2800+ (Clawhammer)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"athlon64_venice",
-			"description":"AMD Athlon(tm) 64 Processor 3000+ (Venice)",
-			"required":"cpu level 6, x86-64"
+			"value": "athlon64_venice",
+			"description": "AMD Athlon(tm) 64 Processor 3000+ (Venice)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"turion64_tyler",
-			"description":"AMD Turion(tm) 64 X2 Mobile TL-60 (Tyler)",
-			"required":"cpu level 6, x86-64"
+			"value": "turion64_tyler",
+			"description": "AMD Turion(tm) 64 X2 Mobile TL-60 (Tyler)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"phenom_8650_toliman",
-			"description":"AMD Phenom X3 8650 (Toliman)",
-			"required":"cpu level 6, x86-64"
+			"value": "phenom_8650_toliman",
+			"description": "AMD Phenom X3 8650 (Toliman)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"core2_penryn_t9600",
-			"description":"Intel Mobile Core 2 Duo T9600 (Penryn)",
-			"required":"cpu level 6, x86-64"
+			"value": "core2_penryn_t9600",
+			"description": "Intel Mobile Core 2 Duo T9600 (Penryn)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"corei5_lynnfield_750",
-			"description":"Intel(R) Core(TM) i5 750 (Lynnfield)",
-			"required":"cpu level 6, x86-64"
+			"value": "corei5_lynnfield_750",
+			"description": "Intel(R) Core(TM) i5 750 (Lynnfield)",
+			"required": "cpu level 6, x86-64"
 		},
 
 		{
-			"value":"corei5_arrandale_m520",
-			"description":"Intel(R) Core(TM) i5 M 520 (Arrandale)",
-			"required":"cpu level 6, x86-64"
+			"value": "corei5_arrandale_m520",
+			"description": "Intel(R) Core(TM) i5 M 520 (Arrandale)",
+			"required": "cpu level 6, x86-64"
 		},
 		
 		{
-			"value":"corei7_sandy_bridge_2600k",
-			"description":"Intel(R) Core(TM) i7-2600K (Sandy Bridge)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "corei7_sandy_bridge_2600k",
+			"description": "Intel(R) Core(TM) i7-2600K (Sandy Bridge)",
+			"required": "cpu level 6, x86-64, avx"
 		},
 
 		{
-			"value":"zambezi",
-			"description":"AMD FX(tm)-4100 Quad-Core Processor (Zambezi)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "zambezi",
+			"description": "AMD FX(tm)-4100 Quad-Core Processor (Zambezi)",
+			"required": "cpu level 6, x86-64, avx"
 		},
 
 		{
-			"value":"trinity_apu",
-			"description":"AMD A8-5600K APU (Trinity)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "trinity_apu",
+			"description": "AMD A8-5600K APU (Trinity)",
+			"required": "cpu level 6, x86-64, avx"
 		},
 		
 		{
-			"value":"ryzen",
-			"description":"AMD Ryzen 7 1700",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "ryzen",
+			"description": "AMD Ryzen 7 1700",
+			"required": "cpu level 6, x86-64, avx"
 		},
 
 		{
-			"value":"corei7_ivy_bridge_3770k",
-			"description":"Intel(R) Core(TM) i7-3770K CPU (Ivy Bridge)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "corei7_ivy_bridge_3770k",
+			"description": "Intel(R) Core(TM) i7-3770K CPU (Ivy Bridge)",
+			"required": "cpu level 6, x86-64, avx"
 		},
 
 		{
-			"value":"corei7_haswell_4770",
-			"description":"Intel(R) Core(TM) i7-4770 CPU (Haswell)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "corei7_haswell_4770",
+			"description": "Intel(R) Core(TM) i7-4770 CPU (Haswell)",
+			"required": "cpu level 6, x86-64, avx"
 		},
 		
 		{
-			"value":"broadwell_ult",
-			"description":"Intel(R) Processor 5Y70 CPU (Broadwell)",
-			"required":"cpu level 6, x86-64, avx"
+			"value": "broadwell_ult",
+			"description": "Intel(R) Processor 5Y70 CPU (Broadwell)",
+			"required": "cpu level 6, x86-64, avx"
+		}
+
+	],
+
+"chipsetlist":[
+		{
+			"value": "i430fx"
+		},
+
+		{
+			"value": "i440fx"
+		},
+
+		{
+			"value": "i440bx"
 		}
 
 	],
 	
 "vgalist":[
 		{
-			"value":"vbe",
-			"description":"Bochs VBE (ISA)"
-		},
-		
-		{
-			"value":"pcivga",
-			"description":"Bochs VBE (PCI)"
+			"value": "vbe",
+			"description": "Bochs VBE (ISA)",
+			"vgaExtension": "vbe",
+			"vgaRomImage": "VGABIOS-lgpl-latest"
 		},
 
 		{
-			"value":"cirrus_5430",
-			"description":"Cirrus Logic CL-GD5430 (ISA)"
+			"value": "pcivga",
+			"description": "Bochs VBE (PCI)",
+			"vgaExtension": "vbe",
+			"vgaRomImage": "VGABIOS-lgpl-latest"
 		},
-		
+
 		{
-			"value":"cirrus_5446",
-			"description":"Cirrus Logic CL-GD5446 (PCI)"
+			"value": "cirrus_5430",
+			"description": "Cirrus Logic CL-GD5430 (ISA)",
+			"vgaExtension": "cirrus",
+			"vgaRomImage": "VGABIOS-lgpl-latest-cirrus"
+		},
+
+		{
+			"value": "cirrus_5446",
+			"description": "Cirrus Logic CL-GD5446 (PCI)",
+			"vgaExtension": "cirrus",
+			"vgaRomImage": "VGABIOS-lgpl-latest-cirrus"
+		},
+
+		{
+			"value": "banshee",
+			"description": "Voodoo Banshee (PCI)",
+			"vgaExtension": "voodoo",
+			"vgaRomImage": "Pci_sg.rom"
+		},
+
+		{
+			"value": "voodoo3",
+			"description": "Voodoo3 (PCI)",
+			"vgaExtension": "voodoo",
+			"vgaRomImage": "V3_2000_PCI_SG_2.15.06_LC.rom"
+		},
+
+		{
+			"value": "banshee",
+			"description": "Voodoo Banshee (AGP)",
+			"vgaExtension": "voodoo",
+			"vgaRomImage": "Agp_sg.rom",
+			"chipset": "i440bx"
+		},
+
+		{
+			"value": "voodoo3",
+			"description": "Voodoo3 (AGP)",
+			"vgaExtension": "voodoo",
+			"vgaRomImage": "1k11sg.rom",
+			"chipset": "i440bx"
 		}
-		
+
 	],
-	
+
 "soundlist":[
 		{
-			"value":"none",
-			"description":""
-		},
-		
-		{
-			"value":"sb16",
-			"description":"Creative Sound Blaster 16 (ISA)"
+			"value": "none",
+			"description": ""
 		},
 
 		{
-			"value":"es1370",
-			"description":"Ensoniq ES1370 (PCI)"
+			"value": "sb16",
+			"description": "Creative Sound Blaster 16 (ISA)"
+		},
+
+		{
+			"value": "es1370",
+			"description": "Ensoniq ES1370 (PCI)"
 		}
-		
+
 	],
-	
+
 "ethernetlist":[
 		{
-			"value":"none",
-			"description":""
-		},
-		
-		{
-			"value":"ne2k",
-			"description":"Novell NE2000 (ISA)"
+			"value": "none",
+			"description": ""
 		},
 
 		{
-			"value":"rtl8029",
-			"description":"Realtek RTL8029 (PCI)"
+			"value": "ne2k",
+			"description": "Novell NE2000 (ISA)"
 		},
-		
+
 		{
-			"value":"e1000",
-			"description":"Intel 82540EM (PCI)"
+			"value": "rtl8029",
+			"description": "Realtek RTL8029 (PCI)"
+		},
+
+		{
+			"value": "e1000",
+			"description": "Intel 82540EM (PCI)"
 		}
-		
+
+	]},
+
+"voodoolist":[
+		{
+			"model": "none",
+			"name": ""
+		},
+
+		{
+			"model": "voodoo1",
+			"name": "Voodoo1"
+		},
+
+		{
+			"model": "voodoo2",
+			"name": "Voodoo2"
+		}
+
 	]}
