@@ -193,21 +193,21 @@
 			"value": "banshee",
 			"name": "Voodoo Banshee (PCI)",
 			"vgaExtension": "voodoo",
-			"vgaRomImage": "Pci_sg.rom"
+			"vgaRomImage": "Pci_sg.0"
 		},
 
 		{
 			"value": "voodoo3",
 			"name": "Voodoo3 (PCI)",
 			"vgaExtension": "voodoo",
-			"vgaRomImage": "V3_2000_PCI_SG_2.15.06_LC.rom"
+			"vgaRomImage": "V3_2000_PCI_SG_2.15.06_LC.0"
 		},
 
 		{
 			"value": "banshee",
 			"name": "Voodoo Banshee (AGP)",
 			"vgaExtension": "voodoo",
-			"vgaRomImage": "Agp_sg.rom",
+			"vgaRomImage": "Agp_sg.0",
 			"chipset": "i440bx"
 		},
 
@@ -215,7 +215,7 @@
 			"value": "voodoo3",
 			"name": "Voodoo3 (AGP)",
 			"vgaExtension": "voodoo",
-			"vgaRomImage": "1k11sg.rom",
+			"vgaRomImage": "V3_2000_AGP_SG_2.15.06_LC.0",
 			"chipset": "i440bx"
 		}
 
