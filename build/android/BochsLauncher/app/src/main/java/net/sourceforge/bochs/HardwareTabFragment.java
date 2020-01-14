@@ -110,7 +110,7 @@ public class HardwareTabFragment extends Fragment {
         spVoodoo.setAdapter(voodooAdapter);
         for (int i = 0; i < 5; i++)
             spSlot[i].setAdapter(slotAdapter[i]);
-        int selectedCpuModel = getCpuModelSelectorList().indexOf(Config.cpuModel);
+        int selectedCpuModel = getSelectedCpuModelIndex(Config.cpuModel);
         spCpuModel.setSelection(selectedCpuModel);
         int selectedChipset = getChipsetSelectorList().indexOf(Config.chipset);
         spChipsetModel.setSelection(selectedChipset);
@@ -131,9 +131,9 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                Config.cpuModel = getCpuModelSelectorList().get(p3);
-                int num = getCpuModelSelectorList().indexOf(Config.cpuModel);
-                tvCpuDescription.setText(cpuModels.get(num).getDescription());
+                CpuModel cpuModel = cpuModels.get(p3);
+                Config.cpuModel = cpuModel.getValue();
+                tvCpuDescription.setText(cpuModel.getDescription());
             }
 
             @Override
@@ -419,7 +419,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getCpuModelSelectorList() {
         List<String> result = new ArrayList<>();
         for (CpuModel cm : cpuModels) {
-            result.add(cm.getValue());
+            result.add(cm.getDescription());
         }
         return result;
     }
@@ -507,6 +507,15 @@ public class HardwareTabFragment extends Fragment {
         }
     }
 
+    private int getSelectedCpuModelIndex(String value) {
+        for (int i = 0; i < cpuModels.size(); i++) {
+            if (cpuModels.get(i).getValue().equals(value)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
     private void checkVga() {
         switch (Config.vgaExtension) {
             case "vbe":
@@ -543,8 +552,6 @@ public class HardwareTabFragment extends Fragment {
                 Config.useVoodoo = false;
                 spVoodoo.setSelection(0);
             }
-/*            spVoodoo.setSelection(checkPciSlotFor("voodoo")
-                    ? Config.voodooModel.equals("voodoo2") ? 2 : 1 : 0);*/
         }
     }
 
