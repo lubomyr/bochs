@@ -444,7 +444,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getSoundCardSelectorList() {
         List<String> result = new ArrayList<>();
         for (SoundCard sc : soundCards) {
-            result.add(sc.getValue());
+            result.add(sc.getDescription());
         }
         return result;
     }
@@ -452,7 +452,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getEthernetCardSelectorList() {
         List<String> result = new ArrayList<>();
         for (EthernetCard ec : ethernetCards) {
-            result.add(ec.getValue());
+            result.add(ec.getDescription());
         }
         return result;
     }
