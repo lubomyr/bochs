@@ -224,7 +224,7 @@
 "soundlist":[
 		{
 			"value": "none",
-			"name": ""
+			"name": "none"
 		},
 
 		{
@@ -242,7 +242,7 @@
 "ethernetlist":[
 		{
 			"value": "none",
-			"name": ""
+			"name": "none"
 		},
 
 		{
