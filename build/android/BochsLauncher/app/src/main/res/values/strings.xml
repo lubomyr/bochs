@@ -47,5 +47,6 @@
     <string name="logo">logo</string>
     <string name="start">start</string>
     <string name="download">download</string>
+    <string name="agp">AGP:</string>
 
 </resources>

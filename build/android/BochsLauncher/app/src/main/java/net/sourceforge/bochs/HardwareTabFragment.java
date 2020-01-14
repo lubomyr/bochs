@@ -45,6 +45,7 @@ public class HardwareTabFragment extends Fragment {
     private Spinner[] spSlot = new Spinner[5];
     private LinearLayout voodooLayout;
     private LinearLayout mvLayout;
+    private TextView slot5TextLabel;
     private ArrayAdapter slotAdapter[] = new ArrayAdapter[5];
     private List<CpuModel> cpuModels = new ArrayList<>();
     private List<ChipsetModel> chipsetModels = new ArrayList<>();
@@ -93,6 +94,7 @@ public class HardwareTabFragment extends Fragment {
         spSlot[4] = rootView.findViewById(R.id.hardwareSpinnerSlot5);
         voodooLayout = rootView.findViewById(R.id.voodooLayout);
         mvLayout = rootView.findViewById(R.id.mvLayout);
+        slot5TextLabel = rootView.findViewById(R.id.slot5TextLabel);
         SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
         SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
@@ -145,6 +147,8 @@ public class HardwareTabFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
                 Config.chipset = getChipsetSelectorList().get(p3);
+                slot5TextLabel.setText(Config.chipset.equals("i440bx") ? getString(R.string.agp)
+                        : getString(R.string.slot5));
                 checkVga();
                 checkVoodoo();
                 updateSlotLists();
