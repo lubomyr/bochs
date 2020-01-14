@@ -34,7 +34,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     static String appPath;
     private String configPath;
-    private ViewPager viewPager;
     private SharedPreferences sPref;
     final String SAVED_PATH = "saved_path";
     private final int REQUEST_EXTERNAL_STORAGE = 1;
@@ -54,7 +53,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //initToolbar();
         ViewPager viewPager = (ViewPager) findViewById(R.id.viewpager);
 
-        //tabs = {getString(R.string.storage), getString(R.string.hardware), getString(R.string.misc)};
         TabLayout tabLayout = (TabLayout) findViewById(R.id.tabs);
         tabLayout.setupWithViewPager(viewPager);
 
