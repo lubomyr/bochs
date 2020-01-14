@@ -2,7 +2,6 @@ package net.sourceforge.bochs;
 
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -221,7 +220,7 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvSoundDescription.setText(soundCards.get(p3).getDescription());
+                tvSoundDescription.setText(soundCards.get(p3).getName());
                 switch (p3) {
                     case 0:
                         Config.useSb16 = false;
@@ -251,7 +250,7 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvEthernetDescription.setText(ethernetCards.get(p3).getDescription());
+                tvEthernetDescription.setText(ethernetCards.get(p3).getName());
                 switch (p3) {
                     case 0:
                         Config.useNe2000 = false;
@@ -444,7 +443,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getSoundCardSelectorList() {
         List<String> result = new ArrayList<>();
         for (SoundCard sc : soundCards) {
-            result.add(sc.getDescription());
+            result.add(sc.getName());
         }
         return result;
     }
@@ -452,7 +451,7 @@ public class HardwareTabFragment extends Fragment {
     private List<String> getEthernetCardSelectorList() {
         List<String> result = new ArrayList<>();
         for (EthernetCard ec : ethernetCards) {
-            result.add(ec.getDescription());
+            result.add(ec.getName());
         }
         return result;
     }
