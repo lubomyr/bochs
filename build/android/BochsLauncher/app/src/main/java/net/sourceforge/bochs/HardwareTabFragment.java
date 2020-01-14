@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.Spinner;
@@ -20,6 +21,7 @@ import net.sourceforge.bochs.entity.CpuModel;
 import net.sourceforge.bochs.entity.EthernetCard;
 import net.sourceforge.bochs.entity.SoundCard;
 import net.sourceforge.bochs.entity.VgaCard;
+import net.sourceforge.bochs.entity.VoodooModel;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -38,14 +40,18 @@ public class HardwareTabFragment extends Fragment {
     private TextView tvSoundDescription;
     private Spinner spEthernet;
     private TextView tvEthernetDescription;
+    private Spinner spVoodoo;
     private TextView tvMemory;
     private Spinner[] spSlot = new Spinner[5];
+    private LinearLayout voodooLayout;
+    private LinearLayout mvLayout;
     private ArrayAdapter slotAdapter[] = new ArrayAdapter[5];
     private List<CpuModel> cpuModels = new ArrayList<>();
     private List<ChipsetModel> chipsetModels = new ArrayList<>();
     private List<VgaCard> vgaCards = new ArrayList<>();
     private List<SoundCard> soundCards = new ArrayList<>();
     private List<EthernetCard> ethernetCards = new ArrayList<>();
+    private List<VoodooModel> voodooModels = new ArrayList<>();
     private List<String>[] slotList = new List[5];
 
     @Override
@@ -77,6 +83,7 @@ public class HardwareTabFragment extends Fragment {
         tvSoundDescription = rootView.findViewById(R.id.hardwareTextViewSoundDesc);
         spEthernet = rootView.findViewById(R.id.hardwareSpinnerEthernet);
         tvEthernetDescription = rootView.findViewById(R.id.hardwareTextViewEthernetDesc);
+        spVoodoo = rootView.findViewById(R.id.hardwareSpinnerVoodoo);
         SeekBar sbMemory = rootView.findViewById(R.id.hardwareSeekBarMemory);
         tvMemory = rootView.findViewById(R.id.hardwareTextViewMemory);
         spSlot[0] = rootView.findViewById(R.id.hardwareSpinnerSlot1);
@@ -84,6 +91,8 @@ public class HardwareTabFragment extends Fragment {
         spSlot[2] = rootView.findViewById(R.id.hardwareSpinnerSlot3);
         spSlot[3] = rootView.findViewById(R.id.hardwareSpinnerSlot4);
         spSlot[4] = rootView.findViewById(R.id.hardwareSpinnerSlot5);
+        voodooLayout = rootView.findViewById(R.id.voodooLayout);
+        mvLayout = rootView.findViewById(R.id.mvLayout);
         SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
         SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
@@ -91,11 +100,13 @@ public class HardwareTabFragment extends Fragment {
         SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardSelectorList());
         SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardSelectorList());
         SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardSelectorList());
+        SpinnerAdapter voodooAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVoodooModelsSelectorList());
         spCpuModel.setAdapter(cpuModelAdapter);
         spChipsetModel.setAdapter(chipsetModelAdapter);
         spVga.setAdapter(vgaAdapter);
         spSound.setAdapter(soundAdapter);
         spEthernet.setAdapter(ethernetAdapter);
+        spVoodoo.setAdapter(voodooAdapter);
         for (int i = 0; i < 5; i++)
             spSlot[i].setAdapter(slotAdapter[i]);
         int selectedCpuModel = getCpuModelSelectorList().indexOf(Config.cpuModel);
@@ -113,6 +124,7 @@ public class HardwareTabFragment extends Fragment {
         checkVga();
         checkSound();
         checkEthernet();
+        checkVoodoo();
 
         spCpuModel.setOnItemSelectedListener(new OnItemSelectedListener() {
 
@@ -134,6 +146,8 @@ public class HardwareTabFragment extends Fragment {
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
                 Config.chipset = getChipsetSelectorList().get(p3);
                 checkVga();
+                checkVoodoo();
+                updateSlotLists();
             }
 
             @Override
@@ -149,20 +163,22 @@ public class HardwareTabFragment extends Fragment {
                 tvVgaDescription.setText(vgaCard.getName());
                 Config.vgaExtension = vgaCard.getVgaExtension();
                 Config.vgaRomImage = vgaCard.getVgaRomImage();
+                showVoodooLayout(!vgaCard.getVgaExtension().equals("voodoo"));
                 if (vgaCard.getVgaExtension().equals("voodoo")) {
                     Config.useVoodoo = true;
                     Config.voodooModel = vgaCard.getValue();
-                    setFreePciSlot("pcivga");
-                    setFreePciSlot("cirrus");
-                    setFreePciSlot("voodoo");
+                    setFreePciSlot(new String[]{"pcivga", "cirrus", "voodoo"});
+                } else {
+                    if (!Config.voodooModel.equals("voodoo1") && !Config.voodooModel.equals("voodoo2")) {
+                        setFreePciSlot("voodoo");
+                    }
                 }
                 if (vgaCard.getChipset() != null) {
                     spChipsetModel.setSelection(getChipsetSelectorList().indexOf(vgaCard.getChipset()));
                 }
                 switch (p3) {
                     case 0:
-                        setFreePciSlot("pcivga");
-                        setFreePciSlot("cirrus");
+                        setFreePciSlot(new String[]{"pcivga", "cirrus"});
                         break;
                     case 1:
                         setFreePciSlot("cirrus");
@@ -170,8 +186,7 @@ public class HardwareTabFragment extends Fragment {
                         slotAdapter[0].notifyDataSetChanged();
                         break;
                     case 2:
-                        setFreePciSlot("pcivga");
-                        setFreePciSlot("cirrus");
+                        setFreePciSlot(new String[]{"pcivga", "cirrus"});
                         break;
                     case 3:
                         setFreePciSlot("pcivga");
@@ -272,6 +287,29 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
+        spVoodoo.setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                VoodooModel vm = voodooModels.get(i);
+                if (!Config.vgaExtension.equals("voodoo")) {
+                    Config.useVoodoo = (i > 0);
+                    Config.voodooModel = vm.getModel();
+                    if (i > 0 && !checkPciSlotFor("voodoo")) {
+                        Config.slot[3] = "voodoo";
+                        spSlot[3].setSelection(slotList[3].indexOf("voodoo"));
+                        slotAdapter[3].notifyDataSetChanged();
+                    } else if (i == 0){
+                        setFreePciSlot("voodoo");
+                    }
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+
         for (int i = 0; i <= 4; i++) {
             final int finalI = i;
             spSlot[i].setOnItemSelectedListener(new OnItemSelectedListener() {
@@ -285,6 +323,7 @@ public class HardwareTabFragment extends Fragment {
                     checkVga();
                     checkSound();
                     checkEthernet();
+                    checkVoodoo();
                 }
 
                 @Override
@@ -362,6 +401,13 @@ public class HardwareTabFragment extends Fragment {
                 String description = model.getString("name");
                 ethernetCards.add(new EthernetCard(value, description));
             }
+            JSONArray voodoolist = dataJsonObj.getJSONArray("voodoolist");
+            for (int i = 0; i < voodoolist.length(); i++) {
+                JSONObject model = voodoolist.getJSONObject(i);
+                String name = model.getString("name");
+                String modelName = model.getString("model");
+                voodooModels.add(new VoodooModel(name, modelName));
+            }
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -407,6 +453,14 @@ public class HardwareTabFragment extends Fragment {
         return result;
     }
 
+    private List<String> getVoodooModelsSelectorList() {
+        List<String> result = new ArrayList<>();
+        for (VoodooModel vm : voodooModels) {
+            result.add(vm.getName());
+        }
+        return result;
+    }
+
     private int getFreePciSlot() {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals("")) {
@@ -434,6 +488,12 @@ public class HardwareTabFragment extends Fragment {
         return -1;
     }
 
+    private void setFreePciSlot(String[] str) {
+        for (String s : str) {
+            setFreePciSlot(s);
+        }
+    }
+
     private void setFreePciSlot(String str) {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals(str)) {
@@ -453,15 +513,35 @@ public class HardwareTabFragment extends Fragment {
                 spVga.setSelection(checkPciSlotFor("cirrus") ? 3 : 2);
                 break;
             case "voodoo":
-                if (Config.voodooModel.equals("banshee")) {
+                if (checkPciSlotFor("voodoo") && Config.voodooModel.equals("banshee")) {
                     spVga.setSelection((Config.slot[4].equals("voodoo")
                             && Config.chipset.equals("i440bx")) ? 6 : 4);
                 }
-                else if (Config.voodooModel.equals("voodoo3")) {
+                else if (checkPciSlotFor("voodoo") && Config.voodooModel.equals("voodoo3")) {
                     spVga.setSelection((Config.slot[4].equals("voodoo")
                             && Config.chipset.equals("i440bx")) ? 7 : 5);
+                } else {
+                    spVga.setSelection(0);
                 }
                 break;
+        }
+    }
+
+    private void checkVoodoo() {
+        if (!Config.vgaExtension.equals("voodoo")) {
+            if (Config.useVoodoo && checkPciSlotFor("voodoo")) {
+                if (Config.voodooModel.equals("voodoo2")) {
+                    spVoodoo.setSelection(2);
+                } else {
+                    Config.voodooModel = "voodoo1";
+                    spVoodoo.setSelection(1);
+                }
+            } else {
+                Config.useVoodoo = false;
+                spVoodoo.setSelection(0);
+            }
+/*            spVoodoo.setSelection(checkPciSlotFor("voodoo")
+                    ? Config.voodooModel.equals("voodoo2") ? 2 : 1 : 0);*/
         }
     }
 
@@ -513,8 +593,10 @@ public class HardwareTabFragment extends Fragment {
 
     private List<String> getSlotList(int num) {
         List<String> list = new ArrayList<>();
-        final List<String> fullSlotList = Arrays.asList("none", "pcivga", "cirrus", "voodoo",
-                "es1370", "ne2k", "e1000");
+        List<String> pciList = Arrays.asList("none", "pcivga", "cirrus", "voodoo", "es1370", "ne2k",
+                "e1000");
+        List<String> agpList = Arrays.asList("none", "voodoo");
+        final List<String> fullSlotList = (Config.chipset.equals("i440bx") && num == 4) ? agpList : pciList;
         list.addAll(fullSlotList);
         for (int i = 0; i < 5; i++) {
             list.remove(Config.slot[i]);
@@ -533,6 +615,13 @@ public class HardwareTabFragment extends Fragment {
                 int selectedSlot = slotList[i].indexOf(Config.slot[i]);
                 spSlot[i].setSelection((selectedSlot == -1) ? 0 : selectedSlot);
             }
+        }
+    }
+
+    private void showVoodooLayout(boolean isShow) {
+        voodooLayout.setVisibility(isShow ? View.VISIBLE : View.GONE);
+        if (mvLayout != null) {
+            mvLayout.setWeightSum(isShow ? 1.0f : 0.7f);
         }
     }
 

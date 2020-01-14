@@ -260,12 +260,11 @@
 			"name": "Intel 82540EM (PCI)"
 		}
 
-	]},
-
+	],
 "voodoolist":[
 		{
 			"model": "none",
-			"name": ""
+			"name": "none"
 		},
 
 		{
@@ -279,3 +278,5 @@
 		}
 
 	]}
+}
+

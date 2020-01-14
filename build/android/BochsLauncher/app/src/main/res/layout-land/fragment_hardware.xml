@@ -8,8 +8,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:weightSum="1.0"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:weightSum="1.0">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -20,16 +20,16 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:weightSum="1.0"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:weightSum="1.0">
 
                 <LinearLayout
                     android:id="@+id/cpuLayout"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="0.78"
                     android:layout_marginStart="5dp"
                     android:layout_marginTop="5dp"
+                    android:layout_weight="0.78"
                     android:background="@drawable/my_border"
                     android:gravity="center_vertical|center_horizontal"
                     android:orientation="vertical">
@@ -61,9 +61,9 @@
                     android:id="@+id/chipsetLayout"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
-                    android:layout_weight="0.22"
                     android:layout_marginStart="5dp"
                     android:layout_marginTop="5dp"
+                    android:layout_weight="0.22"
                     android:background="@drawable/my_border"
                     android:gravity="center_vertical|center_horizontal"
                     android:orientation="vertical">
@@ -82,50 +82,85 @@
                 </LinearLayout>
 
             </LinearLayout>
-			
-			<LinearLayout
-                android:id="@+id/memoryLayout"
+
+            <LinearLayout
+                android:id="@+id/mvLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
-                android:layout_marginTop="5dp"
-                android:background="@drawable/my_border"
-                android:gravity="center_horizontal"
-                android:orientation="vertical">
+                android:orientation="horizontal"
+                android:weightSum="1.0">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/memory" />
+                <LinearLayout
+                    android:id="@+id/memoryLayout"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="0.70"
+                    android:layout_marginStart="5dp"
+                    android:layout_marginTop="5dp"
+                    android:background="@drawable/my_border"
+                    android:gravity="center"
+                    android:orientation="vertical">
 
-                <SeekBar
-                    android:id="@+id/hardwareSeekBarMemory"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:max="127" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/memory" />
 
-                <TextView
-                    android:id="@+id/hardwareTextViewMemory"
-                    android:layout_width="wrap_content"
+                    <SeekBar
+                        android:id="@+id/hardwareSeekBarMemory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:max="127" />
+
+                    <TextView
+                        android:id="@+id/hardwareTextViewMemory"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/value" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/voodooLayout"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="@string/value" />
+                    android:layout_weight="0.30"
+                    android:layout_marginStart="5dp"
+                    android:layout_marginTop="5dp"
+                    android:background="@drawable/my_border"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_horizontal"
+                        android:text="@string/voodoo_extension_card" />
+
+                    <Spinner
+                        android:id="@+id/hardwareSpinnerVoodoo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:padding="0dp" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:weightSum="1.0"
+                android:baselineAligned="false"
                 android:orientation="horizontal"
-                android:baselineAligned="false">
+                android:weightSum="1.0">
 
                 <LinearLayout
                     android:id="@+id/vgaLayout"
                     android:layout_width="0dp"
                     android:layout_height="110dp"
-                    android:layout_weight="0.33"
-                    android:layout_marginEnd="5dp"
+                    android:layout_marginStart="5dp"
                     android:layout_marginTop="5dp"
+                    android:layout_weight="0.33"
                     android:background="@drawable/my_border"
                     android:gravity="center"
                     android:orientation="vertical">
@@ -155,9 +190,9 @@
                     android:id="@+id/soundLayout"
                     android:layout_width="0dp"
                     android:layout_height="110dp"
-                    android:layout_weight="0.33"
                     android:layout_marginStart="5dp"
                     android:layout_marginTop="5dp"
+                    android:layout_weight="0.33"
                     android:background="@drawable/my_border"
                     android:gravity="center"
                     android:orientation="vertical">
@@ -187,9 +222,9 @@
                     android:id="@+id/ethernetLayout"
                     android:layout_width="0dp"
                     android:layout_height="110dp"
-                    android:layout_weight="0.34"
                     android:layout_marginStart="5dp"
                     android:layout_marginTop="5dp"
+                    android:layout_weight="0.34"
                     android:background="@drawable/my_border"
                     android:gravity="center"
                     android:orientation="vertical">
@@ -224,10 +259,10 @@
             android:id="@+id/pciLayout"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.25"
             android:layout_marginLeft="5dp"
-            android:layout_marginRight="5dp"
             android:layout_marginTop="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_weight="0.25"
             android:background="@drawable/my_border"
             android:gravity="center_vertical|center_horizontal"
             android:orientation="vertical">

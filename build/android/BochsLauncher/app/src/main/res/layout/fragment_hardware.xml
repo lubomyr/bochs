@@ -125,11 +125,43 @@
                 android:orientation="vertical">
 
                 <LinearLayout
-                    android:id="@+id/vgaLayout"
+                android:id="@+id/vgaLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="2dp"
+                android:layout_marginRight="2dp"
+                android:background="@drawable/my_border"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:text="@string/vga_card" />
+
+                <Spinner
+                    android:id="@+id/hardwareSpinnerVga"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="0dp" />
+
+                <TextView
+                    android:id="@+id/hardwareTextViewVgaDesc"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="@string/description" />
+
+            </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/voodooLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginLeft="2dp"
                     android:layout_marginRight="2dp"
+                    android:layout_marginTop="5dp"
                     android:background="@drawable/my_border"
                     android:gravity="center"
                     android:orientation="vertical">
@@ -138,20 +170,13 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:gravity="center_horizontal"
-                        android:text="@string/vga_card" />
+                        android:text="@string/voodoo_extension_card" />
 
                     <Spinner
-                        android:id="@+id/hardwareSpinnerVga"
+                        android:id="@+id/hardwareSpinnerVoodoo"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:padding="0dp" />
-
-                    <TextView
-                        android:id="@+id/hardwareTextViewVgaDesc"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="@string/description" />
 
                 </LinearLayout>
 
