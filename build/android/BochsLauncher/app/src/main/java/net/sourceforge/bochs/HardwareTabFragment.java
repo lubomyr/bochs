@@ -542,7 +542,11 @@ public class HardwareTabFragment extends Fragment {
     private void checkVoodoo() {
         if (!Config.vgaExtension.equals("voodoo")) {
             if (Config.useVoodoo && checkPciSlotFor("voodoo")) {
-                if (Config.voodooModel.equals("voodoo2")) {
+                if (Config.chipset.equals("i440bx") && Config.slot[4].equals("voodoo")
+                        && (Config.voodooModel.equals("voodoo1")
+                        || Config.voodooModel.equals("voodoo2")))
+                    spVga.setSelection(6);
+                else if (Config.voodooModel.equals("voodoo2")) {
                     spVoodoo.setSelection(2);
                 } else {
                     Config.voodooModel = "voodoo1";
