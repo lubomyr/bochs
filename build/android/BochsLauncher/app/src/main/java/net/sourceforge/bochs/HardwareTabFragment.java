@@ -32,13 +32,9 @@ import java.util.List;
 import java.util.Scanner;
 
 public class HardwareTabFragment extends Fragment {
-    private TextView tvCpuDescription;
     private Spinner spVga;
-    private TextView tvVgaDescription;
     private Spinner spSound;
-    private TextView tvSoundDescription;
     private Spinner spEthernet;
-    private TextView tvEthernetDescription;
     private Spinner spVoodoo;
     private TextView tvMemory;
     private Spinner[] spSlot = new Spinner[5];
@@ -76,13 +72,9 @@ public class HardwareTabFragment extends Fragment {
 
         Spinner spCpuModel = rootView.findViewById(R.id.hardwareSpinnerCpuModel);
         final Spinner spChipsetModel = rootView.findViewById(R.id.hardwareSpinnerChipset);
-        tvCpuDescription = rootView.findViewById(R.id.hardwareTextViewCpuDesc);
         spVga = rootView.findViewById(R.id.hardwareSpinnerVga);
-        tvVgaDescription = rootView.findViewById(R.id.hardwareTextViewVgaDesc);
         spSound = rootView.findViewById(R.id.hardwareSpinnerSound);
-        tvSoundDescription = rootView.findViewById(R.id.hardwareTextViewSoundDesc);
         spEthernet = rootView.findViewById(R.id.hardwareSpinnerEthernet);
-        tvEthernetDescription = rootView.findViewById(R.id.hardwareTextViewEthernetDesc);
         spVoodoo = rootView.findViewById(R.id.hardwareSpinnerVoodoo);
         SeekBar sbMemory = rootView.findViewById(R.id.hardwareSeekBarMemory);
         tvMemory = rootView.findViewById(R.id.hardwareTextViewMemory);
@@ -97,7 +89,7 @@ public class HardwareTabFragment extends Fragment {
         SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
         SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
-            slotAdapter[i] = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, slotList[i]);
+            slotAdapter[i] = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row_fixed, slotList[i]);
         SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardSelectorList());
         SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardSelectorList());
         SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardSelectorList());
@@ -114,7 +106,6 @@ public class HardwareTabFragment extends Fragment {
         spCpuModel.setSelection(selectedCpuModel);
         int selectedChipset = getChipsetSelectorList().indexOf(Config.chipset);
         spChipsetModel.setSelection(selectedChipset);
-        tvCpuDescription.setText(cpuModels.get(selectedCpuModel).getDescription());
         sbMemory.setProgress((Config.megs / memoryStep) - minValueMemory);
         tvMemory.setText(String.format("%s mb", Config.megs));
         Integer[] selectedSlot = new Integer[5];
@@ -133,7 +124,6 @@ public class HardwareTabFragment extends Fragment {
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
                 CpuModel cpuModel = cpuModels.get(p3);
                 Config.cpuModel = cpuModel.getValue();
-                tvCpuDescription.setText(cpuModel.getDescription());
             }
 
             @Override
@@ -163,7 +153,6 @@ public class HardwareTabFragment extends Fragment {
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
                 VgaCard vgaCard = vgaCards.get(p3);
-                tvVgaDescription.setText(vgaCard.getName());
                 Config.vgaExtension = vgaCard.getVgaExtension();
                 Config.vgaRomImage = vgaCard.getVgaRomImage();
                 showVoodooLayout(!vgaCard.getVgaExtension().equals("voodoo"));
@@ -220,7 +209,6 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvSoundDescription.setText(soundCards.get(p3).getName());
                 switch (p3) {
                     case 0:
                         Config.useSb16 = false;
@@ -250,7 +238,6 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvEthernetDescription.setText(ethernetCards.get(p3).getName());
                 switch (p3) {
                     case 0:
                         Config.useNe2000 = false;

@@ -20,7 +20,6 @@ import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
@@ -180,7 +179,8 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
         // setup boot selection logic
         Spinner spBoot = rootView.findViewById(R.id.storageSpinnerBoot);
-        SpinnerAdapter adapterBoot = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, bootList);
+        SpinnerAdapter adapterBoot = new ArrayAdapter<String>(getActivity(),
+                R.layout.spinner_row, bootList);
         spBoot.setAdapter(adapterBoot);
         spBoot.setSelection(bootList.indexOf(Config.boot));
         spBoot.setOnItemSelectedListener(new OnItemSelectedListener() {
@@ -220,7 +220,8 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
         }
 
         //setup ata logic
-        SpinnerAdapter adapterType = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, typeList);
+        SpinnerAdapter adapterType = new ArrayAdapter<String>(getActivity(),
+                R.layout.spinner_row_fixed, typeList);
         for (int i = 0; i < ataNum; i++) {
             cbAta[i].setChecked(Config.ata[i]);
             tvAta[i].setText(MainActivity.getFileName(Config.ataImage[i]));

@@ -3,10 +3,10 @@
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	android:id="@+id/cust_view"
 	android:layout_width="fill_parent"
-	android:layout_height="50dp"
-	android:textSize="20sp"
+	android:layout_height="wrap_content"
+	android:textSize="19sp"
 	android:padding="10dp"
-	android:gravity="left|center_vertical">
+	android:gravity="start|center_vertical">
 
 </TextView>
 
