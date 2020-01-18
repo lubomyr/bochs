@@ -16,6 +16,6 @@ if [ \! -d BochsLauncher/app/src/main/jniLibs ] ; then
 fi
 
 cd BochsLauncher
-./gradlew assembleDebug
-mv app/build/outputs/apk/debug/app-debug.apk ../bochs-debug.apk
+./gradlew assembleRelease
+mv app/build/outputs/apk/release/app-release-unsigned.apk ../bochs-debug.apk
 cd ..
