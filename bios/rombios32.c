@@ -1,10 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios32.c 13498 2018-05-03 17:54:31Z vruppert $
+// $Id: rombios32.c 13752 2019-12-30 13:16:18Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  32 bit Bochs BIOS init code
 //  Copyright (C) 2006       Fabrice Bellard
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2019  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -370,7 +370,7 @@ void bios_printf(int flags, const char *fmt, ...)
 
 void delay_ms(int n)
 {
-    int i, j;
+    volatile int i, j;
     for(i = 0; i < n; i++) {
 #ifdef BX_QEMU
         volatile int k = 0;
@@ -1993,7 +1993,7 @@ smbios_entry_point_init(void *start,
     }
 
 /* Type 0 -- BIOS Information */
-#define RELEASE_DATE_STR "01/01/2007"
+#define RELEASE_DATE_STR "29/12/2019"
 static void *
 smbios_type_0_init(void *start)
 {

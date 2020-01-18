@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxdialog.cc 13588 2019-11-02 19:30:39Z vruppert $
+// $Id: wxdialog.cc 13634 2019-12-01 18:57:08Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2019  The Bochs Project
@@ -104,20 +104,20 @@ LogMsgAskDialog::LogMsgAskDialog(
 {
   for (int i=0; i<N_BUTTONS; i++) enabled[i] = TRUE;
   vertSizer = new wxBoxSizer(wxVERTICAL);
-  context = new wxStaticText (this, -1, wxT(""));
-  wxFont font = context->GetFont ();
-  font.SetWeight (wxBOLD);
-  font.SetPointSize (2 + font.GetPointSize ());
-  context->SetFont (font);
-  message = new wxStaticText (this, -1, wxT(""));
-  message->SetFont (font);
-  dontAsk = new wxCheckBox (this, -1, LOG_MSG_DONT_ASK_STRING);
+  context = new wxStaticText(this, -1, wxT(""));
+  wxFont font = context->GetFont();
+  font.SetWeight(wxFONTWEIGHT_BOLD);
+  font.SetPointSize(2 + font.GetPointSize());
+  context->SetFont(font);
+  message = new wxStaticText(this, -1, wxT(""));
+  message->SetFont(font);
+  dontAsk = new wxCheckBox(this, -1, LOG_MSG_DONT_ASK_STRING);
   btnSizer = new wxBoxSizer(wxHORIZONTAL);
   // fill vertical sizer
-  vertSizer->Add (context, 0, wxGROW|wxALIGN_LEFT|wxLEFT|wxTOP, 30);
-  vertSizer->Add (message, 0, wxGROW|wxALIGN_LEFT|wxLEFT, 30);
-  vertSizer->Add (dontAsk, 0, wxALIGN_CENTER|wxTOP, 30);
-  vertSizer->Add (btnSizer, 0, wxALIGN_CENTER|wxTOP, 30);
+  vertSizer->Add(context, 0, wxGROW|wxALIGN_LEFT|wxLEFT|wxTOP, 30);
+  vertSizer->Add(message, 0, wxGROW|wxALIGN_LEFT|wxLEFT, 30);
+  vertSizer->Add(dontAsk, 0, wxALIGN_CENTER|wxTOP, 30);
+  vertSizer->Add(btnSizer, 0, wxALIGN_CENTER|wxTOP, 30);
   // Some object creation and layout is postponed until Init()
   // so that caller has time to configure the dialog.
 }

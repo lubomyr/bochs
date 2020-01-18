@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vga.cc 13514 2018-05-21 07:31:18Z vruppert $
+// $Id: vga.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2018  The Bochs Project
@@ -1220,7 +1220,7 @@ Bit32u bx_vga_c::vbe_write(Bit32u address, Bit32u value, unsigned io_len)
           //   virt_height >=yres
           //   virt_width*virt_height < MAX_VIDEO_MEMORY
 
-          // basicly 2 situations
+          // basically 2 situations
 
           // situation 1:
           //   MAX_VIDEO_MEMORY / virt_width >= yres

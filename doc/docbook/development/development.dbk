@@ -1,7 +1,7 @@
 <!--
 ================================================================
 doc/docbook/development/development.dbk
-$Id: development.dbk 13623 2019-11-30 12:20:00Z vruppert $
+$Id: development.dbk 13771 2020-01-04 22:46:00Z vruppert $
 
 This is the top level file for the Bochs Developers Manual.
 ================================================================
@@ -2395,21 +2395,21 @@ disk image <emphasis>size</emphasis>. Returns 0.
 <emphasis>int create(const char* filename, const char* type, Bit64u size);</emphasis>
 creates a new empty redolog file, with header and catalog, named <emphasis>filename</emphasis>
 of type <emphasis>type</emphasis> for a <emphasis>size</emphasis> bytes image.
-Returns 0 for OK or -1 if a problem occured.
+Returns 0 for OK or -1 if a problem occurred.
 </para>
 <para>
 <emphasis>int create(int filedes, const char* type, Bit64u size);</emphasis>
 creates a new empty redolog file, with header and catalog, in a previously
 opened file described by <emphasis>filedes</emphasis>, of type <emphasis>type</emphasis>
 for a <emphasis>size</emphasis> bytes image.
-Returns 0 for OK or -1 if a problem occured.
+Returns 0 for OK or -1 if a problem occurred.
 </para>
 <para>
 <emphasis>int open(const char* filename, const char* type, Bit64u size);</emphasis>
 opens a redolog file named <emphasis>filename</emphasis>, and checks
 for consistency of header values against a <emphasis>type</emphasis> and
 <emphasis>size</emphasis>.
-Returns 0 for OK or -1 if a problem occured.
+Returns 0 for OK or -1 if a problem occurred.
 </para>
 <para>
 <emphasis>int open(const char* filename, const char* type, Bit64u size, int flags);</emphasis>
@@ -2426,7 +2426,7 @@ closes a redolog file.
 seeks at logical data offset <emphasis>offset</emphasis> in a redolog.
 <emphasis>offset</emphasis> must be a multiple of 512.
 Only SEEK_SET and SEEK_CUR are supported for <emphasis>whence</emphasis>.
-Returns -1 if a problem occured, or the current logical offset in
+Returns -1 if a problem occurred, or the current logical offset in
 the redolog.
 </para>
 <para>
@@ -2535,7 +2535,7 @@ as an undoable disk image. The image mode of this base image is auto-detected.
 All supported disk image modes can be used here. The associated
 redolog will be named <emphasis>pathname</emphasis> with a
 <emphasis>UNDOABLE_REDOLOG_EXTENSION</emphasis> suffix, unless set in the
-constructor. Returns 0 for OK or -1 if a problem occured.
+constructor. Returns 0 for OK or -1 if a problem occurred.
 </para>
 
 <para>
@@ -2552,7 +2552,7 @@ off_t lseek(off_t offset, int whence);
 seeks at logical data position <emphasis>offset</emphasis> in
 the undoable disk image.
 Only SEEK_SET and SEEK_CUR are supported for <emphasis>whence</emphasis>.
-Returns -1 if a problem occured, or the current logical
+Returns -1 if a problem occurred, or the current logical
 offset in the undoable disk image.
 </para>
 
@@ -2618,7 +2618,7 @@ int open(const char* pathname);
 opens the disk image <emphasis>pathname</emphasis> in read-only mode,
 as a volatile disk image. The image mode is auto-detected. The associated
 redolog will be named <emphasis>pathname</emphasis> with a random suffix,
-unless set in the constructor. Returns 0 for OK or -1 if a problem occured.
+unless set in the constructor. Returns 0 for OK or -1 if a problem occurred.
 </para>
 
 <para>
@@ -2636,7 +2636,7 @@ off_t lseek(off_t offset, int whence);
 seeks at logical data position <emphasis>offset</emphasis> in
 the volatile disk image.
 Only SEEK_SET and SEEK_CUR are supported for <emphasis>whence</emphasis>.
-Returns -1 if a problem occured, or the current logical offset in
+Returns -1 if a problem occurred, or the current logical offset in
 the volatile disk image.
 </para>
 
@@ -2698,7 +2698,7 @@ object. This disk image logical length is <emphasis>size</emphasis> bytes.
 int open(const char* pathname);
 </emphasis>
 opens the growing disk image <emphasis>pathname</emphasis>,
-Returns 0 for OK or -1 if a problem occured.
+Returns 0 for OK or -1 if a problem occurred.
 </para>
 
 <para>
@@ -2715,7 +2715,7 @@ off_t lseek(off_t offset, int whence);
 seeks at logical data position <emphasis>offset</emphasis> in
 the growable disk image.
 Only SEEK_SET and SEEK_CUR are supported for <emphasis>whence</emphasis>.
-Returns -1 if a problem occured, or the current logical offset in
+Returns -1 if a problem occurred, or the current logical offset in
 the grwoing image.
 </para>
 
@@ -2798,6 +2798,138 @@ The file gui/x.cc implements this architecture, so you can refer to it
 as an example.
 </screen>
 
+</section>
+<section id="bochsbios"><title>The Bochs BIOS</title>
+<section id="biossums"><title>The biossums utility</title>
+<section><title>Intention</title>
+<para>
+Writing a BIOS for a pc-compatible includes the task of embedding various
+checksums. At least there is the overall bios checksum stored in the very
+last byte of the program. Depending on the number and types of services the
+bios provides there are others, e.g.
+</para>
+<itemizedlist>
+<listitem><para>
+a checksum for the PCI BIOS extensions
+</para></listitem>
+<listitem><para>
+a checksum for the PCI interrupt routing table
+</para></listitem>
+<listitem><para>
+a checksum for the plug and play BIOS extensions
+</para></listitem>
+</itemizedlist>
+<para>
+All these checksums have one common point: using the usual assembler directives
+they are hard (if not impossible) to compute at compile time. You can either
+compute them by hand --- a tedious, error-prone task, where in addition you
+often have to make unreliable assumptions about the memory layout of the
+entire BIOS. Or you patch them directly into your compiled BIOS image. Apart
+from computing the checksums this is what <command>biossums</command> does for you.
+</para>
+</section>
+<section><title>Checksums</title>
+<para>
+With the exception of the overall BIOS checksum, in a modern PC BIOS checksums
+are not used to ensure data integrity. Instead they are used in conjunction
+with certain signatures to securely identify the entry points or the addresses
+of important data of some BIOS extensions. Because these services are often
+invoked from x86 protected mode the original method via interrupts is not
+applicable. Scanning (even only parts) of the BIOS for (short) signatures and
+solely relying on this is insecure though, cause the found signature might not
+refer to the sought service but rather be some obscure machine code resembling
+the signature by accident.
+</para>
+<para>
+Since signatures are usually part of a larger header or table the above
+mentioned problem is being circumvented by checksumming over this header and
+comparing the result to a checksum stored next to the signature. In practice the
+checksum is often part of the header, chosen in a way that the contents of the
+header add up to zero.
+</para>
+</section>
+<section><title>Usage</title>
+<para>
+<command>biossums</command> is very simple and straightforward. The only (and mandatory)
+argument is the file name of the BIOS image. The file is being read, patched and written.
+So if you want to keep your original file for reference, use <command>biossums</command>
+on a copy of your BIOS image.
+</para>
+<para>
+For now, <command>biossums</command> can only rely on signatures to find the locations
+of the accompanying checksums. Therefore <command>biossums</command> refuses to set any
+checksums if it finds more than one signature of the same type.
+</para>
+</section>
+<section><title>Example output</title>
+<para>
+Running upon the current BIOS-bochs-legacy <command>biossums</command> displays:
+<screen>
+PCI-Bios header at: 0x9610
+Current checksum:     0x17
+Calculated checksum:  0x17  
+
+
+$PIR header at:     0x99C0
+Current checksum:     0x37
+Calculated checksum:  0x37
+
+
+$PnP header at:     0x9C80
+Current checksum:     0xD1
+Calculated checksum:  0x0F  Setting checksum.
+
+
+Bios checksum at:   0xFFFF
+Current checksum:     0x00
+Calculated checksum:  0x28  Setting checksum.
+</screen>
+</para>
+<para>
+If we patch in a second "_32_" signature at offset 0x9F00 and reset the $PIR
+checksum to 0x00 we get:
+</para>
+<para>
+<screen>
+PCI-Bios header at: 0x9610
+Current checksum:     0x17
+Calculated checksum:  0x17  
+
+PCI-Bios header at: 0x9F00
+Current checksum:     0x00
+Calculated checksum:  0x00  Multiple PCI headers! No checksum set.
+
+
+$PIR header at:     0x99C0
+Current checksum:     0x00
+Calculated checksum:  0x37  Setting checksum.
+
+
+$PnP header at:     0x9C80
+Current checksum:     0x0F
+Calculated checksum:  0x0F
+
+
+Bios checksum at:   0xFFFF
+Current checksum:     0x28
+Calculated checksum:  0x05  Setting checksum.
+</screen>
+</para>
+</section>
+<section><title>Possible enhancements</title>
+<para>
+Although <command>biossums</command> takes care of all checksums being used by
+the BIOS of the Bochs project (as of version 2.02) there are more to cover, e.g.
+the checksums for "Plug and Play" BIOS extension.
+</para>
+<para>
+In addition it was planned to provide further information to <command>biossums</command>
+via map-/symbol-files to verify the locations of checksums apart from scanning for
+signatures. For now this seems not to be necessary; in practice no double
+signatures have been observed yet.
+</para>
+</section>
+</section>
 </section>
 
 </chapter>
@@ -3239,6 +3371,7 @@ Use the "timeleft" command to see how much time remains before shutdown.
 Use the "shutdown" command to destroy the shell before the time limit.
 For path information and login help, type "sf-help".
 
+[vruppert@shell-24002 ~]$ svnserve -d -r /home/svn/p/bochs/code
 [vruppert@shell-24002 ~]$ cd /home/project-web/bochs/htdocs/
 [vruppert@shell-24002 htdocs]$ svn update
 U    index.html

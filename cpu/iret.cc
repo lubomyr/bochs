@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////
-// $Id: iret.cc 13168 2017-04-01 05:49:01Z sshwarts $
+// $Id: iret.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2005-2017 Stanislav Shwartsman
+//   Copyright (c) 2005-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -164,10 +164,18 @@ BX_CPU_C::iret_protected(bxInstruction_c *i)
   // check code-segment descriptor
   check_cs(&cs_descriptor, raw_cs_selector, 0, cs_selector.rpl);
 
-  if (cs_selector.rpl == CPL) { /* INTERRUPT RETURN TO SAME LEVEL */
+  if (cs_selector.rpl == CPL) {
+
+    BX_DEBUG(("INTERRUPT RETURN TO SAME PRIVILEGE LEVEL"));
+
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(CPL)) {
+      SSP = shadow_stack_restore(raw_cs_selector, cs_descriptor, new_eip);
+    }
+#endif
 
     /* load CS-cache with new code segment descriptor */
-    branch_far32(&cs_selector, &cs_descriptor, new_eip, cs_selector.rpl);
+    branch_far(&cs_selector, &cs_descriptor, new_eip, cs_selector.rpl);
 
     /* top 6/12 bytes on stack must be within limits, else #SS(0) */
     /* satisfied above */
@@ -198,9 +206,10 @@ BX_CPU_C::iret_protected(bxInstruction_c *i)
       ESP += top_nbytes_same;
     else
        SP += top_nbytes_same;
-    return;
   }
-  else { /* INTERRUPT RETURN TO OUTER PRIVILEGE LEVEL */
+  else {
+
+    BX_DEBUG(("INTERRUPT RETURN TO OUTER PRIVILEGE LEVEL"));
 
     /* 16bit opsize  |   32bit opsize
      * ==============================
@@ -284,10 +293,24 @@ BX_CPU_C::iret_protected(bxInstruction_c *i)
     if (! i->os32L()) // 16 bit
       changeMask &= 0xffff;
 
+#if BX_SUPPORT_CET
+    unsigned prev_cpl = CPL;
+    bx_address new_SSP = BX_CPU_THIS_PTR msr.ia32_pl_ssp[3];
+    if (ShadowStackEnabled(CPL)) {
+      if (SSP & 0x7) {
+        BX_ERROR(("iret_protected: SSP is not 8-byte aligned"));
+        exception(BX_CP_EXCEPTION, BX_CP_FAR_RET_IRET);
+      }
+      if (cs_selector.rpl != 3) {
+        new_SSP = shadow_stack_restore(raw_cs_selector, cs_descriptor, new_eip);
+      }
+    }
+#endif
+
     /* load CS:EIP from stack */
     /* load the CS-cache with CS descriptor */
     /* set CPL to the RPL of the return CS selector */
-    branch_far32(&cs_selector, &cs_descriptor, new_eip, cs_selector.rpl);
+    branch_far(&cs_selector, &cs_descriptor, new_eip, cs_selector.rpl);
 
     // IF only changed if (prev_CPL <= EFLAGS.IOPL)
     // VIF, VIP, IOPL only changed if prev_CPL == 0
@@ -301,6 +324,20 @@ BX_CPU_C::iret_protected(bxInstruction_c *i)
       ESP = new_esp;
     else
       SP  = new_esp;
+
+#if BX_SUPPORT_CET
+    bx_address old_SSP = SSP;
+    if (ShadowStackEnabled(CPL)) {
+      if (GET32H(new_SSP) != 0) {
+        BX_ERROR(("iret_protected: 64-bit SSP in legacy mode"));
+        exception(BX_GP_EXCEPTION, 0);
+      }
+      SSP = new_SSP;
+    }
+    if (ShadowStackEnabled(prev_cpl)) {
+      shadow_stack_atomic_clear_busy(old_SSP, prev_cpl);
+    }
+#endif
 
     validate_seg_regs();
   }
@@ -392,17 +429,24 @@ BX_CPU_C::long_iret(bxInstruction_c *i)
   /* INTERRUPT RETURN TO SAME PRIVILEGE LEVEL */
   if (cs_selector.rpl == CPL && !i->os64L())
   {
+    BX_DEBUG(("LONG MODE INTERRUPT RETURN TO SAME PRIVILEGE LEVEL"));
+
     /* top 24 bytes on stack must be within limits, else #SS(0) */
     /* satisfied above */
 
+#if BX_SUPPORT_CET
+    if (ShadowStackEnabled(CPL)) {
+      bx_address prev_SSP = SSP;
+      SSP = shadow_stack_restore(raw_cs_selector, cs_descriptor, new_rip);
+      if (SSP != prev_SSP) {
+        shadow_stack_atomic_clear_busy(SSP, CPL);
+      }
+    }
+#endif
+
     /* load CS:EIP from stack */
     /* load CS-cache with new code segment descriptor */
-    if(cs_descriptor.u.segment.l) {
-      branch_far64(&cs_selector, &cs_descriptor, new_rip, CPL);
-    }
-    else {
-      branch_far32(&cs_selector, &cs_descriptor, (Bit32u) new_rip, CPL);
-    }
+    branch_far(&cs_selector, &cs_descriptor, new_rip, CPL);
 
     // ID,VIP,VIF,AC,VM,RF,x,NT,IOPL,OF,DF,IF,TF,SF,ZF,x,AF,x,PF,x,CF
     Bit32u changeMask = EFlagsOSZAPCMask | EFlagsTFMask | EFlagsDFMask |
@@ -426,7 +470,10 @@ BX_CPU_C::long_iret(bxInstruction_c *i)
     else
        SP += top_nbytes_same;
   }
-  else { /* INTERRUPT RETURN TO OUTER PRIVILEGE LEVEL or 64 BIT MODE */
+  else {
+
+    BX_DEBUG(("LONG MODE INTERRUPT RETURN TO OUTER PRIVILEGE LEVEL or 64 BIT MODE"));
+
     /* 64bit opsize
      * ============
      * SS     eSP+32
@@ -513,8 +560,21 @@ BX_CPU_C::long_iret(bxInstruction_c *i)
     if (! i->os32L()) // 16 bit
       changeMask &= 0xffff;
 
+#if BX_SUPPORT_CET
+    bx_address new_SSP = BX_CPU_THIS_PTR msr.ia32_pl_ssp[3];
+    if (ShadowStackEnabled(CPL)) {
+      if (SSP & 0x7) {
+        BX_ERROR(("iret64: SSP is not 8-byte aligned"));
+        exception(BX_CP_EXCEPTION, BX_CP_FAR_RET_IRET);
+      }
+      if (cs_selector.rpl != 3) {
+        new_SSP = shadow_stack_restore(raw_cs_selector, cs_descriptor, new_rip);
+      }
+    }
+#endif
+
     /* set CPL to the RPL of the return CS selector */
-    branch_far64(&cs_selector, &cs_descriptor, new_rip, cs_selector.rpl);
+    branch_far(&cs_selector, &cs_descriptor, new_rip, cs_selector.rpl);
 
     // IF only changed if (prev_CPL <= EFLAGS.IOPL)
     // VIF, VIP, IOPL only changed if prev_CPL == 0
@@ -536,6 +596,20 @@ BX_CPU_C::long_iret(bxInstruction_c *i)
       if (ss_descriptor.u.segment.d_b) ESP = (Bit32u) new_rsp;
       else SP = (Bit16u) new_rsp;
     }
+
+#if BX_SUPPORT_CET
+    bx_address old_SSP = SSP;
+    if (ShadowStackEnabled(CPL)) {
+      if (!long64_mode() && GET32H(new_SSP) != 0) {
+        BX_ERROR(("iret64: 64-bit SSP in legacy mode"));
+        exception(BX_GP_EXCEPTION, 0);
+      }
+      SSP = new_SSP;
+    }
+    if (ShadowStackEnabled(prev_cpl)) {
+      shadow_stack_atomic_clear_busy(old_SSP, prev_cpl);
+    }
+#endif
 
     if (prev_cpl != CPL) validate_seg_regs();
   }

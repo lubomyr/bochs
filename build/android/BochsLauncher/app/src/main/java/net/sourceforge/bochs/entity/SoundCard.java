@@ -2,11 +2,11 @@ package net.sourceforge.bochs.entity;
 
 public class SoundCard {
     private String value;
-    private String description;
+    private String name;
 
-    public SoundCard(String value, String description) {
+    public SoundCard(String value, String name) {
         this.value = value;
-        this.description = description;
+        this.name = name;
     }
 
     public void setValue(String value) {
@@ -17,11 +17,11 @@ public class SoundCard {
         return value;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
+    public void setName(String name) {
+        this.name = name;
     }
 
-    public String getDescription() {
-        return description;
+    public String getName() {
+        return name;
     }
 }

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: uhci_core.cc 13497 2018-05-01 15:54:37Z vruppert $
+// $Id: uhci_core.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2017  Benjamin D Lunt (fys [at] fysnet [dot] net)
@@ -307,8 +307,8 @@ Bit32u bx_uhci_core_c::read(Bit32u address, unsigned io_len)
       val = hub.usb_sof.sof_timing;
       break;
 
-    case 0x14: // port #3 non existant, but linux systems check it to see if there are more than 2
-      BX_ERROR(("read from non existant offset 0x14 (port #3)"));
+    case 0x14: // port #3 non existent, but linux systems check it to see if there are more than 2
+      BX_ERROR(("read from non existent offset 0x14 (port #3)"));
       val = 0xFF7F;
       break;
 
@@ -488,8 +488,8 @@ void bx_uhci_core_c::write(Bit32u address, Bit32u value, unsigned io_len)
        hub.usb_sof.sof_timing = value;
        break;
 
-    case 0x14: // port #3 non existant, but linux systems check it to see if there are more than 2
-      BX_ERROR(("write to non existant offset 0x14 (port #3)"));
+    case 0x14: // port #3 non existent, but linux systems check it to see if there are more than 2
+      BX_ERROR(("write to non existent offset 0x14 (port #3)"));
       break;
 
     case 0x10: // port #1

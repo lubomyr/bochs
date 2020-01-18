@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode_opmap_0f3a.h 13550 2019-02-16 15:23:24Z sshwarts $
+// $Id: fetchdecode_opmap_0f3a.h 13730 2019-12-27 13:08:20Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2017-2019 Stanislav Shwartsman
@@ -75,7 +75,7 @@ static const Bit64u BxOpcodeTable0F3A61[] = { last_opcode(ATTR_SSE_PREFIX_66, BX
 static const Bit64u BxOpcodeTable0F3A62[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_PCMPISTRM_VdqWdqIb) };
 static const Bit64u BxOpcodeTable0F3A63[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_PCMPISTRI_VdqWdqIb) };
 
-static const Bit64u BxOpcodeTable0F3ACC[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_SHA1RNDS4_VdqWdqIb) };
+static const Bit64u BxOpcodeTable0F3ACC[] = { last_opcode(ATTR_SSE_NO_PREFIX, BX_IA_SHA1RNDS4_VdqWdqIb) };
 static const Bit64u BxOpcodeTable0F3ACE[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_GF2P8AFFINEQB_VdqWdqIb) };
 static const Bit64u BxOpcodeTable0F3ACF[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_GF2P8AFFINEINVQB_VdqWdqIb) };
 static const Bit64u BxOpcodeTable0F3ADF[] = { last_opcode(ATTR_SSE_PREFIX_66, BX_IA_AESKEYGENASSIST_VdqWdqIb) };

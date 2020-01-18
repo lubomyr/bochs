@@ -184,7 +184,7 @@ int bx_write_image(int fd, Bit64s offset, void *buf, int count)
 
 int bx_close_image(int fd, const char *pathname)
 {
-#if !(defined(BXIMAGE) || defined(ANDROID)) 
+#if !(defined(BXIMAGE) || defined(ANDROID))
   char lockfn[BX_PATHNAME_LEN];
 
   sprintf(lockfn, "%s.lock", pathname);

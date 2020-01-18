@@ -4,22 +4,23 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
-import android.widget.RadioButton;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 
+import net.sourceforge.bochs.entity.ChipsetModel;
 import net.sourceforge.bochs.entity.CpuModel;
 import net.sourceforge.bochs.entity.EthernetCard;
 import net.sourceforge.bochs.entity.SoundCard;
 import net.sourceforge.bochs.entity.VgaCard;
+import net.sourceforge.bochs.entity.VoodooModel;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -31,20 +32,22 @@ import java.util.List;
 import java.util.Scanner;
 
 public class HardwareTabFragment extends Fragment {
-    private TextView tvCpuDescription;
     private Spinner spVga;
-    private TextView tvVgaDescription;
     private Spinner spSound;
-    private TextView tvSoundDescription;
     private Spinner spEthernet;
-    private TextView tvEthernetDescription;
+    private Spinner spVoodoo;
     private TextView tvMemory;
     private Spinner[] spSlot = new Spinner[5];
+    private LinearLayout voodooLayout;
+    private LinearLayout mvLayout;
+    private TextView slot5TextLabel;
     private ArrayAdapter slotAdapter[] = new ArrayAdapter[5];
-    private List<CpuModel> cpuModel = new ArrayList<>();
-    private List<VgaCard> vgaCard = new ArrayList<>();
-    private List<SoundCard> soundCard = new ArrayList<>();
-    private List<EthernetCard> ethernetCard = new ArrayList<>();
+    private List<CpuModel> cpuModels = new ArrayList<>();
+    private List<ChipsetModel> chipsetModels = new ArrayList<>();
+    private List<VgaCard> vgaCards = new ArrayList<>();
+    private List<SoundCard> soundCards = new ArrayList<>();
+    private List<EthernetCard> ethernetCards = new ArrayList<>();
+    private List<VoodooModel> voodooModels = new ArrayList<>();
     private List<String>[] slotList = new List[5];
 
     @Override
@@ -64,43 +67,45 @@ public class HardwareTabFragment extends Fragment {
             slotList[i] = new ArrayList<>();
         updateSlotLists();
 
-        if (cpuModel.size() == 0)
+        if (cpuModels.size() == 0)
             readCpuList();
 
-        Spinner spCpuModel = (Spinner) rootView.findViewById(R.id.hardwareSpinnerCpuModel);
-        RadioButton rbI430fx = (RadioButton) rootView.findViewById(R.id.hardwareRadioButtonI430fx);
-        RadioButton rbI440fx = (RadioButton) rootView.findViewById(R.id.hardwareRadioButtonI440fx);
-        tvCpuDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewCpuDesc);
-        spVga = (Spinner) rootView.findViewById(R.id.hardwareSpinnerVga);
-        tvVgaDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewVgaDesc);
-        spSound = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSound);
-        tvSoundDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewSoundDesc);
-        spEthernet = (Spinner) rootView.findViewById(R.id.hardwareSpinnerEthernet);
-        tvEthernetDescription = (TextView) rootView.findViewById(R.id.hardwareTextViewEthernetDesc);
-        SeekBar sbMemory = (SeekBar) rootView.findViewById(R.id.hardwareSeekBarMemory);
-        tvMemory = (TextView) rootView.findViewById(R.id.hardwareTextViewMemory);
-        spSlot[0] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot1);
-        spSlot[1] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot2);
-        spSlot[2] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot3);
-        spSlot[3] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot4);
-        spSlot[4] = (Spinner) rootView.findViewById(R.id.hardwareSpinnerSlot5);
-        SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelValues());
+        Spinner spCpuModel = rootView.findViewById(R.id.hardwareSpinnerCpuModel);
+        final Spinner spChipsetModel = rootView.findViewById(R.id.hardwareSpinnerChipset);
+        spVga = rootView.findViewById(R.id.hardwareSpinnerVga);
+        spSound = rootView.findViewById(R.id.hardwareSpinnerSound);
+        spEthernet = rootView.findViewById(R.id.hardwareSpinnerEthernet);
+        spVoodoo = rootView.findViewById(R.id.hardwareSpinnerVoodoo);
+        SeekBar sbMemory = rootView.findViewById(R.id.hardwareSeekBarMemory);
+        tvMemory = rootView.findViewById(R.id.hardwareTextViewMemory);
+        spSlot[0] = rootView.findViewById(R.id.hardwareSpinnerSlot1);
+        spSlot[1] = rootView.findViewById(R.id.hardwareSpinnerSlot2);
+        spSlot[2] = rootView.findViewById(R.id.hardwareSpinnerSlot3);
+        spSlot[3] = rootView.findViewById(R.id.hardwareSpinnerSlot4);
+        spSlot[4] = rootView.findViewById(R.id.hardwareSpinnerSlot5);
+        voodooLayout = rootView.findViewById(R.id.voodooLayout);
+        mvLayout = rootView.findViewById(R.id.mvLayout);
+        slot5TextLabel = rootView.findViewById(R.id.slot5TextLabel);
+        SpinnerAdapter cpuModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getCpuModelSelectorList());
+        SpinnerAdapter chipsetModelAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getChipsetSelectorList());
         for (int i = 0; i < 5; i++)
-            slotAdapter[i] = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, slotList[i]);
-        SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardValues());
-        SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardValues());
-        SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardValues());
+            slotAdapter[i] = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row_fixed, slotList[i]);
+        SpinnerAdapter vgaAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVgaCardSelectorList());
+        SpinnerAdapter soundAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getSoundCardSelectorList());
+        SpinnerAdapter ethernetAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getEthernetCardSelectorList());
+        SpinnerAdapter voodooAdapter = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, getVoodooModelsSelectorList());
         spCpuModel.setAdapter(cpuModelAdapter);
+        spChipsetModel.setAdapter(chipsetModelAdapter);
         spVga.setAdapter(vgaAdapter);
         spSound.setAdapter(soundAdapter);
         spEthernet.setAdapter(ethernetAdapter);
+        spVoodoo.setAdapter(voodooAdapter);
         for (int i = 0; i < 5; i++)
             spSlot[i].setAdapter(slotAdapter[i]);
-        int selectedCpuModel = getCpuModelValues().indexOf(Config.cpuModel);
+        int selectedCpuModel = getSelectedCpuModelIndex(Config.cpuModel);
         spCpuModel.setSelection(selectedCpuModel);
-        tvCpuDescription.setText(cpuModel.get(selectedCpuModel).getDescription());
-        rbI430fx.setChecked(Config.chipset.equals("i430fx"));
-        rbI440fx.setChecked(Config.chipset.equals("i440fx"));
+        int selectedChipset = getChipsetSelectorList().indexOf(Config.chipset);
+        spChipsetModel.setSelection(selectedChipset);
         sbMemory.setProgress((Config.megs / memoryStep) - minValueMemory);
         tvMemory.setText(String.format("%s mb", Config.megs));
         Integer[] selectedSlot = new Integer[5];
@@ -111,14 +116,31 @@ public class HardwareTabFragment extends Fragment {
         checkVga();
         checkSound();
         checkEthernet();
+        checkVoodoo();
 
         spCpuModel.setOnItemSelectedListener(new OnItemSelectedListener() {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                Config.cpuModel = getCpuModelValues().get(p3);
-                int num = getCpuModelValues().indexOf(Config.cpuModel);
-                tvCpuDescription.setText(cpuModel.get(num).getDescription());
+                CpuModel cpuModel = cpuModels.get(p3);
+                Config.cpuModel = cpuModel.getValue();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p1) {
+            }
+        });
+
+        spChipsetModel.setOnItemSelectedListener(new OnItemSelectedListener() {
+
+            @Override
+            public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
+                Config.chipset = getChipsetSelectorList().get(p3);
+                slot5TextLabel.setText(Config.chipset.equals("i440bx") ? getString(R.string.agp)
+                        : getString(R.string.slot5));
+                checkVga();
+                checkVoodoo();
+                updateSlotLists();
             }
 
             @Override
@@ -130,33 +152,50 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvVgaDescription.setText(vgaCard.get(p3).getDescription());
+                VgaCard vgaCard = vgaCards.get(p3);
+                Config.vgaExtension = vgaCard.getVgaExtension();
+                Config.vgaRomImage = vgaCard.getVgaRomImage();
+                showVoodooLayout(!vgaCard.getVgaExtension().equals("voodoo"));
+                if (vgaCard.getVgaExtension().equals("voodoo")) {
+                    Config.useVoodoo = true;
+                    Config.voodooModel = vgaCard.getValue();
+                    setFreePciSlot(new String[]{"pcivga", "cirrus", "voodoo"});
+                } else {
+                    if (!Config.voodooModel.equals("voodoo1") && !Config.voodooModel.equals("voodoo2")) {
+                        setFreePciSlot("voodoo");
+                    }
+                }
+                if (vgaCard.getChipset() != null) {
+                    spChipsetModel.setSelection(getChipsetSelectorList().indexOf(vgaCard.getChipset()));
+                }
                 switch (p3) {
                     case 0:
-                        Config.vgaExtension = "vbe";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest";
-                        setFreePciSlot("pcivga");
-                        setFreePciSlot("cirrus");
+                        setFreePciSlot(new String[]{"pcivga", "cirrus"});
                         break;
                     case 1:
-                        Config.vgaExtension = "vbe";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest";
                         setFreePciSlot("cirrus");
                         spSlot[0].setSelection(slotList[0].indexOf("pcivga"));
                         slotAdapter[0].notifyDataSetChanged();
                         break;
                     case 2:
-                        Config.vgaExtension = "cirrus";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest-cirrus";
-                        setFreePciSlot("pcivga");
-                        setFreePciSlot("cirrus");
+                        setFreePciSlot(new String[]{"pcivga", "cirrus"});
                         break;
                     case 3:
-                        Config.vgaExtension = "cirrus";
-                        Config.vgaRomImage = "VGABIOS-lgpl-latest-cirrus";
                         setFreePciSlot("pcivga");
                         spSlot[0].setSelection(slotList[0].indexOf("cirrus"));
                         slotAdapter[0].notifyDataSetChanged();
+                        break;
+                    case 4:
+                    case 5:
+                        Config.slot[0] = "voodoo";
+                        spSlot[0].setSelection(slotList[0].indexOf("voodoo"));
+                        slotAdapter[0].notifyDataSetChanged();
+                        break;
+                    case 6:
+                    case 7:
+                        Config.slot[4] = "voodoo";
+                        spSlot[4].setSelection(slotList[4].indexOf("voodoo"));
+                        slotAdapter[4].notifyDataSetChanged();
                         break;
                 }
             }
@@ -170,7 +209,6 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvSoundDescription.setText(soundCard.get(p3).getDescription());
                 switch (p3) {
                     case 0:
                         Config.useSb16 = false;
@@ -200,7 +238,6 @@ public class HardwareTabFragment extends Fragment {
 
             @Override
             public void onItemSelected(AdapterView<?> p1, View p2, int p3, long p4) {
-                tvEthernetDescription.setText(ethernetCard.get(p3).getDescription());
                 switch (p3) {
                     case 0:
                         Config.useNe2000 = false;
@@ -240,7 +277,30 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
-        for (int i=0; i<=4; i++) {
+        spVoodoo.setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                VoodooModel vm = voodooModels.get(i);
+                if (!Config.vgaExtension.equals("voodoo")) {
+                    Config.useVoodoo = (i > 0);
+                    Config.voodooModel = vm.getModel();
+                    if (i > 0 && !checkPciSlotFor("voodoo")) {
+                        Config.slot[3] = "voodoo";
+                        spSlot[3].setSelection(slotList[3].indexOf("voodoo"));
+                        slotAdapter[3].notifyDataSetChanged();
+                    } else if (i == 0){
+                        setFreePciSlot("voodoo");
+                    }
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+
+        for (int i = 0; i <= 4; i++) {
             final int finalI = i;
             spSlot[i].setOnItemSelectedListener(new OnItemSelectedListener() {
 
@@ -253,6 +313,7 @@ public class HardwareTabFragment extends Fragment {
                     checkVga();
                     checkSound();
                     checkEthernet();
+                    checkVoodoo();
                 }
 
                 @Override
@@ -279,16 +340,6 @@ public class HardwareTabFragment extends Fragment {
             }
         });
 
-        OnClickListener hwOnClick = new OnClickListener() {
-
-            @Override
-            public void onClick(View p1) {
-                Config.chipset = (p1.getId() == R.id.hardwareRadioButtonI430fx) ? "i430fx" : "i440fx";
-            }
-        };
-
-        rbI430fx.setOnClickListener(hwOnClick);
-        rbI440fx.setOnClickListener(hwOnClick);
     }
 
     private void readCpuList() {
@@ -306,69 +357,101 @@ public class HardwareTabFragment extends Fragment {
             for (int i = 0; i < cpulist.length(); i++) {
                 JSONObject model = cpulist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
+                String description = model.getString("name");
                 String required = model.getString("required");
-                cpuModel.add(new CpuModel(value, description, required));
+                cpuModels.add(new CpuModel(value, description, required));
+            }
+            JSONArray chipsetlist = dataJsonObj.getJSONArray("chipsetlist");
+            for (int i = 0; i < chipsetlist.length(); i++) {
+                JSONObject model = chipsetlist.getJSONObject(i);
+                String value = model.getString("value");
+                chipsetModels.add(new ChipsetModel(value));
             }
             JSONArray vgalist = dataJsonObj.getJSONArray("vgalist");
             for (int i = 0; i < vgalist.length(); i++) {
                 JSONObject model = vgalist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
-                vgaCard.add(new VgaCard(value, description));
+                String name = model.getString("name");
+                String vgaExtension = model.getString("vgaExtension");
+                String vgaRomImage = model.getString("vgaRomImage");
+                String chipset = model.has("chipset") ? model.getString("chipset") : null;
+                vgaCards.add(new VgaCard(value, name, vgaExtension, vgaRomImage, chipset));
             }
             JSONArray soundlist = dataJsonObj.getJSONArray("soundlist");
             for (int i = 0; i < soundlist.length(); i++) {
                 JSONObject model = soundlist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
-                soundCard.add(new SoundCard(value, description));
+                String description = model.getString("name");
+                soundCards.add(new SoundCard(value, description));
             }
             JSONArray ethernetlist = dataJsonObj.getJSONArray("ethernetlist");
             for (int i = 0; i < ethernetlist.length(); i++) {
                 JSONObject model = ethernetlist.getJSONObject(i);
                 String value = model.getString("value");
-                String description = model.getString("description");
-                ethernetCard.add(new EthernetCard(value, description));
+                String description = model.getString("name");
+                ethernetCards.add(new EthernetCard(value, description));
+            }
+            JSONArray voodoolist = dataJsonObj.getJSONArray("voodoolist");
+            for (int i = 0; i < voodoolist.length(); i++) {
+                JSONObject model = voodoolist.getJSONObject(i);
+                String name = model.getString("name");
+                String modelName = model.getString("model");
+                voodooModels.add(new VoodooModel(name, modelName));
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
 
-    private List<String> getCpuModelValues() {
+    private List<String> getCpuModelSelectorList() {
         List<String> result = new ArrayList<>();
-        for (CpuModel cm : cpuModel) {
+        for (CpuModel cm : cpuModels) {
+            result.add(cm.getDescription());
+        }
+        return result;
+    }
+
+    private List<String> getChipsetSelectorList() {
+        List<String> result = new ArrayList<>();
+        for (ChipsetModel cm : chipsetModels) {
             result.add(cm.getValue());
         }
         return result;
     }
 
-    private List<String> getVgaCardValues() {
+    private List<String> getVgaCardSelectorList() {
         List<String> result = new ArrayList<>();
-        for (VgaCard vc : vgaCard) {
-            result.add(vc.getValue());
+        for (VgaCard vc : vgaCards) {
+            result.add(vc.getName());
         }
         return result;
     }
 
-    private List<String> getSoundCardValues() {
+    private List<String> getSoundCardSelectorList() {
         List<String> result = new ArrayList<>();
-        for (SoundCard sc : soundCard) {
-            result.add(sc.getValue());
+        for (SoundCard sc : soundCards) {
+            result.add(sc.getName());
         }
         return result;
     }
 
-    private List<String> getEthernetCardValues() {
+    private List<String> getEthernetCardSelectorList() {
         List<String> result = new ArrayList<>();
-        for (EthernetCard ec : ethernetCard) {
-            result.add(ec.getValue());
+        for (EthernetCard ec : ethernetCards) {
+            result.add(ec.getName());
         }
         return result;
     }
 
-    private int getfreePciSlot() {
+    private List<String> getVoodooModelsSelectorList() {
+        List<String> result = new ArrayList<>();
+        for (VoodooModel vm : voodooModels) {
+            result.add(vm.getName());
+        }
+        return result;
+    }
+
+    private int getFreePciSlot() {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals("")) {
                 return i;
@@ -386,6 +469,21 @@ public class HardwareTabFragment extends Fragment {
         return false;
     }
 
+    private int getPciSlotIndexFor(String str) {
+        for (int i = 0; i < Config.slot.length; i++) {
+            if (Config.slot[i].equals(str)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void setFreePciSlot(String[] str) {
+        for (String s : str) {
+            setFreePciSlot(s);
+        }
+    }
+
     private void setFreePciSlot(String str) {
         for (int i = 0; i < Config.slot.length; i++) {
             if (Config.slot[i].equals(str)) {
@@ -396,11 +494,55 @@ public class HardwareTabFragment extends Fragment {
         }
     }
 
+    private int getSelectedCpuModelIndex(String value) {
+        for (int i = 0; i < cpuModels.size(); i++) {
+            if (cpuModels.get(i).getValue().equals(value)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
     private void checkVga() {
-        if (Config.vgaExtension.equals("vbe")) {
-            spVga.setSelection(checkPciSlotFor("pcivga") ? 1 : 0);
-        } else if (Config.vgaExtension.equals("cirrus")) {
-            spVga.setSelection(checkPciSlotFor("cirrus") ? 3 : 2);
+        switch (Config.vgaExtension) {
+            case "vbe":
+                spVga.setSelection(checkPciSlotFor("pcivga") ? 1 : 0);
+                break;
+            case "cirrus":
+                spVga.setSelection(checkPciSlotFor("cirrus") ? 3 : 2);
+                break;
+            case "voodoo":
+                if (checkPciSlotFor("voodoo") && Config.voodooModel.equals("banshee")) {
+                    spVga.setSelection((Config.slot[4].equals("voodoo")
+                            && Config.chipset.equals("i440bx")) ? 6 : 4);
+                }
+                else if (checkPciSlotFor("voodoo") && Config.voodooModel.equals("voodoo3")) {
+                    spVga.setSelection((Config.slot[4].equals("voodoo")
+                            && Config.chipset.equals("i440bx")) ? 7 : 5);
+                } else {
+                    spVga.setSelection(0);
+                }
+                break;
+        }
+    }
+
+    private void checkVoodoo() {
+        if (!Config.vgaExtension.equals("voodoo")) {
+            if (Config.useVoodoo && checkPciSlotFor("voodoo")) {
+                if (Config.chipset.equals("i440bx") && Config.slot[4].equals("voodoo")
+                        && (Config.voodooModel.equals("voodoo1")
+                        || Config.voodooModel.equals("voodoo2")))
+                    spVga.setSelection(6);
+                else if (Config.voodooModel.equals("voodoo2")) {
+                    spVoodoo.setSelection(2);
+                } else {
+                    Config.voodooModel = "voodoo1";
+                    spVoodoo.setSelection(1);
+                }
+            } else {
+                Config.useVoodoo = false;
+                spVoodoo.setSelection(0);
+            }
         }
     }
 
@@ -452,8 +594,10 @@ public class HardwareTabFragment extends Fragment {
 
     private List<String> getSlotList(int num) {
         List<String> list = new ArrayList<>();
-        final List<String> fullSlotList = Arrays.asList("none", "pcivga", "cirrus", "voodoo",
-                "es1370", "ne2k", "e1000");
+        List<String> pciList = Arrays.asList("none", "pcivga", "cirrus", "voodoo", "es1370", "ne2k",
+                "e1000");
+        List<String> agpList = Arrays.asList("none", "voodoo");
+        final List<String> fullSlotList = (Config.chipset.equals("i440bx") && num == 4) ? agpList : pciList;
         list.addAll(fullSlotList);
         for (int i = 0; i < 5; i++) {
             list.remove(Config.slot[i]);
@@ -472,6 +616,13 @@ public class HardwareTabFragment extends Fragment {
                 int selectedSlot = slotList[i].indexOf(Config.slot[i]);
                 spSlot[i].setSelection((selectedSlot == -1) ? 0 : selectedSlot);
             }
+        }
+    }
+
+    private void showVoodooLayout(boolean isShow) {
+        voodooLayout.setVisibility(isShow ? View.VISIBLE : View.GONE);
+        if (mvLayout != null) {
+            mvLayout.setWeightSum(isShow ? 1.0f : 0.7f);
         }
     }
 

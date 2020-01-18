@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: load.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: load.cc 13718 2019-12-21 20:30:15Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2008-2018 Stanislav Shwartsman
+//   Copyright (c) 2008-2019 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -89,6 +89,21 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Wss(bxInstruction_c *i)
 #endif
 }
 
+#if BX_SUPPORT_EVEX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_Wss(bxInstruction_c *i)
+{
+  Bit32u val_32 = 0;
+
+  if (BX_SCALAR_ELEMENT_MASK(i->opmask())) {
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
+    val_32 = read_virtual_dword(i->seg(), eaddr);
+  }
+
+  BX_WRITE_XMM_REG_LO_DWORD(BX_VECTOR_TMP_REGISTER, val_32);
+  BX_CPU_CALL_METHOD(i->execute2(), (i));
+}
+#endif
+
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Wsd(bxInstruction_c *i)
 {
 #if BX_CPU_LEVEL >= 6
@@ -99,6 +114,21 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Wsd(bxInstruction_c *i)
   BX_CPU_CALL_METHOD(i->execute2(), (i));
 #endif
 }
+
+#if BX_SUPPORT_EVEX
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_Wsd(bxInstruction_c *i)
+{
+  Bit64u val_64 = 0;
+
+  if (BX_SCALAR_ELEMENT_MASK(i->opmask())) {
+    bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
+    val_64 = read_virtual_qword(i->seg(), eaddr);
+  }
+
+  BX_WRITE_XMM_REG_LO_QWORD(BX_VECTOR_TMP_REGISTER, val_64);
+  BX_CPU_CALL_METHOD(i->execute2(), (i));
+}
+#endif
 
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Wdq(bxInstruction_c *i)
 {
@@ -196,7 +226,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Quarter_Vector(bxInstruction_c *i)
   BX_CPU_CALL_METHOD(i->execute2(), (i));
 }
 
-void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Oct_Vector(bxInstruction_c *i)
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Eighth_Vector(bxInstruction_c *i)
 {
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   unsigned len = i->getVL();
@@ -228,6 +258,22 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_Oct_Vector(bxInstruction_c *i)
 
 #include "simd_int.h"
 
+// load vector of bytes, support masked fault suppression, no broadcast
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_VectorB(bxInstruction_c *i)
+{
+  Bit64u opmask = (i->opmask() != 0) ? BX_READ_OPMASK(i->opmask()) : BX_CONST64(0xffffffffffffffff);
+
+  if (opmask == 0) {
+    BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics
+    return;
+  }
+
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
+  avx_masked_load8(i, eaddr, &BX_READ_AVX_REG(BX_VECTOR_TMP_REGISTER), opmask);
+
+  BX_CPU_CALL_METHOD(i->execute2(), (i));
+}
+
 // load vector of words, support masked fault suppression, no broadcast
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_VectorW(bxInstruction_c *i)
 {
@@ -240,6 +286,38 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_VectorW(bxInstruction_c *i)
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   avx_masked_load16(i, eaddr, &BX_READ_AVX_REG(BX_VECTOR_TMP_REGISTER), opmask);
+
+  BX_CPU_CALL_METHOD(i->execute2(), (i));
+}
+
+// load vector of dwords, support masked fault suppression, no broadcast
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_VectorD(bxInstruction_c *i)
+{
+  Bit32u opmask = (i->opmask() != 0) ? BX_READ_16BIT_OPMASK(i->opmask()) : 0xffff;
+
+  if (opmask == 0) {
+    BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics
+    return;
+  }
+
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
+  avx_masked_load32(i, eaddr, &BX_READ_AVX_REG(BX_VECTOR_TMP_REGISTER), opmask);
+
+  BX_CPU_CALL_METHOD(i->execute2(), (i));
+}
+
+// load vector of qwords, support masked fault suppression, no broadcast
+void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_MASK_VectorQ(bxInstruction_c *i)
+{
+  Bit32u opmask = (i->opmask() != 0) ? BX_READ_8BIT_OPMASK(i->opmask()) : 0xff;
+
+  if (opmask == 0) {
+    BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics
+    return;
+  }
+
+  bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
+  avx_masked_load64(i, eaddr, &BX_READ_AVX_REG(BX_VECTOR_TMP_REGISTER), opmask);
 
   BX_CPU_CALL_METHOD(i->execute2(), (i));
 }
@@ -269,7 +347,9 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_VectorD(bxInstruction_c *i)
 // load vector of dwords, support broadcast and masked fault suppression
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_MASK_VectorD(bxInstruction_c *i)
 {
+  unsigned len = i->getVL();
   Bit32u opmask = (i->opmask() != 0) ? BX_READ_16BIT_OPMASK(i->opmask()) : 0xffff;
+  opmask &= CUT_OPMASK_TO(DWORD_ELEMENTS(len));
 
   if (opmask == 0) {
     BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics
@@ -277,7 +357,6 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_MASK_VectorD(bxInstruction_
   }
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
-  unsigned len = i->getVL();
 
   if (i->getEvexb()) {
     Bit32u val_32 = read_virtual_dword(i->seg(), eaddr);
@@ -315,7 +394,9 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_VectorQ(bxInstruction_c *i)
 // load vector of qwords, support broadcast and masked fault suppression
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_MASK_VectorQ(bxInstruction_c *i)
 {
+  unsigned len = i->getVL();
   Bit32u opmask = (i->opmask() != 0) ? BX_READ_8BIT_OPMASK(i->opmask()) : 0xff;
+  opmask &= CUT_OPMASK_TO(QWORD_ELEMENTS(len));
 
   if (opmask == 0) {
     BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics
@@ -323,7 +404,6 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_MASK_VectorQ(bxInstruction_
   }
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
-  unsigned len = i->getVL();
 
   if (i->getEvexb()) {
     Bit64u val_64 = read_virtual_qword(i->seg(), eaddr);
@@ -366,9 +446,8 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_Half_VectorD(bxInstruction_
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::LOAD_BROADCAST_MASK_Half_VectorD(bxInstruction_c *i)
 {
   unsigned len = i->getVL();
-
   Bit32u opmask = (i->opmask() != 0) ? BX_READ_16BIT_OPMASK(i->opmask()) : 0xffff;
-  opmask &= (1 << (DWORD_ELEMENTS(len) - 1)) - 1;
+  opmask &= CUT_OPMASK_TO(DWORD_ELEMENTS(len)-1);
 
   if (opmask == 0) {
     BX_CPU_CALL_METHOD(i->execute2(), (i)); // for now let execute method to deal with zero/merge masking semantics

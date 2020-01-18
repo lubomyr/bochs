@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.cc 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: devices.cc 13751 2019-12-30 07:16:46Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2019  The Bochs Project
@@ -104,7 +104,7 @@ void bx_devices_c::init(BX_MEM_C *newmem)
   const char def_name[] = "Default";
   const char *vga_ext;
 
-  BX_DEBUG(("Init $Id: devices.cc 13580 2019-10-16 20:46:00Z sshwarts $"));
+  BX_DEBUG(("Init $Id: devices.cc 13751 2019-12-30 07:16:46Z vruppert $"));
   mem = newmem;
 
   /* set builtin default handlers, will be overwritten by the real default handler */
@@ -480,9 +480,11 @@ void bx_devices_c::write(Bit32u address, Bit32u value, unsigned io_len)
 #else
   UNUSED(this_ptr);
 #endif  // !BX_USE_DEV_SMF
+#if BX_SUPPORT_PCI
   Bit8u bus, devfunc, handle;
   Bit16u bus_devfunc;
   bx_pci_device_c *dev = NULL;
+#endif
 
   switch (address) {
     case 0x0092:

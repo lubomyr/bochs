@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode32.cc 13571 2019-10-14 06:40:19Z sshwarts $
+// $Id: fetchdecode32.cc 13734 2019-12-27 19:34:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -388,7 +388,11 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /*    0F 1B */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
    /*    0F 1C */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
    /*    0F 1D */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+#if BX_SUPPORT_CET
+   /*    0F 1E */ { &decoder32_modrm, BxOpcodeTable0F1E },
+#else
    /*    0F 1E */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
+#endif
    /*    0F 1F */ { &decoder32_modrm, BxOpcodeTableMultiByteNOP },
 #else
    /*    0F 18 */ { &decoder_ud32, NULL },
@@ -871,7 +875,11 @@ static BxOpcodeDecodeDescriptor32 decode32_descriptor[] =
    /* 0F 38 F2 */ { &decoder_ud32, NULL },
    /* 0F 38 F3 */ { &decoder_ud32, NULL },
    /* 0F 38 F4 */ { &decoder_ud32, NULL },
+#if BX_SUPPORT_CET
+   /* 0F 38 F5 */ { &decoder32_modrm, BxOpcodeTable0F38F5 },
+#else
    /* 0F 38 F5 */ { &decoder_ud32, NULL },
+#endif
    /* 0F 38 F6 */ { &decoder32_modrm, BxOpcodeTable0F38F6 },
    /* 0F 38 F7 */ { &decoder_ud32, NULL },
    /* 0F 38 F8 */ { &decoder_ud32, NULL },
@@ -1640,7 +1648,7 @@ unsigned evex_displ8_compression(const bxInstruction_c *i, unsigned ia_opcode, u
 #endif
     return (4 * len);
 
-  case BX_VMM_OCT_VECTOR:
+  case BX_VMM_EIGHTH_VECTOR:
 #if BX_SUPPORT_EVEX
     BX_ASSERT(! i->getEvexb());
 #endif
@@ -1656,7 +1664,7 @@ unsigned evex_displ8_compression(const bxInstruction_c *i, unsigned ia_opcode, u
   return 1;
 }
 
-bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm)
+BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm)
 {
   for (unsigned n = 0; n <= 3; n++) {
     unsigned src = (unsigned) BxOpcodesTable[ia_opcode].src[n];
@@ -1700,13 +1708,13 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsign
     }
   }
 
-  return BX_TRUE;
+  return BX_DECODE_OK;
 }
 
 #if BX_SUPPORT_AVX
-bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bx_bool had_evex = BX_FALSE, bx_bool displ8 = BX_FALSE)
+BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bx_bool had_evex = false, bx_bool displ8 = false)
 {
-  bx_bool use_vvv = BX_FALSE;
+  bx_bool use_vvv = false;
 #if BX_SUPPORT_EVEX
   unsigned displ8_scale = 1;
 #endif
@@ -1717,7 +1725,7 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
     unsigned type = BX_DISASM_SRC_TYPE(src);
     src = BX_DISASM_SRC_ORIGIN(src);
 #if BX_SUPPORT_EVEX
-    bx_bool mem_src = BX_FALSE;
+    bx_bool mem_src = false;
 #endif
 
     switch(src) {
@@ -1732,19 +1740,26 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
     case BX_SRC_NNN:
       i->setSrcReg(n, nnn);
       if (type == BX_KMASK_REG) {
-        if (nnn >= 8) return BX_FALSE;
+        if (nnn >= 8) return BX_EVEX_ILLEGAL_KMASK_REGISTER;
+        // vector instruction using opmask as source or dest
+        if (i->isZeroMasking())
+          return BX_EVEX_ILLEGAL_ZERO_MASKING_WITH_KMASK_SRC_OR_DEST;
       }
       break;
     case BX_SRC_RM:
       if (i->modC0()) {
-        if (type == BX_KMASK_REG)
+        if (type == BX_KMASK_REG) {
           rm &= 0x7;
+          // vector instruction using opmask as source or dest
+          if (i->isZeroMasking())
+            return BX_EVEX_ILLEGAL_ZERO_MASKING_WITH_KMASK_SRC_OR_DEST;
+        }
 
         i->setSrcReg(n, rm);
       }
       else {
 #if BX_SUPPORT_EVEX
-        mem_src = BX_TRUE;
+        mem_src = true;
 #endif
         i->setSrcReg(n, (type == BX_VMM_REG) ? BX_VECTOR_TMP_REGISTER : BX_TMP_REGISTER);
       }
@@ -1756,17 +1771,20 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
       else {
         i->setSrcReg(n, BX_VECTOR_TMP_REGISTER);
 #if BX_SUPPORT_EVEX
-        mem_src = BX_TRUE;
+        mem_src = true;
         if (n == 0) // zero masking is not allowed for memory destination
-          if (i->isZeroMasking()) return BX_FALSE;
+          if (i->isZeroMasking()) return BX_EVEX_ILLEGAL_ZERO_MASKING_MEMORY_DESTINATION;
 #endif
       }
       break;
     case BX_SRC_VVV:
       i->setSrcReg(n, vvv);
-      use_vvv = BX_TRUE;
+      use_vvv = true;
       if (type == BX_KMASK_REG) {
-        if (vvv >= 8) return BX_FALSE;
+        if (vvv >= 8) return BX_EVEX_ILLEGAL_KMASK_REGISTER;
+        // vector instruction using opmask as source or dest
+        if (i->isZeroMasking())
+          return BX_EVEX_ILLEGAL_ZERO_MASKING_WITH_KMASK_SRC_OR_DEST;
       }
       break;
     case BX_SRC_VIB:
@@ -1783,14 +1801,15 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
       }
       break;
     case BX_SRC_VSIB:
-      if (! i->as32L() || i->sibIndex() == BX_NIL_REGISTER) {
-        return BX_FALSE;
-      }
+      if (! i->as32L())
+        return BX_VSIB_FORBIDDEN_ASIZE16;
+      if (i->sibIndex() == BX_NIL_REGISTER)
+        return BX_VSIB_ILLEGAL_SIB_INDEX;
 #if BX_SUPPORT_EVEX
       i->setSibIndex(i->sibIndex() | (vvv & 0x10));
       // zero masking is not allowed for gather/scatter
-      if (i->isZeroMasking()) return BX_FALSE;
-      mem_src = BX_TRUE;
+      if (i->isZeroMasking()) return BX_EVEX_ILLEGAL_ZERO_MASKING_VSIB;
+      mem_src = true;
 #endif
       break;
     default:
@@ -1815,10 +1834,10 @@ bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsig
 #endif
 
   if (! use_vvv && vvv != 0) {
-    return BX_FALSE;
+    return BX_ILLEGAL_VEX_XOP_VVV;
   }
 
-  return BX_TRUE;
+  return BX_DECODE_OK;
 }
 #endif
 
@@ -1930,7 +1949,8 @@ int decoder_vex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
     }
   }
 
-  if (! assign_srcs(i, ia_opcode, BX_FALSE, nnn, rm, vvv, vex_w))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, false, nnn, rm, vvv, vex_w);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 #endif
 
@@ -1952,7 +1972,7 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   }
 
 #if BX_SUPPORT_EVEX
-  bx_bool displ8 = BX_FALSE;
+  bx_bool displ8 = false;
 
   if (sse_prefix)
     return(BX_IA_ERROR);
@@ -2030,7 +2050,7 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
     return(-1);
 
   if (modrm.mod == 0x40) { // mod==01b
-    displ8 = BX_TRUE;
+    displ8 = true;
   }
 
   // EVEX.b in reg form implies 512-bit vector length
@@ -2065,7 +2085,8 @@ int decoder_evex32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
     }
   }
 
-  if (! assign_srcs(i, ia_opcode, BX_FALSE, modrm.nnn, modrm.rm, vvv, vex_w, BX_TRUE, displ8))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, false, modrm.nnn, modrm.rm, vvv, vex_w, true, displ8);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 
   // EVEX specific #UD conditions
@@ -2140,10 +2161,11 @@ int decoder_xop32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
 
   ia_opcode = findOpcode(BxOpcodeTableXOP[opcode_byte], decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, false) < 0)
     return (-1);
 
-  if (! assign_srcs(i, ia_opcode, BX_FALSE, modrm.nnn, modrm.rm, vvv, vex_w))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, false, modrm.nnn, modrm.rm, vvv, vex_w);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 #endif
 
@@ -2208,7 +2230,7 @@ int decoder32_modrm(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, uns
 
   Bit16u ia_opcode = findOpcode((Bit64u *) opcode_table, decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, false) < 0)
     return (-1);
 
   assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
@@ -2231,7 +2253,7 @@ int decoder32(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned 
 
   Bit16u ia_opcode = findOpcode((Bit64u *) opcode_table, decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_FALSE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, false) < 0)
     return (-1);
 
   assign_srcs(i, ia_opcode, nnn, rm);
@@ -2430,6 +2452,9 @@ fetch_b1:
 #endif
 
   i->setSeg(BX_SEG_REG_DS); // default segment is DS:
+#if BX_SUPPORT_CET
+  i->setSegOverride(seg_override);
+#endif
 
   i->modRMForm.Id = 0;
  

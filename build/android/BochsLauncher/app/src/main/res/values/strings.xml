@@ -2,6 +2,8 @@
 <resources>
 
     <string name="app_name">Bochs</string>
+    <string name="app_id">ca-app-pub-4572241703388342~5758790772</string>
+    <string name="banner_ad_unit_id">ca-app-pub-4572241703388342/3371412534</string>
     <string name="storage">Storage</string>
     <string name="hardware">Hardware</string>
     <string name="misc">Misc</string>
@@ -43,9 +45,9 @@
     <string name="vga_update_freq">VGA update freq:</string>
     <string name="full_screen">Full screen</string>
     <string name="speaker">Speaker</string>
-    <string name="app_id">ca-app-pub-4572241703388342~5758790772</string>
-    <string name="banner_ad_unit_id">ca-app-pub-4572241703388342/3371412534</string>
+    <string name="voodoo_extension_card">Voodoo Ext. Card</string>
     <string name="logo">logo</string>
     <string name="start">start</string>
     <string name="download">download</string>
+    <string name="agp">AGP:</string>
 </resources>

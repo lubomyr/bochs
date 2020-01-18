@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sb16.h 13509 2018-05-15 18:51:41Z vruppert $
+// $Id: sb16.h 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2018  The Bochs Project
@@ -68,7 +68,7 @@
    BX_SB16_IOADLIBLEN should be 2 or 4. If 0, Ports 0x388.. don't
    get used, but the OPL2 can still be accessed at 0x228..0x229.
    If 2, the usual Adlib emulation is enabled. If 4, an OPL3 is
-   emulated at adresses 0x388..0x38b, or two separate OPL2's.
+   emulated at addresses 0x388..0x38b, or two separate OPL2's.
 */
 
 #define BX_SB16_MIX_REG  0x100        // total number of mixer registers
@@ -226,7 +226,7 @@ private:
     Bit16u timer[4];              // two timers on each chip
     Bit16u timerinit[4];          // initial timer counts
     int tmask[2];                 // the timer masking byte for both chips
-    int tflag[2];                 // shows if the timer overflow has occured
+    int tflag[2];                 // shows if the timer overflow has occurred
   } opl;
 
   struct bx_sb16_mixer_struct {

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: scsi_device.cc 13476 2018-03-23 19:02:38Z vruppert $
+// $Id: scsi_device.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  SCSI emulation layer (ported from QEMU)
@@ -846,7 +846,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool
       r->async_mode = async;
       break;
     case 0x35:
-      BX_DEBUG(("Syncronise cache (sector " FMT_LL "d, count %d)", lba, len));
+      BX_DEBUG(("Synchronise cache (sector " FMT_LL "d, count %d)", lba, len));
       // TODO: flush cache
       break;
     case 0x43:

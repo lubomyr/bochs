@@ -2,20 +2,21 @@ dnl // Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
 AC_INIT(bochs.h)
-AC_REVISION([[$Id: configure.in 13627 2019-12-01 07:57:56Z vruppert $]])
+AC_REVISION([[$Id: configure.in 13772 2020-01-05 07:36:44Z vruppert $]])
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_HEADER(ltdlconf.h)
 
 dnl // Put Bochs version information right here so that it gets substituted
 dnl // into all the right places.
-VERSION="2.6.10"
+VERSION="2.6.11"
 VER_MAJOR=2
 VER_MINOR=6
 dnl // this should be > 90 for pre-release of next version otherwise revision level
-VER_REVISION=10
+VER_REVISION=11
 dnl // this should be 0 for release and 1 for svn version
 VER_SVN=0
-REL_STRING="Built from SVN snapshot on December 1, 2019"
+REL_STRING="Built from SVN snapshot on January 5, 2020"
+REL_TIMESTAMP=`grep "Updated:" $srcdir/README | sed 's/Updated: //'`
 
 changequote(<<, >>)
 changequote([, ])
@@ -91,6 +92,7 @@ if test "${ADD_FLAGS:+set}" = set; then
       CXXFLAGS="$CXXFLAGS $ADD_FLAGS"
       CPPFLAGS="$CPPFLAGS $ADD_FLAGS"
 fi
+BOCHS_BITS=$MSVC_TARGET
 
 AC_MSG_CHECKING(for standard CFLAGS on this platform)
 AC_MSG_RESULT($ADD_FLAGS)
@@ -1252,6 +1254,29 @@ if test "$support_pkeys" -gt 0 -a "$use_x86_64" = 0; then
   AC_MSG_ERROR([User-Mode Protection Keys feature emulation require x86-64 enabled])
 fi
 
+support_cet=0
+AC_MSG_CHECKING(for Control Flow Enforcement Technology support)
+AC_ARG_ENABLE(cet,
+  AS_HELP_STRING([--enable-cet], [Control Flow Enforcement Technology support (no)]),
+  [if test "$enableval" = yes; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE(BX_SUPPORT_CET, 1)
+    support_cet=1
+   elif test "$enableval" = no; then
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_CET, 0)
+   fi
+   ],
+  [
+    AC_MSG_RESULT(no)
+    AC_DEFINE(BX_SUPPORT_CET, 0)
+  ]
+  )
+
+if test "$support_cet" -gt 0 -a "$use_x86_64" = 0; then
+  AC_MSG_ERROR([Control Flow Enforcement Technology feature emulation require x86-64 enabled])
+fi
+
 AC_MSG_CHECKING(for 3DNow! support)
 AC_ARG_ENABLE(3dnow,
   AS_HELP_STRING([--enable-3dnow], [3DNow! support (no - incomplete)]),
@@ -1459,16 +1484,16 @@ AC_ARG_ENABLE(pcidev,
           AC_MSG_NOTICE([Linux detected as host for PCI host device mapping])
           linux_version=`uname -r`
           case "$linux_version" in
+            2.2*)
+              AC_MSG_ERROR([Linux kernel 2.4, 2.6 or 3.x is required for PCI host device mapping])
+              ;;
             2.4*)
               PCIDEV_MODULE_MAKE_ALL="all-kernel24"
               KERNEL_MODULE_SUFFIX="o"
               ;;
-            2.6*|3.*)
+            *)
               PCIDEV_MODULE_MAKE_ALL="all-kernel26"
               KERNEL_MODULE_SUFFIX="ko"
-              ;;
-            *)
-              AC_MSG_ERROR([Linux kernel 2.4, 2.6 or 3.x is required for PCI host device mapping])
               ;;
           esac
           KERNELDIR="/lib/modules/$linux_version/build"
@@ -1968,7 +1993,7 @@ if test "$soundcard_present" = 1; then
         soundlow_drivers="alsa $soundlow_drivers"
         AC_DEFINE(BX_HAVE_SOUND_ALSA, 1)
         if test "$bx_plugins" = 1; then
-          SOUND_LINK_OPTS="$SOUND_LINK_OPTS -lasound"
+          ALSA_SOUND_LINK_OPTS="$ALSA_SOUND_LINK_OPTS -lasound"
         else
           DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lasound"
         fi
@@ -2003,7 +2028,7 @@ if test "$soundcard_present" = 1; then
   if test "$with_sdl" = yes; then
     SOUNDLOW_OBJS="$SOUNDLOW_OBJS soundsdl.o"
     if test "$bx_plugins" = 1; then
-      SOUND_LINK_OPTS="$SOUND_LINK_OPTS `sdl-config --libs`"
+      SDL_SOUND_LINK_OPTS="$SDL_SOUND_LINK_OPTS `sdl-config --libs`"
     fi
     soundlow_drivers="$soundlow_drivers sdl"
     if test "$soundlow_default" = "dummy"; then
@@ -2013,7 +2038,7 @@ if test "$soundcard_present" = 1; then
   elif test "$with_sdl2" = yes; then
     SOUNDLOW_OBJS="$SOUNDLOW_OBJS soundsdl.o"
     if test "$bx_plugins" = 1; then
-      SOUND_LINK_OPTS="$SOUND_LINK_OPTS `sdl2-config --libs`"
+      SDL_SOUND_LINK_OPTS="$SDL_SOUND_LINK_OPTS `sdl2-config --libs`"
     fi
     soundlow_drivers="$soundlow_drivers sdl"
     if test "$soundlow_default" = "dummy"; then
@@ -2057,7 +2082,8 @@ else
 fi
 AC_SUBST(SOUNDHW_OBJS)
 AC_SUBST(SOUNDLOW_OBJS)
-AC_SUBST(SOUND_LINK_OPTS)
+AC_SUBST(ALSA_SOUND_LINK_OPTS)
+AC_SUBST(SDL_SOUND_LINK_OPTS)
 AC_SUBST(SOUNDHW_DLL_TARGETS)
 
 
@@ -2754,11 +2780,11 @@ case "$target" in
     CFP="/Tc"
     OFP="/Fo"
     MAKE=nmake
-    MAKELIB="lib /nologo /subsystem:console,\"5.01\" /verbose /out:\$@"
+    MAKELIB="lib /nologo /subsystem:console /verbose /out:\$@"
     RMCOMMAND="-del"
     #L_OPT="/debug"    # for debugging
     L_OPT=""           # no debug info
-    LINK="link $L_OPT /nologo /subsystem:console,\"5.01\" /incremental:no /out:\$@ "
+    LINK="link $L_OPT /nologo /subsystem:console /incremental:no /out:\$@ "
     LINK_CONSOLE=$LINK
     EXE=".exe"
     PRIMARY_TARGET="bochs.exe"
@@ -2852,7 +2878,7 @@ case $target in
       PLUGIN_LIBNAME_TRANSFORMATION='%.o=bx_%.dll'
       INSTALL_PLUGINS_VAR=install_dll_plugins
       WIN32_DLL_IMPORT_LIB="bochs.lib"
-      LINK_DLL="link /dll /nologo /subsystem:console,\"5.01\" /incremental:no /out:\$@"
+      LINK_DLL="link /dll /nologo /subsystem:console /incremental:no /out:\$@"
       LIBS="$LIBS advapi32.lib comctl32.lib comdlg32.lib gdi32.lib shell32.lib user32.lib"
       PLUGIN_TARGET_2=plugins_msvc
       LINK_VAR="_VCPP"
@@ -2872,7 +2898,7 @@ case $target in
       for i in $IODEV_DLL_LIST
       do
         echo -e "bx_$i.dll: $i.o" >> iodev/makeincl.vc
-        echo -e "\tlink /dll /nologo /subsystem:console,\"5.01\" /incremental:no /out:\$@ $i.o \$(WIN32_DLL_IMPORT_LIBRARY)\n" >> iodev/makeincl.vc
+        echo -e "\tlink /dll /nologo /subsystem:console /incremental:no /out:\$@ $i.o \$(WIN32_DLL_IMPORT_LIBRARY)\n" >> iodev/makeincl.vc
         IODEV_DLL_TARGETS="$IODEV_DLL_TARGETS bx_$i.dll"
       done
     else
@@ -2903,7 +2929,7 @@ esac
 AC_SUBST(DIALOG_OBJS)
 AC_SUBST(EXPORT_DYNAMIC)
 
-if test "$use_curses" = yes -a "$cross_configure" = 0; then
+if test "$use_curses" = yes; then
   if test "$PKGCONFIG" != not_found; then
     AC_CHECK_LIB(curses, mvaddch, GUI_LINK_OPTS_TERM="`pkg-config --libs curses`")
     AC_CHECK_LIB(ncurses, mvaddch, GUI_LINK_OPTS_TERM="`pkg-config --libs ncurses`")
@@ -3165,35 +3191,35 @@ ACX_PTHREAD([
 
 # since some features need the pthread library, check that it was found.
 # But on win32 platforms, the pthread library is not needed.
-if test "$cross_configure" = 0; then
-  # assuming that the GUI debuggers require pthreads or are for Win32
-  if test "$pthread_ok" = yes; then
-    if test "$with_rfb" = yes; then
-      RFB_LIBS="$RFB_LIBS $PTHREAD_LIBS"
-    fi
-    if test "$with_vncsrv" = yes; then
-      GUI_LINK_OPTS_VNCSRV="$GUI_LINK_OPTS_VNCSRV $PTHREAD_LIBS"
-    fi
-    if test "$soundcard_present" = 1; then
-      if test "$bx_plugins" = 1; then
-        SOUND_LINK_OPTS="$SOUND_LINK_OPTS $PTHREAD_LIBS"
-      else
-        DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS $PTHREAD_LIBS"
+case "$target" in
+  *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+    # pthread not needed for win32 platform
+    ;;
+  *)
+    # assuming that some GUIs and the sound subsystem require pthreads
+    if test "$pthread_ok" = yes; then
+      if test "$with_rfb" = yes; then
+        RFB_LIBS="$RFB_LIBS $PTHREAD_LIBS"
       fi
+      if test "$with_vncsrv" = yes; then
+        GUI_LINK_OPTS_VNCSRV="$GUI_LINK_OPTS_VNCSRV $PTHREAD_LIBS"
+      fi
+      if test "$soundcard_present" = 1; then
+        if test "$bx_plugins" = 1; then
+          ALSA_SOUND_LINK_OPTS="$ALSA_SOUND_LINK_OPTS $PTHREAD_LIBS"
+          SDL_SOUND_LINK_OPTS="$SDL_SOUND_LINK_OPTS $PTHREAD_LIBS"
+        else
+          DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS $PTHREAD_LIBS"
+        fi
+      fi
+      CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+      CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
+      CC="$PTHREAD_CC"
+    else
+      echo ERROR: the pthread library is required, but could not be found.; exit 1
     fi
-    CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-    CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS"
-    CC="$PTHREAD_CC"
-  else
-    case "$target" in
-      *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
-        # pthread not needed for win32 platform
-        ;;
-      *)
-        echo ERROR: the pthread library is required, but could not be found.; exit 1
-    esac
-  fi
-fi
+	;;
+esac
 
 dnl // DEPRECATED configure options - force users to remove them
 
@@ -3252,6 +3278,7 @@ AC_SUBST(VER_MINOR)
 AC_SUBST(VER_REVISION)
 AC_SUBST(VER_SVN)
 AC_SUBST(REL_STRING)
+AC_SUBST(REL_TIMESTAMP)
 AC_SUBST(EXTRA_LINK_OPTS)
 AC_SUBST(GUI_NON_PLUGIN_OBJS)
 AC_SUBST(GUI_PLUGIN_OBJS)
@@ -3265,12 +3292,14 @@ AC_SUBST(PLUGIN_TARGET)
 AC_SUBST(PLUGIN_TARGET_2)
 AC_SUBST(EXT_MSVC_DLL_RULES)
 AC_SUBST(GUI_DLL_TARGETS)
+AC_SUBST(BOCHS_BITS)
 AC_SUBST(IODEV_DLL_TARGETS)
 AC_SUBST(WIN32_DLL_IMPORT_LIB)
 AC_SUBST(INSTALL_PLUGINS_VAR)
 
 AC_PATH_PROG(GZIP, gzip)
 AC_PATH_PROG(TAR, tar)
+AC_PATH_PROG(IASL, iasl, not_found)
 
 AC_OUTPUT(Makefile iodev/Makefile iodev/display/Makefile iodev/hdimage/Makefile \
 	 iodev/usb/Makefile iodev/network/Makefile iodev/sound/Makefile \

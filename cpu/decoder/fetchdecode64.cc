@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode64.cc 13571 2019-10-14 06:40:19Z sshwarts $
+// $Id: fetchdecode64.cc 13734 2019-12-27 19:34:32Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -102,9 +102,9 @@ extern struct bxIAOpcodeTable BxOpcodesTable[];
 
 extern Bit16u findOpcode(const Bit64u *opMap, Bit32u opMsk);
 
-extern bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm);
+extern BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm);
 #if BX_SUPPORT_AVX
-extern bx_bool assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bx_bool had_evex = BX_FALSE, bx_bool displ8 = BX_FALSE);
+extern BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bx_bool had_evex = false, bx_bool displ8 = false);
 #endif
 
 extern const Bit8u *decodeModrm64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned mod, unsigned nnn, unsigned rm, unsigned rex_r, unsigned rex_x, unsigned rex_b);
@@ -418,7 +418,11 @@ static BxOpcodeDecodeDescriptor64 decode64_descriptor[] =
    /*    0F 1B */ { &decoder64_modrm, BxOpcodeTableMultiByteNOP },
    /*    0F 1C */ { &decoder64_modrm, BxOpcodeTableMultiByteNOP },
    /*    0F 1D */ { &decoder64_modrm, BxOpcodeTableMultiByteNOP },
+#if BX_SUPPORT_CET
+   /*    0F 1E */ { &decoder64_modrm, BxOpcodeTable0F1E },
+#else
    /*    0F 1E */ { &decoder64_modrm, BxOpcodeTableMultiByteNOP },
+#endif
    /*    0F 1F */ { &decoder64_modrm, BxOpcodeTableMultiByteNOP },
    /*    0F 20 */ { &decoder_creg64, BxOpcodeTable0F20_64 },
    /*    0F 21 */ { &decoder_creg64, BxOpcodeTable0F21_64 },
@@ -853,7 +857,7 @@ static BxOpcodeDecodeDescriptor64 decode64_descriptor[] =
    /* 0F 38 CC */ { &decoder64_modrm, BxOpcodeTable0F38CC },
    /* 0F 38 CD */ { &decoder64_modrm, BxOpcodeTable0F38CD },
    /* 0F 38 CE */ { &decoder_ud64, NULL },
-   /* 0F 38 CF */ { &decoder_ud64, NULL },
+   /* 0F 38 CF */ { &decoder64_modrm, BxOpcodeTable0F38CF },
    /* 0F 38 D0 */ { &decoder_ud64, NULL },
    /* 0F 38 D1 */ { &decoder_ud64, NULL },
    /* 0F 38 D2 */ { &decoder_ud64, NULL },
@@ -891,7 +895,11 @@ static BxOpcodeDecodeDescriptor64 decode64_descriptor[] =
    /* 0F 38 F2 */ { &decoder_ud64, NULL },
    /* 0F 38 F3 */ { &decoder_ud64, NULL },
    /* 0F 38 F4 */ { &decoder_ud64, NULL },
+#if BX_SUPPORT_CET
+   /* 0F 38 F5 */ { &decoder64_modrm, BxOpcodeTable0F38F5 },
+#else
    /* 0F 38 F5 */ { &decoder_ud64, NULL },
+#endif
    /* 0F 38 F6 */ { &decoder64_modrm, BxOpcodeTable0F38F6 },
    /* 0F 38 F7 */ { &decoder_ud64, NULL },
    /* 0F 38 F8 */ { &decoder_ud64, NULL },
@@ -1110,8 +1118,8 @@ static BxOpcodeDecodeDescriptor64 decode64_descriptor[] =
    /* 0F 3A CB */ { &decoder_ud64, NULL },
    /* 0F 3A CC */ { &decoder64_modrm, BxOpcodeTable0F3ACC },
    /* 0F 3A CD */ { &decoder_ud64, NULL },
-   /* 0F 3A CE */ { &decoder_ud64, NULL },
-   /* 0F 3A CF */ { &decoder_ud64, NULL },
+   /* 0F 3A CE */ { &decoder64_modrm, BxOpcodeTable0F3ACE },
+   /* 0F 3A CF */ { &decoder64_modrm, BxOpcodeTable0F3ACF },
    /* 0F 3A D0 */ { &decoder_ud64, NULL },
    /* 0F 3A D1 */ { &decoder_ud64, NULL },
    /* 0F 3A D2 */ { &decoder_ud64, NULL },
@@ -1276,7 +1284,8 @@ int decoder_vex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
     }
   }
 
-  if (! assign_srcs(i, ia_opcode, BX_TRUE, nnn, rm, vvv, vex_w))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, true, nnn, rm, vvv, vex_w);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 #endif
 
@@ -1295,7 +1304,7 @@ int decoder_evex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   unsigned rm = 0, mod = 0, nnn = 0;
   unsigned b2 = 0;
 
-  bx_bool displ8 = BX_FALSE;
+  bx_bool displ8 = false;
 
   // EVEX prefix 0x62
   assert(b1 == 0x62);
@@ -1396,7 +1405,7 @@ int decoder_evex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
     if (! iptr) 
       return(-1);
     if (mod == 0x40) { // mod==01b
-      displ8 = BX_TRUE;
+      displ8 = true;
     }
   }
 
@@ -1433,7 +1442,8 @@ int decoder_evex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
     }
   }
 
-  if (! assign_srcs(i, ia_opcode, BX_TRUE, nnn, rm, vvv, vex_w, BX_TRUE, displ8))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, true, nnn, rm, vvv, vex_w, true, displ8);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 
   // EVEX specific #UD conditions
@@ -1537,10 +1547,11 @@ int decoder_xop64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
 
   ia_opcode = findOpcode(BxOpcodeTableXOP[opcode_byte], decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_TRUE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, true) < 0)
     return (-1);
 
-  if (! assign_srcs(i, ia_opcode, BX_TRUE, nnn, rm, vvv, vex_w))
+  BxDecodeError decode_err = assign_srcs(i, ia_opcode, true, nnn, rm, vvv, vex_w);
+  if (decode_err != BX_DECODE_OK)
     ia_opcode = BX_IA_ERROR;
 #endif
 
@@ -1606,7 +1617,7 @@ int decoder64_modrm(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, uns
 
   Bit16u ia_opcode = findOpcode((const Bit64u*) opcode_table, decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_TRUE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, true) < 0)
     return (-1);
 
   assign_srcs(i, ia_opcode, modrm.nnn, modrm.rm);
@@ -1637,7 +1648,7 @@ int decoder64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned 
 
   Bit16u ia_opcode = findOpcode((const Bit64u*) opcode_table, decmask);
 
-  if (fetchImmediate(iptr, remain, i, ia_opcode, BX_TRUE) < 0)
+  if (fetchImmediate(iptr, remain, i, ia_opcode, true) < 0)
     return (-1);
 
   assign_srcs(i, ia_opcode, nnn, rm);
@@ -1881,6 +1892,12 @@ fetch_b1:
   b1 = *iptr++;
   remain--;
 
+#if BX_SUPPORT_CET
+  // in 64-bit mode DS prefix is ignored but still recorded for CET Endranch suppress hint
+  if (b1 == 0x3e)
+    seg_override = BX_SEG_REG_DS;
+#endif
+
   switch (b1) {
     case 0x40:
     case 0x41:
@@ -1923,7 +1940,6 @@ fetch_b1:
     case 0x26: // ES:
     case 0x36: // SS:
     case 0x3e: // DS:
-      /* ignore segment override prefix */
       rex_prefix = 0;
       if (remain != 0) {
         goto fetch_b1;
@@ -1981,6 +1997,9 @@ fetch_b1:
   }
 
   i->setSeg(BX_SEG_REG_DS); // default segment is DS:
+#if BX_SUPPORT_CET
+  i->setSegOverride(seg_override);
+#endif
 
   i->modRMForm.Id = 0;
 
@@ -1993,7 +2012,7 @@ fetch_b1:
   i->setIaOpcode(ia_opcode);
 
   // assign memory segment override
-  if (! BX_NULL_SEG_REG(seg_override))
+  if (seg_override == BX_SEG_REG_FS || seg_override == BX_SEG_REG_GS)
      i->setSeg(seg_override);
 
   Bit32u op_flags = BxOpcodesTable[ia_opcode].opflags;

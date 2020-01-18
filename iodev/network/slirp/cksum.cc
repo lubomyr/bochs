@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cksum.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: cksum.cc 13727 2019-12-26 19:17:47Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1988, 1992, 1993
@@ -33,6 +33,7 @@
  * in_cksum.c,v 1.2 1994/08/02 07:48:16 davidg Exp
  */
 
+// NOTE: <stdint.h> included in slirp.h
 #include "slirp.h"
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP

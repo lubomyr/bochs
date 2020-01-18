@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: enh_dbg.cc 13280 2017-08-22 18:47:18Z sshwarts $
+// $Id: enh_dbg.cc 13677 2019-12-14 12:55:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -8,7 +8,7 @@
 //
 //  Modified by Bruce Ewing
 //
-//  Copyright (C) 2008-2017  The Bochs Project
+//  Copyright (C) 2008-2019  The Bochs Project
 
 #include "config.h"
 
@@ -222,8 +222,8 @@ static const char *BrkName[5] = {
    "Read Watchpoint",
 };
 
-bx_address BrkLAddr[BX_DBG_MAX_LIN_BPOINTS];
-unsigned BrkIdx[BX_DBG_MAX_LIN_BPOINTS];
+bx_address BrkLAddr[BX_DBG_MAX_LIN_BPOINTS+1];
+unsigned BrkIdx[BX_DBG_MAX_LIN_BPOINTS+1];
 int BreakCount = 0;
 
 // Breakpoint Dump Window stuff
@@ -1081,7 +1081,7 @@ void LoadRegList()
             ++itemnum;
         }
     }
-    // display System regsiters (if requested)
+    // display System registers (if requested)
     // displaying these once may be necessary for column resizing
     if (SeeReg[2] || (ResizeColmns != FALSE && NeedSysRresize != FALSE))
     {

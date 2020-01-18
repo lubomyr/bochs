@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bochs.h 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: bochs.h 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -134,7 +134,7 @@ int  bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base);
 Bit32u crc32(const Bit8u *buf, int len);
 
 // used to print param tree from debugger
-void print_tree(bx_param_c *node, int level = 0, bx_bool xml = BX_FALSE);
+void print_tree(bx_param_c *node, int level = 0, bx_bool xml = false);
 
 #if BX_ENABLE_STATISTICS
 // print statistics
@@ -450,10 +450,18 @@ BOCHSAPI extern Bit32u apic_id_mask;
 #endif
 
 // memory access type (read/write/execute/rw)
-#define BX_READ         0
-#define BX_WRITE        1
-#define BX_EXECUTE      2
-#define BX_RW           3
+enum {
+  BX_READ    = 0,
+  BX_WRITE   = 1,
+  BX_EXECUTE = 2,
+  BX_RW      = 3,
+#if BX_SUPPORT_CET
+  BX_SHADOW_STACK_READ    = 4,
+  BX_SHADOW_STACK_WRITE   = 5,
+  BX_SHADOW_STACK_INVALID = 6,  // can't execute shadow stack
+  BX_SHADOW_STACK_RW      = 7,
+#endif
+};
 
 // types of reset
 #define BX_RESET_SOFTWARE 10
@@ -627,12 +635,12 @@ BX_CPP_INLINE void WriteHostWordToLittleEndian(Bit16u *hostPtr, Bit16u nativeVar
   *(hostPtr) = bx_bswap16(nativeVar16);
 }
 
-BX_CPP_INLINE void WriteHostDWordToLittleEndian(Bit8u *hostPtr, Bit32u nativeVar32)
+BX_CPP_INLINE void WriteHostDWordToLittleEndian(Bit32u *hostPtr, Bit32u nativeVar32)
 {
   *(hostPtr) = bx_bswap32(nativeVar32);
 }
 
-BX_CPP_INLINE void WriteHostQWordToLittleEndian(Bit8u *hostPtr, Bit64u nativeVar64)
+BX_CPP_INLINE void WriteHostQWordToLittleEndian(Bit64u *hostPtr, Bit64u nativeVar64)
 {
   *(hostPtr) = bx_bswap64(nativeVar64);
 }

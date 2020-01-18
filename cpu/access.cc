@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: access.cc 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: access.cc 13699 2019-12-20 07:42:07Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2005-2019  The Bochs Project
@@ -297,7 +297,7 @@ BX_CPU_C::system_read_byte(bx_address laddr)
   Bit8u data;
 
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 0);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us read access
     // from this CPL.
@@ -323,7 +323,7 @@ BX_CPU_C::system_read_word(bx_address laddr)
   Bit16u data;
 
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 1);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 1);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us read access
     // from this CPL.
@@ -349,7 +349,7 @@ BX_CPU_C::system_read_dword(bx_address laddr)
   Bit32u data;
 
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 3);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 3);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us read access
     // from this CPL.
@@ -375,7 +375,7 @@ BX_CPU_C::system_read_qword(bx_address laddr)
   Bit64u data;
 
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 7);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 7);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us read access
     // from this CPL.
@@ -399,7 +399,7 @@ BX_CPU_C::system_read_qword(bx_address laddr)
 BX_CPU_C::system_write_byte(bx_address laddr, Bit8u data)
 {
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 0);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us write access
     // from this CPL.
@@ -415,7 +415,7 @@ BX_CPU_C::system_write_byte(bx_address laddr, Bit8u data)
     }
   }
 
-  if (access_write_linear(laddr, 1, 0, 0x0, (void *) &data) < 0)
+  if (access_write_linear(laddr, 1, 0, BX_WRITE, 0x0, (void *) &data) < 0)
     exception(BX_GP_EXCEPTION, 0);
 }
 
@@ -423,7 +423,7 @@ BX_CPU_C::system_write_byte(bx_address laddr, Bit8u data)
 BX_CPU_C::system_write_word(bx_address laddr, Bit16u data)
 {
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 1);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 1);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us write access
     // from this CPL.
@@ -439,7 +439,7 @@ BX_CPU_C::system_write_word(bx_address laddr, Bit16u data)
     }
   }
 
-  if (access_write_linear(laddr, 2, 0, 0x0, (void *) &data) < 0)
+  if (access_write_linear(laddr, 2, 0, BX_WRITE, 0x0, (void *) &data) < 0)
     exception(BX_GP_EXCEPTION, 0);
 }
 
@@ -447,7 +447,7 @@ BX_CPU_C::system_write_word(bx_address laddr, Bit16u data)
 BX_CPU_C::system_write_dword(bx_address laddr, Bit32u data)
 {
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 3);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 3);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us write access
     // from this CPL.
@@ -463,7 +463,7 @@ BX_CPU_C::system_write_dword(bx_address laddr, Bit32u data)
     }
   }
 
-  if (access_write_linear(laddr, 4, 0, 0x0, (void *) &data) < 0)
+  if (access_write_linear(laddr, 4, 0, BX_WRITE, 0x0, (void *) &data) < 0)
     exception(BX_GP_EXCEPTION, 0);
 }
 
@@ -471,7 +471,7 @@ BX_CPU_C::system_write_dword(bx_address laddr, Bit32u data)
 BX_CPU_C::v2h_read_byte(bx_address laddr, bx_bool user)
 {
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 0);
   if (tlbEntry->lpf == lpf) {
     // See if the TLB entry privilege level allows us read access
     // from this CPL.
@@ -490,7 +490,7 @@ BX_CPU_C::v2h_read_byte(bx_address laddr, bx_bool user)
 BX_CPU_C::v2h_write_byte(bx_address laddr, bx_bool user)
 {
   bx_address lpf = LPFOf(laddr);
-  bx_TLB_entry *tlbEntry = BX_TLB_ENTRY_OF(laddr, 0);
+  bx_TLB_entry *tlbEntry = BX_DTLB_ENTRY_OF(laddr, 0);
   if (tlbEntry->lpf == lpf)
   {
     // See if the TLB entry privilege level allows us write access

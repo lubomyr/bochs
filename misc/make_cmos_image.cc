@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: make_cmos_image.cc 12594 2015-01-07 16:17:40Z sshwarts $
+// $Id: make_cmos_image.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -95,6 +95,6 @@ main(int argc, char *argv[])
   }
 
   close(fd);
-  printf("CMOS data successfuly written to file '%s'.\n", argv[1]);
+  printf("CMOS data successfully written to file '%s'.\n", argv[1]);
   return 0;
 }

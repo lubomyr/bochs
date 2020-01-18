@@ -1,7 +1,10 @@
 package net.sourceforge.bochs;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,10 +20,10 @@ import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
+import static android.app.Activity.RESULT_OK;
 import static android.content.Context.MODE_PRIVATE;
 
 public class StorageTabFragment extends Fragment implements OnClickListener {
@@ -38,20 +41,21 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     private final String CDROM = Config.CDROM;
     private final String FLOPPY = Config.FLOPPY;
     private final String VFAT = Config.VFAT;
-    private TextView tvFloppy[] = new TextView[floppyNum];
-    private CheckBox cbFloppy[] = new CheckBox[floppyNum];
-    private Button btBrowseFloppy[] = new Button[floppyNum];
-    private TextView tvAta[] = new TextView[ataNum];
-    private CheckBox cbVvfatAta[] = new CheckBox[ataNum];
-    private CheckBox cbAta[] = new CheckBox[ataNum];
-    private Button btBrowseAta[] = new Button[ataNum];
-    private Spinner spAtaType[] = new Spinner[ataNum];
+    private TextView[] tvFloppy = new TextView[floppyNum];
+    private CheckBox[] cbFloppy = new CheckBox[floppyNum];
+    private Button[] btBrowseFloppy = new Button[floppyNum];
+    private TextView[] tvAta = new TextView[ataNum];
+    private CheckBox[] cbVvfatAta = new CheckBox[ataNum];
+    private CheckBox[] cbAta = new CheckBox[ataNum];
+    private Button[] btBrowseAta = new Button[ataNum];
+    private Spinner[] spAtaType = new Spinner[ataNum];
 
     private String m_chosenDir = "";
     private boolean m_newFolderEnabled = true;
     final String SAVED_PATH = "saved_path";
-
+    final int REQUEST_FILE = 1;
     private enum Requestor {ATA0_MASTER, ATA0_SLAVE, ATA1_MASTER, ATA1_SLAVE, FLOPPY_A, FLOPPY_B}
+    private Requestor requestType = null;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -99,39 +103,84 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
         }
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
+            Uri uri = data.getData();
+            String uriPath = uri.getPath();
+            String filename = uriPath.substring(uriPath.lastIndexOf("/") + 1, uriPath.length());
+            String filepathWOType = uriPath.substring(uriPath.lastIndexOf(":") + 1, uriPath.length());
+            String filepath = filepathWOType.startsWith("/") ? filepathWOType
+                    : Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filepathWOType;
+            saveLastPath(filepath);
+            switch (requestType) {
+                case ATA0_MASTER:
+                    tvAta[ATA_0_MASTER].setText(filename);
+                    Config.ataImage[ATA_0_MASTER] = filepath;
+                    Config.ataMode[ATA_0_MASTER] = getMode(filename);
+                    break;
+                case ATA0_SLAVE:
+                    tvAta[ATA_0_SLAVE].setText(filename);
+                    Config.ataImage[ATA_0_SLAVE] = filepath;
+                    Config.ataMode[ATA_0_SLAVE] = getMode(filename);
+                    break;
+                case ATA1_MASTER:
+                    tvAta[ATA_1_MASTER].setText(filename);
+                    Config.ataImage[ATA_1_MASTER] = filepath;
+                    Config.ataMode[ATA_1_MASTER] = getMode(filename);
+                    break;
+                case ATA1_SLAVE:
+                    tvAta[ATA_1_SLAVE].setText(filename);
+                    Config.ataImage[ATA_1_SLAVE] = filepath;
+                    Config.ataMode[ATA_1_SLAVE] = getMode(filename);
+                    break;
+                case FLOPPY_A:
+                    tvFloppy[FLOPPY_A].setText(filename);
+                    Config.floppyImage[FLOPPY_A] = filepath;
+                    break;
+                case FLOPPY_B:
+                    tvFloppy[FLOPPY_B].setText(filename);
+                    Config.floppyImage[FLOPPY_B] = filepath;
+                    break;
+            }
+        }
+    }
+
     private void setupView(View rootView) {
         final List<String> typeList = Arrays.asList(DISK, CDROM);
         final List<String> bootList = Arrays.asList(DISK, CDROM, FLOPPY);
-        cbFloppy[FLOPPY_A] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxFloppyA);
-        tvFloppy[FLOPPY_A] = (TextView) rootView.findViewById(R.id.storageTextViewFloppyA);
-        btBrowseFloppy[FLOPPY_A] = (Button) rootView.findViewById(R.id.storageButtonFloppyA);
-        cbFloppy[FLOPPY_B] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxFloppyB);
-        tvFloppy[FLOPPY_B] = (TextView) rootView.findViewById(R.id.storageTextViewFloppyB);
-        btBrowseFloppy[FLOPPY_B] = (Button) rootView.findViewById(R.id.storageButtonFloppyB);
-        cbAta[ATA_0_MASTER] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta0m);
-        tvAta[ATA_0_MASTER] = (TextView) rootView.findViewById(R.id.storageTextViewAta0m);
-        cbVvfatAta[ATA_0_MASTER] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta0mVvfat);
-        btBrowseAta[ATA_0_MASTER] = (Button) rootView.findViewById(R.id.storageButtonAta0m);
-        spAtaType[ATA_0_MASTER] = (Spinner) rootView.findViewById(R.id.storageSpinnerAta0m);
-        cbAta[ATA_0_SLAVE] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta0s);
-        tvAta[ATA_0_SLAVE] = (TextView) rootView.findViewById(R.id.storageTextViewAta0s);
-        cbVvfatAta[ATA_0_SLAVE] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta0sVvfat);
-        btBrowseAta[ATA_0_SLAVE] = (Button) rootView.findViewById(R.id.storageButtonAta0s);
-        spAtaType[ATA_0_SLAVE] = (Spinner) rootView.findViewById(R.id.storageSpinnerAta0s);
-        cbAta[ATA_1_MASTER] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta1m);
-        tvAta[ATA_1_MASTER] = (TextView) rootView.findViewById(R.id.storageTextViewAta1m);
-        cbVvfatAta[ATA_1_MASTER] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta1mVvfat);
-        btBrowseAta[ATA_1_MASTER] = (Button) rootView.findViewById(R.id.storageButtonAta1m);
-        spAtaType[ATA_1_MASTER] = (Spinner) rootView.findViewById(R.id.storageSpinnerAta1m);
-        cbAta[ATA_1_SLAVE] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta1s);
-        tvAta[ATA_1_SLAVE] = (TextView) rootView.findViewById(R.id.storageTextViewAta1s);
-        cbVvfatAta[ATA_1_SLAVE] = (CheckBox) rootView.findViewById(R.id.storageCheckBoxAta1sVvfat);
-        btBrowseAta[ATA_1_SLAVE] = (Button) rootView.findViewById(R.id.storageButtonAta1s);
-        spAtaType[ATA_1_SLAVE] = (Spinner) rootView.findViewById(R.id.storageSpinnerAta1s);
+        cbFloppy[FLOPPY_A] = rootView.findViewById(R.id.storageCheckBoxFloppyA);
+        tvFloppy[FLOPPY_A] = rootView.findViewById(R.id.storageTextViewFloppyA);
+        btBrowseFloppy[FLOPPY_A] = rootView.findViewById(R.id.storageButtonFloppyA);
+        cbFloppy[FLOPPY_B] = rootView.findViewById(R.id.storageCheckBoxFloppyB);
+        tvFloppy[FLOPPY_B] = rootView.findViewById(R.id.storageTextViewFloppyB);
+        btBrowseFloppy[FLOPPY_B] = rootView.findViewById(R.id.storageButtonFloppyB);
+        cbAta[ATA_0_MASTER] = rootView.findViewById(R.id.storageCheckBoxAta0m);
+        tvAta[ATA_0_MASTER] = rootView.findViewById(R.id.storageTextViewAta0m);
+        cbVvfatAta[ATA_0_MASTER] = rootView.findViewById(R.id.storageCheckBoxAta0mVvfat);
+        btBrowseAta[ATA_0_MASTER] = rootView.findViewById(R.id.storageButtonAta0m);
+        spAtaType[ATA_0_MASTER] = rootView.findViewById(R.id.storageSpinnerAta0m);
+        cbAta[ATA_0_SLAVE] = rootView.findViewById(R.id.storageCheckBoxAta0s);
+        tvAta[ATA_0_SLAVE] = rootView.findViewById(R.id.storageTextViewAta0s);
+        cbVvfatAta[ATA_0_SLAVE] = rootView.findViewById(R.id.storageCheckBoxAta0sVvfat);
+        btBrowseAta[ATA_0_SLAVE] = rootView.findViewById(R.id.storageButtonAta0s);
+        spAtaType[ATA_0_SLAVE] = rootView.findViewById(R.id.storageSpinnerAta0s);
+        cbAta[ATA_1_MASTER] = rootView.findViewById(R.id.storageCheckBoxAta1m);
+        tvAta[ATA_1_MASTER] = rootView.findViewById(R.id.storageTextViewAta1m);
+        cbVvfatAta[ATA_1_MASTER] = rootView.findViewById(R.id.storageCheckBoxAta1mVvfat);
+        btBrowseAta[ATA_1_MASTER] = rootView.findViewById(R.id.storageButtonAta1m);
+        spAtaType[ATA_1_MASTER] = rootView.findViewById(R.id.storageSpinnerAta1m);
+        cbAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageCheckBoxAta1s);
+        tvAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageTextViewAta1s);
+        cbVvfatAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageCheckBoxAta1sVvfat);
+        btBrowseAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageButtonAta1s);
+        spAtaType[ATA_1_SLAVE] = rootView.findViewById(R.id.storageSpinnerAta1s);
 
         // setup boot selection logic
-        Spinner spBoot = (Spinner) rootView.findViewById(R.id.storageSpinnerBoot);
-        SpinnerAdapter adapterBoot = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, bootList);
+        Spinner spBoot = rootView.findViewById(R.id.storageSpinnerBoot);
+        SpinnerAdapter adapterBoot = new ArrayAdapter<String>(getActivity(),
+                R.layout.spinner_row, bootList);
         spBoot.setAdapter(adapterBoot);
         spBoot.setSelection(bootList.indexOf(Config.boot));
         spBoot.setOnItemSelectedListener(new OnItemSelectedListener() {
@@ -171,7 +220,8 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
         }
 
         //setup ata logic
-        SpinnerAdapter adapterType = new ArrayAdapter<String>(getActivity(), R.layout.spinner_row, typeList);
+        SpinnerAdapter adapterType = new ArrayAdapter<String>(getActivity(),
+                R.layout.spinner_row_fixed, typeList);
         for (int i = 0; i < ataNum; i++) {
             cbAta[i].setChecked(Config.ata[i]);
             tvAta[i].setText(MainActivity.getFileName(Config.ataImage[i]));
@@ -277,7 +327,7 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
     private void fileSelection(final Requestor num, String type) {
         // Set up extension
-        String extension[] = null;
+/*        String extension[] = null;
         switch (type) {
             case DISK:
                 extension = new String[]{".img", ".vmdk", ".vhd", ".vdi"};
@@ -288,48 +338,14 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
             case FLOPPY:
                 extension = new String[]{".img", ".ima"};
                 break;
-        }
-        FileChooser filechooser = new FileChooser(getActivity(), getLastPath(), extension);
-        filechooser.setFileListener(new FileChooser.FileSelectedListener() {
-            @Override
-            public void fileSelected(final File file) {
-                String filename = file.getAbsolutePath();
-                saveLastPath(file.getPath());
-                switch (num) {
-                    case ATA0_MASTER:
-                        tvAta[ATA_0_MASTER].setText(file.getName());
-                        Config.ataImage[ATA_0_MASTER] = filename;
-                        Config.ataMode[ATA_0_MASTER] = getMode(file.getName());
-                        break;
-                    case ATA0_SLAVE:
-                        tvAta[ATA_0_SLAVE].setText(file.getName());
-                        Config.ataImage[ATA_0_SLAVE] = filename;
-                        Config.ataMode[ATA_0_SLAVE] = getMode(file.getName());
-                        break;
-                    case ATA1_MASTER:
-                        tvAta[ATA_1_MASTER].setText(file.getName());
-                        Config.ataImage[ATA_1_MASTER] = filename;
-                        Config.ataMode[ATA_1_MASTER] = getMode(file.getName());
-                        break;
-                    case ATA1_SLAVE:
-                        tvAta[ATA_1_SLAVE].setText(file.getName());
-                        Config.ataImage[ATA_1_SLAVE] = filename;
-                        Config.ataMode[ATA_1_SLAVE] = getMode(file.getName());
-                        break;
-                    case FLOPPY_A:
-                        tvFloppy[FLOPPY_A].setText(file.getName());
-                        Config.floppyImage[FLOPPY_A] = filename;
-                        break;
-                    case FLOPPY_B:
-                        tvFloppy[FLOPPY_B].setText(file.getName());
-                        Config.floppyImage[FLOPPY_B] = filename;
-                        break;
-                }
+        }*/
+        requestType = num;
 
-            }
-        });
+        Intent intent = new Intent()
+                .setType("*/*")
+                .setAction(Intent.ACTION_GET_CONTENT);
 
-        filechooser.showDialog();
+        startActivityForResult(Intent.createChooser(intent, "Select a file"), REQUEST_FILE);
     }
 
     private String getMode(String str) {

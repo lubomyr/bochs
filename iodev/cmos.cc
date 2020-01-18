@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cmos.cc 13515 2018-05-21 16:11:46Z vruppert $
+// $Id: cmos.cc 13653 2019-12-09 16:29:23Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2018  The Bochs Project
@@ -144,7 +144,7 @@ bx_cmos_c::~bx_cmos_c(void)
 
 void bx_cmos_c::init(void)
 {
-  BX_DEBUG(("Init $Id: cmos.cc 13515 2018-05-21 16:11:46Z vruppert $"));
+  BX_DEBUG(("Init $Id: cmos.cc 13653 2019-12-09 16:29:23Z sshwarts $"));
   // CMOS RAM & RTC
 
   DEV_register_ioread_handler(this, read_handler, 0x0070, "CMOS RAM", 1);
@@ -245,7 +245,7 @@ void bx_cmos_c::init(void)
       BX_PANIC(("CMOS: error reading cmos file."));
     }
     close(fd);
-    BX_INFO(("successfuly read from image file '%s'.",
+    BX_INFO(("successfully read from image file '%s'.",
       SIM->get_param_string(BXPN_CMOSIMAGE_PATH)->getptr()));
     BX_CMOS_THIS s.rtc_mode_12hour = ((BX_CMOS_THIS s.reg[REG_STAT_B] & 0x02) == 0);
     BX_CMOS_THIS s.rtc_mode_binary = ((BX_CMOS_THIS s.reg[REG_STAT_B] & 0x04) != 0);

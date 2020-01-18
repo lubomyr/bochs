@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: segment_ctrl.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: segment_ctrl.cc 13729 2019-12-27 13:02:30Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2018  The Bochs Project
@@ -24,6 +24,8 @@
 #include "bochs.h"
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
+
+const char *segname[] = { "ES", "CS", "SS", "DS", "FS", "GS" };
 
 void BX_CPP_AttrRegparmN(2) BX_CPU_C::load_segw(bxInstruction_c *i, unsigned seg)
 {

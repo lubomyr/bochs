@@ -32,10 +32,6 @@
 #define BX_MEM_VECTOR_ALIGN 4096
 #define BX_MEM_HANDLERS   ((BX_CONST64(1) << BX_PHY_ADDRESS_WIDTH) >> 20) /* one per megabyte */
 
-#if BX_LARGE_RAMFILE
-Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
-#endif
-
 #ifdef ANDROID_32BIT
 #    define ftello64 ftell
 #    define fseeko64 fseek
@@ -44,6 +40,10 @@ Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #ifdef ANDROID_ARM64
 #    define ftello64 ftello
 #    define fseeko64 fseeko
+#endif
+
+#if BX_LARGE_RAMFILE
+Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #endif
 
 BX_MEM_C::BX_MEM_C()

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: devices.txt 13500 2018-05-03 19:46:12Z vruppert $
+// $Id: devices.txt 13662 2019-12-11 17:06:45Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 MOTHER BOARD (i430FX / i440FX / i440BX support)                                   devices.cc
@@ -12,6 +12,8 @@ MOTHER BOARD (i430FX / i440FX / i440BX support)                                 
   |        +---- PCI IDE controller                             pci_ide.cc
   |        |
   |        +---- PIIX4 ACPI support                             acpi.cc
+  |
+  +---- High Precision Event Timer                              hpet.cc
   |
   +---- PCI host device mapping (Linux only)                    pcidev.cc
   |

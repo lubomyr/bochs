@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.h 13498 2018-05-03 17:54:31Z vruppert $
+// $Id: rombios.h 13752 2019-12-30 13:16:18Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2006-2018 Volker Ruppert
@@ -79,7 +79,8 @@
 #  define BX_APPNAME "QEMU"
 #  define BX_APPVENDOR "QEMU"
 #else
-#  define BX_APPNAME "Bochs"
+#  include "../bxversion.h"
+#  define BX_APPNAME "Bochs "VERSION
 #  define BX_APPVENDOR "The Bochs Project"
 #endif
 
