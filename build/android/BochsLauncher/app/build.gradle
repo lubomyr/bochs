@@ -7,7 +7,7 @@ android {
         applicationId "net.sourceforge.bochs"
         minSdkVersion 17
         targetSdkVersion 28
-        versionCode 261101
+        versionCode 261102
         versionName "2.6.11"
     }
     buildTypes {
