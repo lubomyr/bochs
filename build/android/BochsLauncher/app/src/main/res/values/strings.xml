@@ -48,5 +48,8 @@
     <string name="start">start</string>
     <string name="download">download</string>
     <string name="agp">AGP:</string>
+    <string name="file_selector">File selector</string>
+    <string name="new_style">Android (new)</string>
+    <string name="old_style">In-App (old)</string>
 
 </resources>
