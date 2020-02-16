@@ -3,8 +3,10 @@ package net.sourceforge.bochs;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,10 +18,13 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.RadioButton;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
@@ -53,8 +58,11 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     private String m_chosenDir = "";
     private boolean m_newFolderEnabled = true;
     final String SAVED_PATH = "saved_path";
+    final String FILE_SELECTOR = "file_selector";
     final int REQUEST_FILE = 1;
+
     private enum Requestor {ATA0_MASTER, ATA0_SLAVE, ATA1_MASTER, ATA1_SLAVE, FLOPPY_A, FLOPPY_B}
+
     private Requestor requestType = null;
 
     @Override
@@ -103,14 +111,17 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if(requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
+        if (requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
             Uri uri = data.getData();
             String uriPath = uri.getPath();
-            String filename = uriPath.substring(uriPath.lastIndexOf("/") + 1, uriPath.length());
-            String filepathWOType = uriPath.substring(uriPath.lastIndexOf(":") + 1, uriPath.length());
+            uriPath = uriPath.contains("/storage/emulated") ? uriPath
+                    : RealPathUtil.getPath(getContext(), uri);
+            String filename = uriPath.substring(uriPath.lastIndexOf("/") + 1);
+            String filepathWOType = uriPath.substring(uriPath.lastIndexOf(":") + 1);
             String filepath = filepathWOType.startsWith("/") ? filepathWOType
                     : Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filepathWOType;
             saveLastPath(filepath);
@@ -176,6 +187,8 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
         cbVvfatAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageCheckBoxAta1sVvfat);
         btBrowseAta[ATA_1_SLAVE] = rootView.findViewById(R.id.storageButtonAta1s);
         spAtaType[ATA_1_SLAVE] = rootView.findViewById(R.id.storageSpinnerAta1s);
+        RadioButton rbNewFileSelector = rootView.findViewById(R.id.newFileSelector);
+        RadioButton rbOldFileSelector = rootView.findViewById(R.id.oldFileSelector);
 
         // setup boot selection logic
         Spinner spBoot = rootView.findViewById(R.id.storageSpinnerBoot);
@@ -285,6 +298,21 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
 
             btBrowseAta[i].setOnClickListener(this);
+
+            rbNewFileSelector.setChecked(!isOldFileSelector());
+            rbOldFileSelector.setChecked(isOldFileSelector());
+
+            OnClickListener hwOnClick = new OnClickListener() {
+
+                @Override
+                public void onClick(View p1) {
+                    final int selected = p1.getId();
+                    saveFileSelector(selected == R.id.oldFileSelector ? "old" : "new");
+                }
+            };
+
+            rbNewFileSelector.setOnClickListener(hwOnClick);
+            rbOldFileSelector.setOnClickListener(hwOnClick);
         }
 
     }
@@ -327,7 +355,7 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
     private void fileSelection(final Requestor num, String type) {
         // Set up extension
-/*        String extension[] = null;
+        String extension[] = null;
         switch (type) {
             case DISK:
                 extension = new String[]{".img", ".vmdk", ".vhd", ".vdi"};
@@ -338,14 +366,58 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
             case FLOPPY:
                 extension = new String[]{".img", ".ima"};
                 break;
-        }*/
+        }
         requestType = num;
 
-        Intent intent = new Intent()
-                .setType("*/*")
-                .setAction(Intent.ACTION_GET_CONTENT);
+        if (!isOldFileSelector()) {
+            Intent intent = new Intent()
+                    .setType("*/*")
+                    .setAction(Intent.ACTION_GET_CONTENT);
 
-        startActivityForResult(Intent.createChooser(intent, "Select a file"), REQUEST_FILE);
+            startActivityForResult(Intent.createChooser(intent, "Select a file"), REQUEST_FILE);
+        } else {
+            FileChooser filechooser = new FileChooser(getActivity(), getLastPath(), extension);
+            filechooser.setFileListener(new FileChooser.FileSelectedListener() {
+                @Override
+                public void fileSelected(final File file) {
+                    String filename = file.getAbsolutePath();
+                    saveLastPath(file.getPath());
+                    switch (num) {
+                        case ATA0_MASTER:
+                            tvAta[ATA_0_MASTER].setText(file.getName());
+                            Config.ataImage[ATA_0_MASTER] = filename;
+                            Config.ataMode[ATA_0_MASTER] = getMode(file.getName());
+                            break;
+                        case ATA0_SLAVE:
+                            tvAta[ATA_0_SLAVE].setText(file.getName());
+                            Config.ataImage[ATA_0_SLAVE] = filename;
+                            Config.ataMode[ATA_0_SLAVE] = getMode(file.getName());
+                            break;
+                        case ATA1_MASTER:
+                            tvAta[ATA_1_MASTER].setText(file.getName());
+                            Config.ataImage[ATA_1_MASTER] = filename;
+                            Config.ataMode[ATA_1_MASTER] = getMode(file.getName());
+                            break;
+                        case ATA1_SLAVE:
+                            tvAta[ATA_1_SLAVE].setText(file.getName());
+                            Config.ataImage[ATA_1_SLAVE] = filename;
+                            Config.ataMode[ATA_1_SLAVE] = getMode(file.getName());
+                            break;
+                        case FLOPPY_A:
+                            tvFloppy[FLOPPY_A].setText(file.getName());
+                            Config.floppyImage[FLOPPY_A] = filename;
+                            break;
+                        case FLOPPY_B:
+                            tvFloppy[FLOPPY_B].setText(file.getName());
+                            Config.floppyImage[FLOPPY_B] = filename;
+                            break;
+                    }
+
+                }
+            });
+
+            filechooser.showDialog();
+        }
     }
 
     private String getMode(String str) {
@@ -374,6 +446,23 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     private String getLastPath() {
         sPref = getActivity().getPreferences(MODE_PRIVATE);
         return sPref.getString(SAVED_PATH, null);
+    }
+
+    private void saveFileSelector(String selector) {
+        sPref = getActivity().getPreferences(MODE_PRIVATE);
+        SharedPreferences.Editor ed = sPref.edit();
+        ed.putString(FILE_SELECTOR, selector);
+        ed.apply();
+    }
+
+    private String getFileSelector() {
+        sPref = getActivity().getPreferences(MODE_PRIVATE);
+        return sPref.getString(FILE_SELECTOR, null);
+    }
+
+    private boolean isOldFileSelector() {
+        final String fileSelector = getFileSelector();
+        return (fileSelector != null && fileSelector.equals("old"));
     }
 
 }

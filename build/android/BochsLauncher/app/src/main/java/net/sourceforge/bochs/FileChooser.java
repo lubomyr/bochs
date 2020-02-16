@@ -45,6 +45,9 @@ public class FileChooser {
 
     public FileChooser(Activity activity, String path, String... extension) {
         this.activity = activity;
+        if (path == null || path.startsWith(activity.getCacheDir().getAbsolutePath())) {
+            path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/";
+        }
         File selectedPath = null;
         if (path != null)
             selectedPath = new File(path);

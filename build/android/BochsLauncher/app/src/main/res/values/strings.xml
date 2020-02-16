@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <string name="app_name">Bochs</string>
     <string name="app_id">ca-app-pub-4572241703388342~5758790772</string>
     <string name="banner_ad_unit_id">ca-app-pub-4572241703388342/3371412534</string>
@@ -50,4 +49,7 @@
     <string name="start">start</string>
     <string name="download">download</string>
     <string name="agp">AGP:</string>
+    <string name="file_selector">File selector</string>
+    <string name="new_style">System (new)</string>
+    <string name="old_style">In-App (old)</string>
 </resources>
