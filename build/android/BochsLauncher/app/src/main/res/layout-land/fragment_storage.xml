@@ -363,6 +363,39 @@
 
         </RelativeLayout>
 
+        <RadioGroup
+            android:id="@+id/fileSelectorGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="5dp"
+            android:gravity="center_vertical|center_horizontal"
+            android:background="@drawable/my_border"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/file_selector" />
+
+            <RadioButton
+                android:id="@+id/newFileSelector"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/new_style" />
+
+            <RadioButton
+                android:id="@+id/oldFileSelector"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/old_style" />
+
+        </RadioGroup>
+
     </LinearLayout>
 
 </ScrollView>
