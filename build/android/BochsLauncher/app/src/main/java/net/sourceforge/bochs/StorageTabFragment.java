@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.Fragment;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -22,7 +23,6 @@ import android.widget.RadioButton;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.io.File;
 import java.util.Arrays;
@@ -60,9 +60,7 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     final String SAVED_PATH = "saved_path";
     final String FILE_SELECTOR = "file_selector";
     final int REQUEST_FILE = 1;
-
     private enum Requestor {ATA0_MASTER, ATA0_SLAVE, ATA1_MASTER, ATA1_SLAVE, FLOPPY_A, FLOPPY_B}
-
     private Requestor requestType = null;
 
     @Override
@@ -112,19 +110,31 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    private String getRealPathByUri(Uri uri) {
+        String uriPath = uri.getPath();
+        String realPath = RealPathUtil.getPath(getActivity(), uri);
+        if (realPath == null) {
+            String docTerm = "/document/";
+            if (uriPath.startsWith(docTerm) && uriPath.contains(":")) {
+                String docPath = uriPath.replace(docTerm, "/storage/");
+                realPath = docPath.replace(":", "/");
+            }
+        }
+        return realPath;
+    }
+
     @Override
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
+        if(requestCode == REQUEST_FILE && resultCode == RESULT_OK) {
             Uri uri = data.getData();
-            String uriPath = uri.getPath();
-            uriPath = uriPath.contains("/storage/emulated") ? uriPath
-                    : RealPathUtil.getPath(getContext(), uri);
-            String filename = uriPath.substring(uriPath.lastIndexOf("/") + 1);
-            String filepathWOType = uriPath.substring(uriPath.lastIndexOf(":") + 1);
+            String filepath = getRealPathByUri(uri);
+            String filename = filepath.substring(filepath.lastIndexOf("/") + 1);
+/*            String filepathWOType = realPath.substring(realPath.lastIndexOf(":") + 1);
             String filepath = filepathWOType.startsWith("/") ? filepathWOType
-                    : Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filepathWOType;
-            saveLastPath(filepath);
+                    : Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filepathWOType;*/
+            //saveLastPath(filepath.substring(0, filepath.lastIndexOf("/") + 1));
             switch (requestType) {
                 case ATA0_MASTER:
                     tvAta[ATA_0_MASTER].setText(filename);
@@ -306,8 +316,14 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
 
                 @Override
                 public void onClick(View p1) {
-                    final int selected = p1.getId();
-                    saveFileSelector(selected == R.id.oldFileSelector ? "old" : "new");
+                    saveFileSelector(p1.getId() == R.id.oldFileSelector ? "old" : "new");
+                    if (p1.getId() == R.id.oldFileSelector) {
+                        String lastPath = getLastPath();
+/*                        if (lastPath == null
+                                || (lastPath != null && !lastPath.startsWith("/storage/emulated"))) {*/
+                            saveLastPath(Environment.getExternalStorageDirectory().getAbsolutePath());
+//                        }
+                    }
                 }
             };
 
@@ -380,36 +396,36 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
             filechooser.setFileListener(new FileChooser.FileSelectedListener() {
                 @Override
                 public void fileSelected(final File file) {
-                    String filename = file.getAbsolutePath();
-                    saveLastPath(file.getPath());
+                    String filepath = file.getAbsolutePath();
+                    saveLastPath(filepath.substring(0, filepath.lastIndexOf("/") + 1));
                     switch (num) {
                         case ATA0_MASTER:
                             tvAta[ATA_0_MASTER].setText(file.getName());
-                            Config.ataImage[ATA_0_MASTER] = filename;
+                            Config.ataImage[ATA_0_MASTER] = filepath;
                             Config.ataMode[ATA_0_MASTER] = getMode(file.getName());
                             break;
                         case ATA0_SLAVE:
                             tvAta[ATA_0_SLAVE].setText(file.getName());
-                            Config.ataImage[ATA_0_SLAVE] = filename;
+                            Config.ataImage[ATA_0_SLAVE] = filepath;
                             Config.ataMode[ATA_0_SLAVE] = getMode(file.getName());
                             break;
                         case ATA1_MASTER:
                             tvAta[ATA_1_MASTER].setText(file.getName());
-                            Config.ataImage[ATA_1_MASTER] = filename;
+                            Config.ataImage[ATA_1_MASTER] = filepath;
                             Config.ataMode[ATA_1_MASTER] = getMode(file.getName());
                             break;
                         case ATA1_SLAVE:
                             tvAta[ATA_1_SLAVE].setText(file.getName());
-                            Config.ataImage[ATA_1_SLAVE] = filename;
+                            Config.ataImage[ATA_1_SLAVE] = filepath;
                             Config.ataMode[ATA_1_SLAVE] = getMode(file.getName());
                             break;
                         case FLOPPY_A:
                             tvFloppy[FLOPPY_A].setText(file.getName());
-                            Config.floppyImage[FLOPPY_A] = filename;
+                            Config.floppyImage[FLOPPY_A] = filepath;
                             break;
                         case FLOPPY_B:
                             tvFloppy[FLOPPY_B].setText(file.getName());
-                            Config.floppyImage[FLOPPY_B] = filename;
+                            Config.floppyImage[FLOPPY_B] = filepath;
                             break;
                     }
 
@@ -432,20 +448,16 @@ public class StorageTabFragment extends Fragment implements OnClickListener {
     }
 
     private void saveLastPath(String filePath) {
-        String dirPath;
-        if (filePath.contains("/"))
-            dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
-        else
-            dirPath = filePath;
         sPref = getActivity().getPreferences(MODE_PRIVATE);
         SharedPreferences.Editor ed = sPref.edit();
-        ed.putString(SAVED_PATH, dirPath);
+        ed.putString(SAVED_PATH, filePath);
         ed.apply();
     }
 
     private String getLastPath() {
         sPref = getActivity().getPreferences(MODE_PRIVATE);
-        return sPref.getString(SAVED_PATH, null);
+        String savedPath = sPref.getString(SAVED_PATH, null);
+        return savedPath;
     }
 
     private void saveFileSelector(String selector) {
