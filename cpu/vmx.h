@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.h 13764 2020-01-03 17:35:02Z sshwarts $
+// $Id: vmx.h 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2019 Stanislav Shwartsman
@@ -196,7 +196,7 @@ const Bit64u VMX_VMFUNC_EPTP_SWITCHING_MASK = (BX_CONST64(1) << VMX_VMFUNC_EPTP_
 /* VMCS 16-bit control fields */
 /* binary 0000_00xx_xxxx_xxx0 */
 #define VMCS_16BIT_CONTROL_VPID                            0x00000000 /* VPID */
-#define VMCS_16BIT_CONTROL_POSTED_INTERRUPT_VECTOR         0x00000002 /* Posted Interrupts */
+#define VMCS_16BIT_CONTROL_POSTED_INTERRUPT_VECTOR         0x00000002 /* Posted Interrupts - not implememted yet */
 #define VMCS_16BIT_CONTROL_EPTP_INDEX                      0x00000004 /* #VE Exception */
 
 /* VMCS 16-bit guest-state fields */
@@ -246,7 +246,7 @@ const Bit64u VMX_VMFUNC_EPTP_SWITCHING_MASK = (BX_CONST64(1) << VMX_VMFUNC_EPTP_
 #define VMCS_64BIT_CONTROL_VIRTUAL_APIC_PAGE_ADDR_HI       0x00002013
 #define VMCS_64BIT_CONTROL_APIC_ACCESS_ADDR                0x00002014 /* APIC virtualization */
 #define VMCS_64BIT_CONTROL_APIC_ACCESS_ADDR_HI             0x00002015
-#define VMCS_64BIT_CONTROL_POSTED_INTERRUPT_DESC_ADDR      0x00002016 /* Posted Interrupts */
+#define VMCS_64BIT_CONTROL_POSTED_INTERRUPT_DESC_ADDR      0x00002016 /* Posted Interrupts - not implemented yet */
 #define VMCS_64BIT_CONTROL_POSTED_INTERRUPT_DESC_ADDR_HI   0x00002017
 #define VMCS_64BIT_CONTROL_VMFUNC_CTRLS                    0x00002018 /* VM Functions */
 #define VMCS_64BIT_CONTROL_VMFUNC_CTRLS_HI                 0x00002019
@@ -302,8 +302,12 @@ const Bit64u VMX_VMFUNC_EPTP_SWITCHING_MASK = (BX_CONST64(1) << VMX_VMFUNC_EPTP_
 #define VMCS_64BIT_GUEST_IA32_PDPTE2_HI                    0x0000280F
 #define VMCS_64BIT_GUEST_IA32_PDPTE3                       0x00002810
 #define VMCS_64BIT_GUEST_IA32_PDPTE3_HI                    0x00002811
-#define VMCS_64BIT_GUEST_IA32_BNDCFGS                      0x00002812 /* MPX */
+#define VMCS_64BIT_GUEST_IA32_BNDCFGS                      0x00002812 /* MPX (not implemented) */
 #define VMCS_64BIT_GUEST_IA32_BNDCFGS_HI                   0x00002813
+#define VMCS_64BIT_GUEST_IA32_RTIT_CTL                     0x00002814 /* Processor Trace (not implemented) */
+#define VMCS_64BIT_GUEST_IA32_RTIT_CTL_HI                  0x00002815
+#define VMCS_64BIT_GUEST_IA32_PKRS                         0x00002818 /* Supervisor-Mode Protection Keys */
+#define VMCS_64BIT_GUEST_IA32_PKRS_HI                      0x00002819
 
 /* VMCS 64-bit host state fields */
 /* binary 0010_11xx_xxxx_xxx0 */
@@ -313,6 +317,8 @@ const Bit64u VMX_VMFUNC_EPTP_SWITCHING_MASK = (BX_CONST64(1) << VMX_VMFUNC_EPTP_
 #define VMCS_64BIT_HOST_IA32_EFER_HI                       0x00002C03
 #define VMCS_64BIT_HOST_IA32_PERF_GLOBAL_CTRL              0x00002C04 /* Perf Global Ctrl */
 #define VMCS_64BIT_HOST_IA32_PERF_GLOBAL_CTRL_HI           0x00002C05
+#define VMCS_64BIT_HOST_IA32_PKRS                          0x00002C06 /* Supervisor-Mode Protection Keys */
+#define VMCS_64BIT_HOST_IA32_PKRS_HI                       0x00002C07
 
 /* VMCS 32_bit control fields */
 /* binary 0100_00xx_xxxx_xxx0 */
@@ -513,8 +519,8 @@ public:
 
    void clear();
 
-   bx_bool clear_mapping(Bit32u encoding);
-   bx_bool set_mapping(Bit32u encoding, Bit32u offset);
+   bool clear_mapping(Bit32u encoding);
+   bool set_mapping(Bit32u encoding, Bit32u offset);
 
    void set_vmcs_revision_id(Bit32u revision) { revision_id = revision; }
    Bit32u get_vmcs_revision_id() const { return revision_id; }
@@ -528,11 +534,11 @@ public:
    
    unsigned vmcs_field_offset(Bit32u encoding) const;
 
-   bx_bool is_reserved(Bit32u encoding) const {
+   bool is_reserved(Bit32u encoding) const {
      return (encoding & VMCS_ENCODING_RESERVED_BITS) != 0;
    }
 
-   bx_bool is_valid(Bit32u encoding) const {
+   bool is_valid(Bit32u encoding) const {
      return ! is_reserved(encoding) && (vmcs_field_offset(encoding) != 0xffffffff);
    }
 };
@@ -597,6 +603,10 @@ typedef struct bx_VMCS_GUEST_STATE
    bx_address ssp;
    bx_address interrupt_ssp_table_address;
 #endif
+
+#if BX_SUPPORT_PKEYS
+   Bit32u pkrs;
+#endif
 } VMCS_GUEST_STATE;
 
 typedef struct bx_VMCS_HOST_STATE
@@ -634,6 +644,10 @@ typedef struct bx_VMCS_HOST_STATE
    Bit64u msr_ia32_s_cet;
    bx_address ssp;
    bx_address interrupt_ssp_table_address;
+#endif
+
+#if BX_SUPPORT_PKEYS
+   Bit32u pkrs;
 #endif
 } VMCS_HOST_STATE;
 
@@ -676,7 +690,7 @@ typedef struct bx_VMCS
 #define VMX_VM_EXEC_CTRL1_NMI_EXITING                 (1 << 3)
 #define VMX_VM_EXEC_CTRL1_VIRTUAL_NMI                 (1 << 5) /* Virtual NMI */
 #define VMX_VM_EXEC_CTRL1_VMX_PREEMPTION_TIMER_VMEXIT (1 << 6) /* VMX preemption timer */
-#define VMX_VM_EXEC_CTRL1_PROCESS_POSTED_INTERRUPTS   (1 << 7) /* Posted Interrupts */
+#define VMX_VM_EXEC_CTRL1_PROCESS_POSTED_INTERRUPTS   (1 << 7) /* Posted Interrupts (not implemented) */
 
 #define VMX_VM_EXEC_CTRL1_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_pin_vmexec_ctrl_supported_bits)
@@ -729,7 +743,7 @@ typedef struct bx_VMCS
 #define VMX_VM_EXEC_CTRL3_RDSEED_VMEXIT             (1 << 16)
 #define VMX_VM_EXEC_CTRL3_PML_ENABLE                (1 << 17) /* Page Modification Logging */
 #define VMX_VM_EXEC_CTRL3_EPT_VIOLATION_EXCEPTION   (1 << 18) /* #VE Exception */
-#define VMX_VM_EXEC_CTRL3_SUPPRESS_GUEST_VMX_TRACE  (1 << 19) /* Processor Trace */
+#define VMX_VM_EXEC_CTRL3_SUPPRESS_GUEST_VMX_TRACE  (1 << 19) /* Processor Trace (not implemented) */
 #define VMX_VM_EXEC_CTRL3_XSAVES_XRSTORS            (1 << 20) /* XSAVES */
 #define VMX_VM_EXEC_CTRL3_MBE_CTRL                  (1 << 22) /* Mode Based Execution Control (not implemented yet) */
 #define VMX_VM_EXEC_CTRL3_SUBPAGE_WR_PROTECT_CTRL   (1 << 23) /* Sub-Page Write Protection Control */
@@ -813,9 +827,10 @@ typedef struct bx_VMCS
 #define VMX_VMEXIT_CTRL1_STORE_EFER_MSR             (1 << 20) /* EFER */
 #define VMX_VMEXIT_CTRL1_LOAD_EFER_MSR              (1 << 21) /* EFER */
 #define VMX_VMEXIT_CTRL1_STORE_VMX_PREEMPTION_TIMER (1 << 22) /* VMX preemption timer */
-#define VMX_VMEXIT_CTRL1_CLEAR_BNDCFGS              (1 << 23) /* MPX */
-#define VMX_VMEXIT_CTRL1_SUPPRESS_VMX_PACKETS       (1 << 24) /* Processor Trace */
+#define VMX_VMEXIT_CTRL1_CLEAR_BNDCFGS              (1 << 23) /* MPX (not implemented) */
+#define VMX_VMEXIT_CTRL1_SUPPRESS_HOST_VMX_TRACE    (1 << 24) /* Processor Trace (not implemented) */
 #define VMX_VMEXIT_CTRL1_LOAD_HOST_CET_STATE        (1 << 28) /* CET */
+#define VMX_VMEXIT_CTRL1_LOAD_HOST_PKRS             (1 << 29) /* Supervisor-Mode Protection Keys */
 
 #define VMX_VMEXIT_CTRL1_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_vmexit_ctrl_supported_bits)
@@ -838,9 +853,10 @@ typedef struct bx_VMCS
 #define VMX_VMENTRY_CTRL1_LOAD_PERF_GLOBAL_CTRL_MSR         (1 << 13) /* Perf Global Ctrl */
 #define VMX_VMENTRY_CTRL1_LOAD_PAT_MSR                      (1 << 14) /* PAT */
 #define VMX_VMENTRY_CTRL1_LOAD_EFER_MSR                     (1 << 15) /* EFER */
-#define VMX_VMENTRY_CTRL1_LOAD_BNDCFGS                      (1 << 16) /* MPX */
-#define VMX_VMENTRY_CTRL1_SUPPRESS_VMX_PACKETS              (1 << 17) /* Processor Trace */
+#define VMX_VMENTRY_CTRL1_LOAD_BNDCFGS                      (1 << 16) /* MPX (not implemented) */
+#define VMX_VMENTRY_CTRL1_SUPPRESS_VMX_PACKETS              (1 << 17) /* Processor Trace (not implemented) */
 #define VMX_VMENTRY_CTRL1_LOAD_GUEST_CET_STATE              (1 << 20) /* CET */
+#define VMX_VMENTRY_CTRL1_LOAD_GUEST_PKRS                   (1 << 22) /* Supervisor-Mode Protection Keys */
 
 #define VMX_VMENTRY_CTRL1_SUPPORTED_BITS \
     (BX_CPU_THIS_PTR vmx_cap.vmx_vmentry_ctrl_supported_bits)

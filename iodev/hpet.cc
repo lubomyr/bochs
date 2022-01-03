@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hpet.cc 13683 2019-12-17 17:40:30Z vruppert $
+// $Id: hpet.cc 14229 2021-04-18 17:20:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  High Precision Event Timer emulation ported from Qemu
@@ -9,7 +9,7 @@
 //
 //  Authors: Beth Kon <bkon@us.ibm.com>
 //
-//  Copyright (C) 2017-2019  The Bochs Project
+//  Copyright (C) 2017-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,18 +41,19 @@
 
 bx_hpet_c *theHPET = NULL;
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libhpet_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(hpet)
 {
-  theHPET = new bx_hpet_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theHPET, BX_PLUGIN_HPET);
+  if (mode == PLUGIN_INIT) {
+    theHPET = new bx_hpet_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theHPET, BX_PLUGIN_HPET);
+  } else if (mode == PLUGIN_FINI) {
+    delete theHPET;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_STANDARD;
+  }
   return(0); // Success
-}
-
-void CDECL libhpet_LTX_plugin_fini(void)
-{
-  delete theHPET;
 }
 
 // helper functions
@@ -74,7 +75,7 @@ static Bit32u hpet_time_between(Bit64u start, Bit64u end, Bit64u value)
  */
 static Bit64u hpet_cmp32_to_cmp64(Bit64u reference, Bit32u value)
 {
-  if ((Bit32u)reference <= (Bit32u)value) {
+  if ((Bit32u)reference <= value) {
     return (reference & 0xFFFFFFFF00000000ull) | (Bit64u)value;
   } else {
     return ((reference + 0x100000000ull) & 0xFFFFFFFF00000000ull) | (Bit64u)value;
@@ -110,7 +111,7 @@ static int deactivating_bit(Bit64u old, Bit64u _new, Bit64u mask)
 
 // static memory read/write functions
 
-static bx_bool hpet_read(bx_phy_address a20addr, unsigned len, void *data, void *param)
+static bool hpet_read(bx_phy_address a20addr, unsigned len, void *data, void *param)
 {
   Bit32u value1;
   Bit64u value2;
@@ -138,7 +139,7 @@ static bx_bool hpet_read(bx_phy_address a20addr, unsigned len, void *data, void 
   return 1;
 }
 
-static bx_bool hpet_write(bx_phy_address a20addr, unsigned len, void *data, void *param)
+static bool hpet_write(bx_phy_address a20addr, unsigned len, void *data, void *param)
 {
   if (len == 4) { // must be 32-bit aligned
     if ((a20addr & 0x3) != 0) {
@@ -166,6 +167,7 @@ static bx_bool hpet_write(bx_phy_address a20addr, unsigned len, void *data, void
 bx_hpet_c::bx_hpet_c()
 {
   put("HPET");
+  memset(&s, 0, sizeof(s));
 }
 
 bx_hpet_c::~bx_hpet_c()
@@ -256,7 +258,7 @@ Bit64u bx_hpet_c::hpet_calculate_diff(HPETTimer *t, Bit64u current)
   }
 }
 
-void bx_hpet_c::update_irq(HPETTimer *timer, bx_bool set)
+void bx_hpet_c::update_irq(HPETTimer *timer, bool set)
 {
   Bit64u mask;
   int route;
@@ -309,7 +311,7 @@ void bx_hpet_c::hpet_timer()
 
   if (timer_is_periodic(t)) {
     if (t->config & HPET_TN_32BIT) {
-      Bit64u cmp64 = hpet_cmp32_to_cmp64(t->last_checked, t->cmp);
+      Bit64u cmp64 = hpet_cmp32_to_cmp64(t->last_checked, (Bit32u)t->cmp);
       if (hpet_time_between(t->last_checked, cur_tick, cmp64)) {
         update_irq(t, 1);
         if ((Bit32u)t->period != 0) {
@@ -331,7 +333,7 @@ void bx_hpet_c::hpet_timer()
     }
   } else { // One-shot timer
     if (t->config & HPET_TN_32BIT) {
-      Bit64u cmp64 = hpet_cmp32_to_cmp64(t->last_checked, t->cmp);
+      Bit64u cmp64 = hpet_cmp32_to_cmp64(t->last_checked, (Bit32u)t->cmp);
       Bit64u wrap = hpet_cmp32_to_cmp64(t->last_checked, 0);
       if (hpet_time_between(t->last_checked, cur_tick, cmp64) || hpet_time_between(t->last_checked, cur_tick, wrap)) {
         update_irq(t, 1);

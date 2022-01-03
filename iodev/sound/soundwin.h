@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundwin.h 13249 2017-06-02 16:56:58Z vruppert $
+// $Id: soundwin.h 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2015  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -196,7 +196,7 @@ private:
 
   LPWAVEHDR WaveInHdr;
   LPSTR WaveInData;
-  bx_bool recording;
+  bool recording;
 
   int recordnextpacket();
 };

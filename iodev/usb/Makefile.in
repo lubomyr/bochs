@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2015  The Bochs Project
+# Copyright (C) 2012-2021  The Bochs Project
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,7 +49,7 @@ top_builddir    = ../..
 LIBTOOL=@LIBTOOL@
 WIN32_DLL_IMPORT_LIBRARY=../../@WIN32_DLL_IMPORT_LIB@
 
-USBDEV_OBJS = usb_hid.o usb_hub.o usb_msd.o usb_printer.o usb_cbi.o
+USBDEV_OBJS = usb_hid.o usb_hub.o usb_msd.o usb_printer.o usb_floppy.o
 UHCICORE_OBJ = uhci_core.o
 SCSI_OBJS = scsi_device.o
 
@@ -57,7 +57,8 @@ BX_INCDIRS = -I.. -I../.. -I$(srcdir)/.. -I$(srcdir)/../.. -I../../@INSTRUMENT_D
 LOCAL_CXXFLAGS = $(MCH_CFLAGS)
 
 OBJS_THAT_CANNOT_BE_PLUGINS = \
-  usb_common.o
+  usb_common.o \
+  usb_pcap.o
 
 OBJS_THAT_CAN_BE_PLUGINS = \
   @USBHC_OBJS@ \
@@ -70,7 +71,7 @@ OBJS_THAT_SUPPORT_OTHER_PLUGINS = \
 NONPLUGIN_OBJS = @IODEV_EXT_NON_PLUGIN_OBJS@
 PLUGIN_OBJS = @IODEV_EXT_PLUGIN_OBJS@
 USBHC_DLL_TARGETS = @USBHC_DLL_TARGETS@
-USBDEV_DLL_TARGETS = bx_usb_hid.dll bx_usb_hub.dll bx_usb_msd.dll bx_usb_printer.dll bx_usb_cbi.dll
+USBDEV_DLL_TARGETS = bx_usb_hid.dll bx_usb_hub.dll bx_usb_msd.dll bx_usb_printer.dll bx_usb_floppy.dll
 
 all: libusb.a
 
@@ -123,8 +124,8 @@ bx_usb_ehci.dll: usb_ehci.o uhci_core.o
 bx_usb_xhci.dll: usb_xhci.o
 	@LINK_DLL@ usb_xhci.o $(WIN32_DLL_IMPORT_LIBRARY)
 
-bx_usb_cbi.dll: usb_cbi.o
-	@LINK_DLL@ usb_cbi.o $(WIN32_DLL_IMPORT_LIBRARY)
+bx_usb_floppy.dll: usb_floppy.o
+	@LINK_DLL@ usb_floppy.o $(WIN32_DLL_IMPORT_LIBRARY)
 
 bx_usb_hid.dll: usb_hid.o
 	@LINK_DLL@ usb_hid.o $(WIN32_DLL_IMPORT_LIBRARY)
@@ -157,154 +158,188 @@ dist-clean: clean
 # building plugins.
 ###########################################
 scsi_device.o: scsi_device.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../hdimage/hdimage.h ../hdimage/cdrom.h \
- scsi_device.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../hdimage/hdimage.h ../hdimage/cdrom.h scsi_device.h
 uhci_core.o: uhci_core.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h
-usb_cbi.o: usb_cbi.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h ../hdimage/hdimage.h usb_cbi.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h
 usb_common.o: usb_common.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hid.h usb_hub.h usb_msd.h usb_cbi.h \
- usb_printer.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_pcap.h usb_common.h
 usb_ehci.o: usb_ehci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h ../../qemu-queue.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h ../../qemu-queue.h \
  usb_ehci.h
+usb_floppy.o: usb_floppy.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h ../hdimage/hdimage.h usb_floppy.h
 usb_hid.o: usb_hid.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hid.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_hid.h
 usb_hub.o: usb_hub.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hub.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_hub.h
 usb_msd.o: usb_msd.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h ../hdimage/cdrom.h ../hdimage/hdimage.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h ../hdimage/cdrom.h ../hdimage/hdimage.h \
  scsi_device.h usb_msd.h
 usb_ohci.o: usb_ohci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h usb_ohci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h usb_ohci.h
+usb_pcap.o: usb_pcap.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_pcap.h usb_common.h
 usb_printer.o: usb_printer.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_printer.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_printer.h
 usb_uhci.o: usb_uhci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h usb_uhci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h usb_uhci.h
 usb_xhci.o: usb_xhci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h usb_xhci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h usb_xhci.h
 scsi_device.lo: scsi_device.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../hdimage/hdimage.h ../hdimage/cdrom.h \
- scsi_device.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../hdimage/hdimage.h ../hdimage/cdrom.h scsi_device.h
 uhci_core.lo: uhci_core.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h
-usb_cbi.lo: usb_cbi.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h ../hdimage/hdimage.h usb_cbi.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h
 usb_common.lo: usb_common.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hid.h usb_hub.h usb_msd.h usb_cbi.h \
- usb_printer.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_pcap.h usb_common.h
 usb_ehci.lo: usb_ehci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h ../../qemu-queue.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h ../../qemu-queue.h \
  usb_ehci.h
+usb_floppy.lo: usb_floppy.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h ../hdimage/hdimage.h usb_floppy.h
 usb_hid.lo: usb_hid.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hid.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_hid.h
 usb_hub.lo: usb_hub.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_hub.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_hub.h
 usb_msd.lo: usb_msd.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h ../hdimage/cdrom.h ../hdimage/hdimage.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h ../hdimage/cdrom.h ../hdimage/hdimage.h \
  scsi_device.h usb_msd.h
 usb_ohci.lo: usb_ohci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h usb_ohci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h usb_ohci.h
+usb_pcap.lo: usb_pcap.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_pcap.h usb_common.h
 usb_printer.lo: usb_printer.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h usb_common.h usb_printer.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ usb_common.h usb_pcap.h usb_printer.h
 usb_uhci.lo: usb_uhci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h uhci_core.h usb_uhci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h uhci_core.h usb_uhci.h
 usb_xhci.lo: usb_xhci.@CPP_SUFFIX@ ../iodev.h ../../bochs.h ../../config.h \
- ../../osdep.h ../../bx_debug/debug.h ../../config.h ../../osdep.h \
- ../../gui/siminterface.h ../../cpudb.h ../../gui/paramtree.h \
- ../../memory/memory-bochs.h ../../pc_system.h ../../gui/gui.h \
- ../../instrument/stubs/instrument.h ../../plugin.h ../../extplugin.h \
- ../../param_names.h ../pci.h usb_common.h usb_xhci.h
+ ../../osdep.h ../../gui/paramtree.h ../../logio.h \
+ ../../instrument/stubs/instrument.h ../../misc/bswap.h ../../plugin.h \
+ ../../extplugin.h ../../param_names.h ../../pc_system.h \
+ ../../bx_debug/debug.h ../../config.h ../../osdep.h \
+ ../../memory/memory-bochs.h ../../gui/siminterface.h ../../gui/gui.h \
+ ../pci.h usb_common.h usb_pcap.h usb_xhci.h

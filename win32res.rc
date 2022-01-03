@@ -1,12 +1,13 @@
 #define ISOLATION_AWARE_ENABLED
 #include <windows.h>
+#include "config.h"
 #include "gui/win32res.h"
 
 ICON_BOCHS ICON build/win32/nsis/bochs.ico
 ICON_BOCHS2 ICON build/win32/nsis/logo.ico
 
 // Manifest for both 32-bit and 64-bit Windows
-#ifndef VSIDE
+#if !defined(VSIDE) && !BX_WITH_WX
 1 24 build/win32/bochs.manifest
 #endif
 
@@ -76,16 +77,18 @@ BEGIN
     PUSHBUTTON      "Apply", IDAPPLY, 155, 155, 50, 14
 END
 
-PLUGIN_CTRL_DLG DIALOG 100, 120, 180, 135
+PLUGIN_CTRL_DLG DIALOG 100, 120, 280, 140
 STYLE DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 CAPTION "Optional Plugin Control"
 FONT 8, "Helv"
 BEGIN
-    LISTBOX         IDPLUGLIST, 15, 15, 85, 100, WS_VSCROLL | WS_TABSTOP
-    EDITTEXT        IDEDIT, 110, 15, 60, 14
-    PUSHBUTTON      "Load", IDLOAD, 110, 35, 50, 14
-    PUSHBUTTON      "Unload", IDUNLOAD, 110, 55, 50, 14
-    DEFPUSHBUTTON   "OK", IDOK, 65, 115, 50, 14
+    LTEXT           "Available", IDPLUGTXT1, 40, 10, 55, 14
+    LISTBOX         IDPLUGLIST1, 15, 20, 85, 100, WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Loaded", IDPLUGTXT2, 200, 10, 55, 14
+    LISTBOX         IDPLUGLIST2, 175, 20, 85, 100, WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      ">> Load >>", IDLOAD, 110, 40, 50, 14
+    PUSHBUTTON      "<< Unload <<", IDUNLOAD, 110, 60, 50, 14
+    DEFPUSHBUTTON   "OK", IDOK, 115, 120, 50, 14
 END
 
 PARAM_DLG DIALOG 30, 30, 200, 65
@@ -98,4 +101,6 @@ BEGIN
 END
 
 #include "bxversion.rc"
+#if BX_DEBUGGER_GUI
 #include "win32_enh_dbg.rc"
+#endif

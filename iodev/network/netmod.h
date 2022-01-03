@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netmod.h 13109 2017-03-12 07:48:08Z vruppert $
+// $Id: netmod.h 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -27,41 +27,12 @@
 #ifndef BX_NETMOD_H
 #define BX_NETMOD_H
 
-#ifndef BXHUB
-// Pseudo device that loads the lowlevel networking module
-class BOCHSAPI bx_netmod_ctl_c : public logfunctions {
-public:
-  bx_netmod_ctl_c();
-  virtual ~bx_netmod_ctl_c() {}
-  void init(void);
-  void exit(void);
-  virtual void* init_module(bx_list_c *base, void* rxh, void* rxstat, bx_devmodel_c *dev);
-};
-
-BOCHSAPI extern bx_netmod_ctl_c bx_netmod_ctl;
-#endif
-
-#define BX_PACKET_BUFSIZE 2048 // Enough for an ether frame
-
-// device receive status definitions
-#define BX_NETDEV_RXREADY  0x0001
-#define BX_NETDEV_SPEED    0x000e
-#define BX_NETDEV_10MBIT   0x0002
-#define BX_NETDEV_100MBIT  0x0004
-#define BX_NETDEV_1GBIT    0x0008
+#define BX_PACKET_BUFSIZE 1514 // Maximum size of an ethernet frame
 
 // this should not be smaller than an arp reply with an ethernet header
 #define MIN_RX_PACKET_LEN 60
 
-typedef void (*eth_rx_handler_t)(void *arg, const void *buf, unsigned len);
-typedef Bit32u (*eth_rx_status_t)(void *arg);
-
 static const Bit8u broadcast_macaddr[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
-
-#ifndef BXHUB
-int execute_script(bx_devmodel_c *netdev, const char *name, char* arg1);
-void BOCHSAPI_MSVCONLY write_pktlog_txt(FILE *pktlog_txt, const Bit8u *buf, unsigned len, bx_bool host_to_guest);
-#endif
 
 BX_CPP_INLINE Bit16u get_net2(const Bit8u *buf)
 {
@@ -92,6 +63,35 @@ BX_CPP_INLINE void put_net4(Bit8u *buf,Bit32u data)
 }
 
 #ifndef BXHUB
+
+// Pseudo device that loads the lowlevel networking module
+class BOCHSAPI bx_netmod_ctl_c : public logfunctions {
+public:
+  bx_netmod_ctl_c();
+  virtual ~bx_netmod_ctl_c() {}
+  void init(void);
+  const char **get_module_names();
+  void list_modules(void);
+  void exit(void);
+  virtual void* init_module(bx_list_c *base, void *rxh, void *rxstat, logfunctions *netdev);
+};
+
+BOCHSAPI extern bx_netmod_ctl_c bx_netmod_ctl;
+
+// device receive status definitions
+#define BX_NETDEV_RXREADY  0x0001
+#define BX_NETDEV_SPEED    0x000e
+#define BX_NETDEV_10MBIT   0x0002
+#define BX_NETDEV_100MBIT  0x0004
+#define BX_NETDEV_1GBIT    0x0008
+
+typedef void (*eth_rx_handler_t)(void *arg, const void *buf, unsigned len);
+typedef Bit32u (*eth_rx_status_t)(void *arg);
+
+int execute_script(logfunctions *netdev, const char *name, char* arg1);
+void BOCHSAPI_MSVCONLY write_pktlog_txt(FILE *pktlog_txt, const Bit8u *buf, unsigned len, bool host_to_guest);
+size_t BOCHSAPI_MSVCONLY strip_whitespace(char *s);
+
 //
 //  The eth_pktmover class is used by ethernet chip emulations
 // to interface to the outside world. An instance of this
@@ -105,7 +105,7 @@ public:
   virtual void sendpkt(void *buf, unsigned io_len) = 0;
   virtual ~eth_pktmover_c () {}
 protected:
-  bx_devmodel_c *netdev;
+  logfunctions *netdev;
   eth_rx_handler_t  rxh;   // receive callback
   eth_rx_status_t  rxstat; // receive status callback
 };
@@ -118,13 +118,13 @@ protected:
 //
 class BOCHSAPI_MSVCONLY eth_locator_c {
 public:
-  static bx_bool module_present(const char *type);
+  static bool module_present(const char *type);
   static void cleanup();
   static eth_pktmover_c *create(const char *type, const char *netif,
                                 const char *macaddr,
                                 eth_rx_handler_t rxh,
                                 eth_rx_status_t rxstat,
-                                bx_devmodel_c *dev,
+                                logfunctions *netdev,
                                 const char *script);
 protected:
   eth_locator_c(const char *type);
@@ -133,7 +133,7 @@ protected:
                                    const char *macaddr,
                                    eth_rx_handler_t rxh,
                                    eth_rx_status_t rxstat,
-                                   bx_devmodel_c *dev,
+                                   logfunctions *netdev,
                                    const char *script) = 0;
 private:
   static eth_locator_c *all;

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: paramtree.h 13654 2019-12-09 16:44:36Z sshwarts $
+// $Id: paramtree.h 14206 2021-03-28 06:31:03Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2010-2018  The Bochs Project
+//  Copyright (C) 2010-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -104,8 +104,8 @@ protected:
   const char *long_text_format;  // printf format string. %d for ints, %s for strings, etc.
   char *ask_format;  // format string for asking for a new value
   char *group_name;  // name of the group the param belongs to
-  int runtime_param;
-  int enabled;
+  bool runtime_param;
+  bool enabled;
   Bit32u options;
   // The dependent_list is initialized to NULL.  If dependent_list is modified
   // to point to a bx_list_c of other parameters, the set() method of the
@@ -146,14 +146,14 @@ public:
   void set_description(const char *text);
   const char *get_description() const { return description; }
 
-  virtual void set_runtime_param(int val) { runtime_param = val; }
-  int get_runtime_param() const { return runtime_param; }
+  virtual void set_runtime_param(bool val) { runtime_param = val; }
+  bool get_runtime_param() const { return runtime_param; }
 
   void set_group(const char *group);
   const char *get_group() const {return group_name;}
 
-  int get_enabled() const { return enabled; }
-  virtual void set_enabled(int _enabled) { enabled = _enabled; }
+  bool get_enabled() const { return enabled; }
+  virtual void set_enabled(bool _enabled) { enabled = _enabled; }
 
   static const char* set_default_format(const char *f);
   static const char *get_default_format() { return default_text_format; }
@@ -166,21 +166,16 @@ public:
   void set_device_param(void *dev) { device = dev; }
   void *get_device_param() { return device; }
 
-#if BX_USE_TEXTCONFIG
-  virtual void text_print() {}
-  virtual int text_ask() { return -1; }
-#endif
-
   virtual int parse_param(const char *value) { return -1; }
 
   virtual void dump_param(FILE *fp) {}
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false) { return 0; }
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false) { return 0; }
 };
 
-typedef Bit64s (*param_event_handler)(class bx_param_c *, int set, Bit64s val);
+typedef Bit64s (*param_event_handler)(class bx_param_c *, bool set, Bit64s val);
 typedef Bit64s (*param_save_handler)(void *devptr, class bx_param_c *);
 typedef void (*param_restore_handler)(void *devptr, class bx_param_c *, Bit64s val);
-typedef int (*param_enable_handler)(class bx_param_c *, int en);
+typedef bool (*param_enable_handler)(class bx_param_c *, bool en);
 
 class BOCHSAPI bx_param_num_c : public bx_param_c {
   BOCHSAPI_CYGONLY static Bit32u default_base;
@@ -195,7 +190,7 @@ protected:
     Bit8s  *p8bit;   // used by bx_shadow_num_c
     float  *pfloat;  // used by bx_shadow_num_c
     double *pdouble; // used by bx_shadow_num_c
-    bx_bool *pbool;  // used by bx_shadow_bool_c
+    bool   *pbool;   // used by bx_shadow_bool_c
   } val;
   param_event_handler handler;
   void *sr_devptr;
@@ -203,7 +198,7 @@ protected:
   param_restore_handler restore_handler;
   param_enable_handler enable_handler;
   int base;
-  bx_bool is_shadow;
+  bool is_shadow;
 public:
   enum {
     // When a bx_param_num_c is displayed in dialog, USE_SPIN_CONTROL controls
@@ -215,13 +210,13 @@ public:
       const char *label,
       const char *description,
       Bit64s min, Bit64s max, Bit64s initial_val,
-      bx_bool is_shadow = 0);
-  virtual void reset() { val.number = initial_val; }
+      bool is_shadow = 0);
+  virtual void reset() { set(initial_val); }
   void set_handler(param_event_handler handler);
   void set_sr_handlers(void *devptr, param_save_handler save, param_restore_handler restore);
   void set_enable_handler(param_enable_handler handler) { enable_handler = handler; }
   void set_dependent_list(bx_list_c *l);
-  virtual void set_enabled(int enabled);
+  virtual void set_enabled(bool enabled);
   virtual Bit32s get() { return (Bit32s) get64(); }
   virtual Bit64s get64();
   virtual void set(Bit64s val);
@@ -233,13 +228,9 @@ public:
   Bit64s get_max() const { return max; }
   static Bit32u set_default_base(Bit32u val);
   static Bit32u get_default_base() { return default_base; }
-#if BX_USE_TEXTCONFIG
-  virtual void text_print();
-  virtual int text_ask();
-#endif
   virtual int parse_param(const char *value);
   virtual void dump_param(FILE *fp);
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false);
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false);
 };
 
 // a bx_shadow_num_c is like a bx_param_num_c except that it doesn't
@@ -321,31 +312,22 @@ public:
       const char *label,
       const char *description,
       Bit64s initial_val,
-      bx_bool is_shadow = 0);
-#if BX_USE_TEXTCONFIG
-  virtual void text_print();
-  virtual int text_ask();
-#endif
+      bool is_shadow = 0);
   virtual int parse_param(const char *value);
   virtual void dump_param(FILE *fp);
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false);
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false);
 };
 
 // a bx_shadow_bool_c is a shadow param based on bx_param_bool_c.
 class BOCHSAPI bx_shadow_bool_c : public bx_param_bool_c {
-  // each bit of a bitfield can be a separate value.  bitnum tells which
-  // bit is used.  get/set will only modify that bit.
-  Bit8u bitnum;
 public:
   bx_shadow_bool_c(bx_param_c *parent,
       const char *name,
       const char *label,
-      bx_bool *ptr_to_real_val,
-      Bit8u bitnum = 0);
+      bool *ptr_to_real_val);
   bx_shadow_bool_c(bx_param_c *parent,
       const char *name,
-      bx_bool *ptr_to_real_val,
-      Bit8u bitnum = 0);
+      bool *ptr_to_real_val);
   virtual Bit64s get64();
   virtual void set(Bit64s val);
 };
@@ -365,25 +347,22 @@ public:
       Bit64s value_base = 0);
   virtual ~bx_param_enum_c();
   const char *get_choice(int n) { return choices[n]; }
+  const char **get_choices() { return choices; }
   const char *get_selected() { return choices[val.number - min]; }
   int find_by_name(const char *s);
   virtual void set(Bit64s val);
-  bx_bool set_by_name(const char *s);
-  void set_dependent_list(bx_list_c *l, bx_bool enable_all);
+  bool set_by_name(const char *s);
+  void set_dependent_list(bx_list_c *l, bool enable_all);
   void set_dependent_bitmap(Bit64s value, Bit64u bitmap);
   Bit64u get_dependent_bitmap(Bit64s value);
-  virtual void set_enabled(int enabled);
-#if BX_USE_TEXTCONFIG
-  virtual void text_print();
-  virtual int text_ask();
-#endif
+  virtual void set_enabled(bool enabled);
   virtual int parse_param(const char *value);
   virtual void dump_param(FILE *fp);
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false);
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false);
 };
 
 typedef const char* (*param_string_event_handler)(class bx_param_string_c *,
-                     int set, const char *oldval, const char *newval, int maxlen);
+                     bool set, const char *oldval, const char *newval, int maxlen);
 
 class BOCHSAPI bx_param_string_c : public bx_param_c {
 protected:
@@ -410,23 +389,20 @@ public:
   virtual void reset();
   void set_handler(param_string_event_handler handler);
   void set_enable_handler(param_enable_handler handler);
-  virtual void set_enabled(int enabled);
+  param_enable_handler get_enable_handler() { return enable_handler; }
+  virtual void set_enabled(bool enabled);
   void set_dependent_list(bx_list_c *l);
   Bit32s get(char *buf, int len);
   char *getptr() {return val; }
   const char *getptr() const {return val; }
   void set(const char *buf);
-  bx_bool equals(const char *buf) const;
+  bool equals(const char *buf) const;
   int get_maxsize() const {return maxsize; }
   void set_initial_val(const char *buf);
-  bx_bool isempty() const;
-#if BX_USE_TEXTCONFIG
-  virtual void text_print();
-  virtual int text_ask();
-#endif
+  bool isempty() const;
   virtual int parse_param(const char *value);
   virtual void dump_param(FILE *fp);
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false);
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false);
 };
 
 class BOCHSAPI bx_param_bytestring_c : public bx_param_string_c {
@@ -447,16 +423,12 @@ public:
 
   Bit32s get(char *buf, int len);
   void set(const char *buf);
-  bx_bool equals(const char *buf) const;
+  bool equals(const char *buf) const;
   void set_initial_val(const char *buf);
-  bx_bool isempty() const;
-
-#if BX_USE_TEXTCONFIG
-  virtual int text_ask();
-#endif
+  bool isempty() const;
 
   virtual int parse_param(const char *value);
-  virtual int dump_param(char *buf, int buflen, bx_bool dquotes = false);
+  virtual int dump_param(char *buf, int buflen, bool dquotes = false);
 };
 
 // Declare a filename class.  It is identical to a string, except that
@@ -478,16 +450,16 @@ public:
 class BOCHSAPI bx_shadow_data_c : public bx_param_c {
   Bit32u data_size;
   Bit8u *data_ptr;
-  bx_bool is_text;
+  bool is_text;
 public:
   bx_shadow_data_c(bx_param_c *parent,
       const char *name,
       Bit8u *ptr_to_data,
-      Bit32u data_size, bx_bool is_text=0);
+      Bit32u data_size, bool is_text=0);
   Bit8u *getptr() {return data_ptr;}
   const Bit8u *getptr() const {return data_ptr;}
   Bit32u get_size() const {return data_size;}
-  bx_bool is_text_format() const {return is_text;}
+  bool is_text_format() const {return is_text;}
   Bit8u get(Bit32u index);
   void set(Bit32u index, Bit8u value);
 };
@@ -571,21 +543,17 @@ public:
   bx_param_c *get(int index);
   bx_param_c *get_by_name(const char *name);
   int get_size() const { return size; }
-  int get_choice() const { return choice; }
-  void set_choice(int new_choice) { choice = new_choice; }
+  Bit32u get_choice() const { return choice; }
+  void set_choice(Bit32u new_choice) { choice = new_choice; }
   char *get_title() { return title; }
   void set_parent(bx_param_c *newparent);
   bx_param_c *get_parent() { return parent; }
   virtual void reset();
   virtual void clear();
   virtual void remove(const char *name);
-  virtual void set_runtime_param(int val);
+  virtual void set_runtime_param(bool val);
   void set_restore_handler(void *devptr, list_restore_handler restore);
   void restore();
-#if BX_USE_TEXTCONFIG
-  virtual void text_print();
-  virtual int text_ask();
-#endif
 };
 
 #endif

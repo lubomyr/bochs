@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: crregs.cc 13767 2020-01-03 19:33:16Z sshwarts $
+// $Id: crregs.cc 14179 2021-03-11 21:19:45Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2010-2019 Stanislav Shwartsman
+//   Copyright (c) 2010-2020 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -978,7 +978,7 @@ bx_address BX_CPU_C::read_CR4(void)
 }
 #endif
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR0(bx_address cr0_val)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR0(bx_address cr0_val)
 {
   bx_cr0_t temp_cr0;
 
@@ -1026,7 +1026,7 @@ bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR0(bx_address cr0_val)
   return 1;
 }
 
-bx_bool BX_CPU_C::SetCR0(bxInstruction_c *i, bx_address val)
+bool BX_CPU_C::SetCR0(bxInstruction_c *i, bx_address val)
 {
   if (! check_CR0(val)) return 0;
 
@@ -1040,7 +1040,7 @@ bx_bool BX_CPU_C::SetCR0(bxInstruction_c *i, bx_address val)
 #endif
 
 #if BX_CPU_LEVEL >= 6
-  bx_bool pg = (val_32 >> 31) & 0x1;
+  bool pg = (val_32 >> 31) & 0x1;
 #endif
 
 #if BX_SUPPORT_X86_64
@@ -1143,7 +1143,7 @@ bx_bool BX_CPU_C::SetCR0(bxInstruction_c *i, bx_address val)
   if ((oldCR0 & 0x80010001) != (val_32 & 0x80010001)) {
     TLB_flush(); // Flush Global entries also
 #if BX_SUPPORT_PKEYS
-    set_PKRU(BX_CPU_THIS_PTR pkru); // recalculate protection keys due to CR0.WP change
+    set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs); // recalculate protection keys due to CR0.WP change
 #endif
   }
 
@@ -1256,12 +1256,17 @@ Bit32u BX_CPU_C::get_cr4_allow_mask(void)
     allowMask |= BX_CR4_CET_MASK;
 #endif
 
+#if BX_SUPPORT_PKEYS
+  if (is_cpu_extension_supported(BX_ISA_PKS))
+    allowMask |= BX_CR4_PKS_MASK;
+#endif
+
 #endif
 
   return allowMask;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR4(bx_address cr4_val)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR4(bx_address cr4_val)
 {
   // check if trying to set undefined bits
   if (cr4_val & ~((bx_address) BX_CPU_THIS_PTR cr4_suppmask)) {
@@ -1305,7 +1310,7 @@ bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::check_CR4(bx_address cr4_val)
   return 1;
 }
 
-bx_bool BX_CPU_C::SetCR4(bxInstruction_c *i, bx_address val)
+bool BX_CPU_C::SetCR4(bxInstruction_c *i, bx_address val)
 {
   if (! check_CR4(val)) return 0;
 
@@ -1361,16 +1366,16 @@ bx_bool BX_CPU_C::SetCR4(bxInstruction_c *i, bx_address val)
 #endif
 #endif
 
-  // re-calculate protection keys if CR4.PKE was set
+  // re-calculate protection keys if CR4.PKE/CR4.PKS was set
 #if BX_SUPPORT_PKEYS
-  set_PKRU(BX_CPU_THIS_PTR pkru);
+  set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs);
 #endif
 
   return 1;
 }
 #endif // BX_CPU_LEVEL >= 5
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::SetCR3(bx_address val)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::SetCR3(bx_address val)
 {
 #if BX_SUPPORT_X86_64
   if (long_mode()) {
@@ -1395,7 +1400,7 @@ bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::SetCR3(bx_address val)
 }
 
 #if BX_CPU_LEVEL >= 5
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::SetEFER(bx_address val_64)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::SetEFER(bx_address val_64)
 {
   Bit32u val32 = (Bit32u) val_64;
 
@@ -1454,7 +1459,7 @@ void BX_CPU_C::WriteCR8(bxInstruction_c *i, bx_address val)
 
 #if BX_SUPPORT_SVM
   if (BX_CPU_THIS_PTR in_svm_guest) {
-    SVM_V_TPR = tpr;
+    SVM_V_TPR = tpr >> 4;   // V_TPR just matching CR8[3:0]
     handleInterruptMaskChange();
     if (SVM_V_INTR_MASKING) return;
   }
@@ -1537,7 +1542,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::CLTS(bxInstruction_c *i)
 
 #if BX_X86_DEBUGGER
 
-bx_bool BX_CPU_C::hwbreakpoint_check(bx_address laddr, unsigned opa, unsigned opb)
+bool BX_CPU_C::hwbreakpoint_check(bx_address laddr, unsigned opa, unsigned opb)
 {
   laddr = LPFOf(laddr);
 
@@ -1781,7 +1786,7 @@ Bit32u BX_CPU_C::get_xcr0_allow_mask(void)
 
 Bit32u BX_CPU_C::get_ia32_xss_allow_mask(void)
 {
-  Bit64u ia32_xss_support_mask = 0;
+  Bit32u ia32_xss_support_mask = 0;
 #if BX_SUPPORT_CET
          ia32_xss_support_mask |= BX_XCR0_CET_U_MASK | BX_XCR0_CET_S_MASK;
 #endif

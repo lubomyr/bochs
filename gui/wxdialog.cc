@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wxdialog.cc 13634 2019-12-01 18:57:08Z vruppert $
+// $Id: wxdialog.cc 14183 2021-03-13 09:54:06Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2019  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -44,8 +44,9 @@
 #include <wx/notebook.h>
 
 #include "osdep.h"               // workarounds for missing stuff
+#include "gui/paramtree.h"       // config parameter tree
 #include "gui/siminterface.h"    // interface to the simulator
-#include "bxversion.h"           // get version string
+#include "logio.h"               // log level definitions
 #include "wxdialog.h"            // custom dialog boxes
 #include "wxmain.h"              // wxwidgets shared stuff
 
@@ -451,34 +452,45 @@ PluginControlDialog::PluginControlDialog(
   SetTitle(wxT("Optional Plugin Control"));
   vertSizer = new wxBoxSizer(wxVERTICAL);
   horzSizer = new wxBoxSizer(wxHORIZONTAL);
-  listSizer = new wxBoxSizer(wxVERTICAL);
-  editSizer = new wxBoxSizer(wxVERTICAL);
+  leftSizer = new wxBoxSizer(wxVERTICAL);
+  centerSizer = new wxBoxSizer(wxVERTICAL);
+  rightSizer = new wxBoxSizer(wxVERTICAL);
   buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-  horzSizer->Add(listSizer, 0, wxALIGN_LEFT);
-  horzSizer->Add(editSizer, 0, wxALIGN_RIGHT);
-  vertSizer->Add(horzSizer, 0, wxALIGN_LEFT);
+  horzSizer->Add(leftSizer, 0, wxALIGN_LEFT);
+  horzSizer->Add(centerSizer, 0, wxALIGN_CENTER);
+  horzSizer->Add(rightSizer, 0, wxALIGN_RIGHT);
+  vertSizer->Add(horzSizer, 0, wxALIGN_CENTER);
   vertSizer->Add(buttonSizer, 0, wxALIGN_CENTER);
-  // listSizer contents
-  pluglist = new wxListBox(this, ID_PluginList);
-  listSizer->Add(pluglist, 0, wxALL, 10);
-  // editSizer contents
-  plugname = new wxTextCtrl(this, ID_PluginName, wxT(""), wxDefaultPosition, wxSize(120, -1));
-  editSizer->Add(plugname, 0, wxALL, 10);
-  btn_load = new wxButton(this, ID_Load, wxT("Load"));
-  editSizer->Add(btn_load, 0, wxALL | wxALIGN_RIGHT, 5);
-  btn_unload = new wxButton(this, ID_Unload, wxT("Unload"));
-  editSizer->Add(btn_unload, 0, wxALL | wxALIGN_RIGHT, 5);
+  // leftSizer contents
+  plugtxt1 = new wxStaticText(this, -1, wxT("Available"));
+  pluglist1 = new wxListBox(this, ID_PluginList1, wxDefaultPosition, wxSize(120, 200));
+  leftSizer->Add(plugtxt1, 0, wxALL | wxALIGN_CENTER, 10);
+  leftSizer->Add(pluglist1, 0, wxALL, 10);
+  // rightSizer contents
+  plugtxt2 = new wxStaticText(this, -1, wxT("Loaded"));
+  pluglist2 = new wxListBox(this, ID_PluginList2, wxDefaultPosition, wxSize(120, 200));
+  rightSizer->Add(plugtxt2, 0, wxALL | wxALIGN_CENTER, 10);
+  rightSizer->Add(pluglist2, 0, wxALL, 10);
+  // centerSizer contents
+  btn_load = new wxButton(this, ID_Load, wxT(">> Load >>"));
+  centerSizer->Add(btn_load, 0, wxALL | wxALIGN_RIGHT, 5);
+  btn_unload = new wxButton(this, ID_Unload, wxT("<< Unload <<"));
+  centerSizer->Add(btn_unload, 0, wxALL | wxALIGN_RIGHT, 5);
   // buttonSizer contents
   wxButton *btn = new wxButton(this, wxID_HELP, BTNLABEL_HELP);
   buttonSizer->Add(btn, 0, wxALL, 5);
   btn = new wxButton(this, wxID_OK, BTNLABEL_OK);
   buttonSizer->Add(btn, 0, wxALL, 5);
-  // make sure all plugins are loaded and add them to the listbox
-  SIM->opt_plugin_ctrl("*", 1);
+  // add plugin names to the listboxes
   bx_list_c *plugin_ctrl = (bx_list_c*) SIM->get_param(BXPN_PLUGIN_CTRL);
+  int a = 0, b = 0;
   for (int i = 0; i < plugin_ctrl->get_size(); i++) {
     bx_param_bool_c *plugin = (bx_param_bool_c*)plugin_ctrl->get(i);
-    pluglist->Insert(wxString(plugin->get_name(), wxConvUTF8), i);
+    if (plugin->get()) {
+      pluglist2->Insert(wxString(plugin->get_name(), wxConvUTF8), a++);
+    } else {
+      pluglist1->Insert(wxString(plugin->get_name(), wxConvUTF8), b++);
+    }
   }
   btn_load->Enable(0);
   btn_unload->Enable(0);
@@ -497,41 +509,52 @@ void PluginControlDialog::Init()
 void PluginControlDialog::OnEvent(wxCommandEvent& event)
 {
   char buf[1024];
+  int i;
 
   int id = event.GetId();
   switch (id) {
-    case ID_PluginList:
+    case ID_PluginList1:
       if (event.GetEventType() == wxEVT_COMMAND_LISTBOX_SELECTED) {
-        btn_unload->Enable(1);
+        pluglist2->SetSelection(-1);
+        btn_load->Enable(1);
+        btn_unload->Enable(0);
       }
       break;
-    case ID_PluginName:
-      if (event.GetEventType() == wxEVT_COMMAND_TEXT_UPDATED) {
-        btn_load->Enable(!plugname->IsEmpty());
+    case ID_PluginList2:
+      if (event.GetEventType() == wxEVT_COMMAND_LISTBOX_SELECTED) {
+        pluglist1->SetSelection(-1);
+        btn_load->Enable(0);
+        btn_unload->Enable(1);
       }
       break;
     case ID_Load:
       {
-        wxString tmpname(plugname->GetValue());
-        strncpy(buf, tmpname.mb_str(wxConvUTF8), sizeof(buf));
+        i = pluglist1->GetSelection();
+        wxString tmpname = pluglist1->GetString(i);
+        strncpy(buf, tmpname.mb_str(wxConvUTF8), sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
         if (SIM->opt_plugin_ctrl(buf, 1)) {
           tmpname.Printf(wxT("Plugin '%s' loaded"), buf);
           wxMessageBox(tmpname, wxT("Plugin Control"), wxOK | wxICON_INFORMATION, this);
-          pluglist->Insert(wxString(buf, wxConvUTF8), pluglist->GetCount());
+          pluglist1->Delete(i);
+          pluglist2->Insert(wxString(buf, wxConvUTF8), pluglist2->GetCount());
+          pluglist1->SetSelection(-1);
+          btn_load->Enable(0);
         }
       }
       break;
     case ID_Unload:
       {
-        int i = pluglist->GetSelection();
-        wxString tmpname = pluglist->GetString(i);
-        strncpy(buf, tmpname.mb_str(wxConvUTF8), sizeof(buf));
+        i = pluglist2->GetSelection();
+        wxString tmpname = pluglist2->GetString(i);
+        strncpy(buf, tmpname.mb_str(wxConvUTF8), sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
         if (SIM->opt_plugin_ctrl(buf, 0)) {
           tmpname.Printf(wxT("Plugin '%s' unloaded"), buf);
           wxMessageBox(tmpname, wxT("Plugin Control"), wxOK | wxICON_INFORMATION, this);
-          pluglist->Delete(i);
+          pluglist1->Insert(wxString(buf, wxConvUTF8), pluglist1->GetCount());
+          pluglist2->Delete(i);
+          pluglist2->SetSelection(-1);
           btn_unload->Enable(0);
         }
       }
@@ -1019,7 +1042,7 @@ void ParamDialog::AddParam(
 
 bool ParamDialog::CopyGuiToParam()
 {
-  bx_bool sim_running = 0;
+  bool sim_running = 0;
 
   if (runtime) {
     sim_running = theFrame->SimThreadControl(0);
@@ -1084,7 +1107,7 @@ bool ParamDialog::CopyGuiToParam(bx_param_c *param)
       bx_param_string_c *stringp = (bx_param_string_c*) pstr->param;
       char buf[1024];
       wxString tmp(pstr->u.text->GetValue());
-      strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf));
+      strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf) - 1);
       buf[sizeof(buf)-1] = 0;
       if (!stringp->equals(buf)) stringp->set(buf);
       break;
@@ -1146,6 +1169,8 @@ void ParamDialog::EnableParam(int param_id, bool enabled)
 void ParamDialog::ProcessDependentList(ParamStruct *pstrChanged, bool enabled)
 {
   bx_param_c *dparam;
+  bx_param_string_c *sparam;
+  param_enable_handler enable_handler;
   ParamStruct *pstr;
   Bit64s value;
   bool en;
@@ -1162,6 +1187,13 @@ void ParamDialog::ProcessDependentList(ParamStruct *pstrChanged, bool enabled)
         dparam = list->get(i);
         if (dparam != enump) {
           en = (enable_bitmap & mask) && enabled;
+          if (dparam->get_type() == BXT_PARAM_STRING) {
+            sparam = (bx_param_string_c*)dparam;
+            enable_handler = sparam->get_enable_handler();
+            if (enable_handler) {
+              en = enable_handler(sparam, en);
+            }
+          }
           pstr = (ParamStruct*) paramHash->Get(dparam->get_id());
           if (pstr) {
             if (en != pstr->u.window->IsEnabled()) {
@@ -1374,7 +1406,7 @@ void FloppyConfigDialog::OnEvent(wxCommandEvent& event)
         {
           int cap = pstrMedia->u.choice->GetSelection();
           char name[1024];
-          strncpy(name, pstrPath->u.text->GetValue().mb_str(wxConvUTF8), sizeof(name));
+          strncpy(name, pstrPath->u.text->GetValue().mb_str(wxConvUTF8), sizeof(name) - 1);
           name[sizeof(name) - 1] = '\0';
           if ((floppy_type_n_sectors[cap] > 0) && (strlen(name) > 0) && (strcmp(name, "none"))) {
             if (CreateImage(0, floppy_type_n_sectors[cap], name)) {
@@ -1526,7 +1558,7 @@ int GetTextCtrlInt(wxTextCtrl *ctrl,
 {
   wxString tmp(ctrl->GetValue());
   char buf[1024];
-  strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf));
+  strncpy(buf, tmp.mb_str(wxConvUTF8), sizeof(buf) - 1);
   buf[sizeof(buf)-1] = '\0';
   int n = strtol(buf, NULL, 0);
   if (n != LONG_MIN && n != LONG_MAX) {

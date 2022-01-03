@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: mbuf.h 12219 2014-03-02 07:42:24Z vruppert $
+// $Id: mbuf.h 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1982, 1986, 1988, 1993
@@ -107,7 +107,7 @@ void m_init(Slirp *);
 void m_cleanup(Slirp *slirp);
 struct mbuf * m_get(Slirp *);
 void m_free(struct mbuf *);
-void m_cat(register struct mbuf *, register struct mbuf *);
+void m_cat(struct mbuf *, struct mbuf *);
 void m_inc(struct mbuf *, int);
 void m_adj(struct mbuf *, int);
 int m_copy(struct mbuf *, struct mbuf *, int, int);

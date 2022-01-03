@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_haswell_4770.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: corei7_haswell_4770.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2013-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "corei7_haswell_4770.h"
 
@@ -63,6 +64,7 @@ corei7_haswell_4770_t::corei7_haswell_4770_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   enable_cpu_extension(BX_ISA_NX);
   enable_cpu_extension(BX_ISA_1G_PAGES);
   enable_cpu_extension(BX_ISA_PCID);
+  enable_cpu_extension(BX_ISA_TSC_ADJUST);
   enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_SSE);
   enable_cpu_extension(BX_ISA_SSE2);
@@ -94,7 +96,6 @@ corei7_haswell_4770_t::corei7_haswell_4770_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   enable_cpu_extension(BX_ISA_INVPCID);
   enable_cpu_extension(BX_ISA_SMEP);
   enable_cpu_extension(BX_ISA_RDRAND);
-  enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_FCS_FDS_DEPRECATION);
 }
 
@@ -102,7 +103,7 @@ void corei7_haswell_4770_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, 
 {
   static const char* brand_string = "Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz\0\0\0\0\0\0\0\0";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
 
@@ -206,18 +207,11 @@ Bit32u corei7_haswell_4770_t::get_vmx_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void corei7_haswell_4770_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xD;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x2;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xD, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -368,7 +362,9 @@ void corei7_haswell_4770_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC
@@ -520,15 +516,8 @@ void corei7_haswell_4770_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_funct
     //   [19:19] ADCX/ADOX instructions support
     //   [20:20] SMAP: Supervisor Mode Access Prevention
     //   [31:21] reserved
-    leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-             /* BX_CPUID_EXT3_TSC_ADJUST | */ // not implemented yet
-                BX_CPUID_EXT3_BMI1 | 
-                BX_CPUID_EXT3_AVX2 |
-                BX_CPUID_EXT3_SMEP | 
-                BX_CPUID_EXT3_BMI2 | 
-                BX_CPUID_EXT3_ENCHANCED_REP_STRINGS |
-                BX_CPUID_EXT3_INVPCID |
-                BX_CPUID_EXT3_DEPRECATE_FCS_FDS;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx(BX_CPUID_EXT3_ENCHANCED_REP_STRINGS);
+
     leaf->ecx = 0;
     leaf->edx = 0;
     break;

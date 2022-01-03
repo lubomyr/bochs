@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vgacore.h 13514 2018-05-21 07:31:18Z vruppert $
+// $Id: vgacore.h 14267 2021-06-04 12:14:45Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -71,7 +71,7 @@ class bx_nonvga_device_c : public bx_pci_device_c {
 public:
   virtual void redraw_area(unsigned x0, unsigned y0,
                            unsigned width, unsigned height) {}
-  virtual void refresh_display(void *this_ptr, bx_bool redraw) {}
+  virtual void refresh_display(void *this_ptr, bool redraw) {}
   virtual void update(void) {}
 };
 #endif
@@ -82,29 +82,29 @@ public:
   virtual ~bx_vgacore_c();
   virtual void   init(void);
   virtual void   reset(unsigned type) {}
-  static bx_bool mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
-  static bx_bool mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool    mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool    mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
   virtual Bit8u  mem_read(bx_phy_address addr);
   virtual void   mem_write(bx_phy_address addr, Bit8u value);
-  virtual void   set_override(bx_bool enabled, void *dev);
-  virtual void   register_state(bx_list_c *parent);
+  virtual void   set_override(bool enabled, void *dev);
+  void           vgacore_register_state(bx_list_c *parent);
   virtual void   after_restore_state(void);
 #if BX_DEBUGGER
-  virtual void   debug_dump(void);
+  virtual void   debug_dump(int argc, char **argv);
 #endif
 
   virtual void   vga_redraw_area(unsigned x0, unsigned y0, unsigned width,
                                  unsigned height);
   virtual void   redraw_area(unsigned x0, unsigned y0, unsigned width,
                              unsigned height);
-  virtual void   refresh_display(void *this_ptr, bx_bool redraw);
+  virtual void   refresh_display(void *this_ptr, bool redraw);
   virtual void   get_text_snapshot(Bit8u **text_snapshot, unsigned *txHeight,
                                    unsigned *txWidth);
-  virtual bx_bool init_vga_extension(void) {return 0;}
-  virtual void   get_crtc_params(bx_crtc_params_t *crtcp);
+  virtual bool   init_vga_extension(void) {return 0;}
+  virtual void   get_crtc_params(bx_crtc_params_t *crtcp, Bit32u *vclock);
 
   static void    vga_timer_handler(void *);
-  static Bit64s  vga_param_handler(bx_param_c *param, int set, Bit64s val);
+  static Bit64s  vga_param_handler(bx_param_c *param, bool set, Bit64s val);
 
 protected:
   void init_standard_vga(void);
@@ -116,24 +116,24 @@ protected:
   static void   write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);
 
   Bit32u read(Bit32u address, unsigned io_len);
-  void   write(Bit32u address, Bit32u value, unsigned io_len, bx_bool no_log);
+  void   write(Bit32u address, Bit32u value, unsigned io_len, bool no_log);
 
-  Bit8u get_vga_pixel(Bit16u x, Bit16u y, Bit16u saddr, Bit16u lc, bx_bool bs, Bit8u **plane);
+  Bit8u get_vga_pixel(Bit16u x, Bit16u y, Bit16u saddr, Bit16u lc, bool bs, Bit8u **plane);
   virtual void update(void);
   void determine_screen_dimensions(unsigned *piHeight, unsigned *piWidth);
   void calculate_retrace_timing(void);
-  bx_bool skip_update(void);
+  bool skip_update(void);
 
   struct {
     struct {
-      bx_bool color_emulation;  // 1=color emulation, base address = 3Dx
+      bool color_emulation;     // 1=color emulation, base address = 3Dx
                                 // 0=mono emulation,  base address = 3Bx
-      bx_bool enable_ram;       // enable CPU access to video memory if set
+      bool enable_ram;          // enable CPU access to video memory if set
       Bit8u   clock_select;     // 0=25Mhz 1=28Mhz
-      bx_bool select_high_bank; // when in odd/even modes, select
+      bool select_high_bank;    // when in odd/even modes, select
                                 // high 64k bank if set
-      bx_bool horiz_sync_pol;   // bit6: negative if set
-      bx_bool vert_sync_pol;    // bit7: negative if set
+      bool horiz_sync_pol;      // bit6: negative if set
+      bool vert_sync_pol;       // bit7: negative if set
                                 //   bit7,bit6 represent number of lines on display:
                                 //   0 = reserved
                                 //   1 = 400 lines
@@ -144,26 +144,26 @@ protected:
     struct {
       Bit8u   address;
       Bit8u   reg[0x19];
-      bx_bool write_protect;
+      bool write_protect;
     } CRTC;
 
     struct {
-      bx_bool  flip_flop; /* 0 = address, 1 = data-write */
-      unsigned address;  /* register number */
-      bx_bool  video_enabled;
+      bool  flip_flop;  /* 0 = address, 1 = data-write */
+      unsigned address; /* register number */
+      bool  video_enabled;
       Bit8u    palette_reg[16];
       Bit8u    overscan_color;
       Bit8u    color_plane_enable;
       Bit8u    horiz_pel_panning;
       Bit8u    color_select;
       struct {
-        bx_bool graphics_alpha;
-        bx_bool display_type;
-        bx_bool enable_line_graphics;
-        bx_bool blink_intensity;
-        bx_bool pixel_panning_compat;
-        bx_bool pixel_clock_select;
-        bx_bool internal_palette_size;
+        bool graphics_alpha;
+        bool display_type;
+        bool enable_line_graphics;
+        bool blink_intensity;
+        bool pixel_panning_compat;
+        bool pixel_clock_select;
+        bool internal_palette_size;
       } mode_ctrl;
     } attribute_ctrl;
 
@@ -191,10 +191,10 @@ protected:
       Bit8u   read_map_select;
       Bit8u   write_mode;
       Bit32u  read_mode;
-      bx_bool odd_even;
-      bx_bool chain_odd_even;
+      bool odd_even;
+      bool chain_odd_even;
       Bit8u   shift_reg;
-      bx_bool graphics_alpha;
+      bool graphics_alpha;
       Bit8u   memory_mapping; /* 0 = use A0000-BFFFF
                                * 1 = use A0000-AFFFF EGA/VGA graphics modes
                                * 2 = use B0000-B7FFF Monochrome modes
@@ -208,30 +208,30 @@ protected:
     struct {
       Bit8u   index;
       Bit8u   map_mask;
-      bx_bool reset1;
-      bx_bool reset2;
+      bool reset1;
+      bool reset2;
       Bit8u   reg1;
       Bit8u   char_map_select;
-      bx_bool extended_mem;
-      bx_bool odd_even;
-      bx_bool chain_four;
-      bx_bool clear_screen;
+      bool extended_mem;
+      bool odd_even;
+      bool chain_four;
+      bool clear_screen;
     } sequencer;
 
-    bx_bool  vga_enabled;
-    bx_bool  vga_mem_updated;
+    bool  vga_enabled;
+    bool  vga_mem_updated;
     unsigned line_offset;
     unsigned line_compare;
     unsigned vertical_display_end;
     unsigned blink_counter;
-    bx_bool  *vga_tile_updated;
+    bool  *vga_tile_updated;
     Bit8u *memory;
     Bit32u memsize;
     Bit8u text_snapshot[128 * 1024]; // current text snapshot
     Bit8u tile[X_TILESIZE * Y_TILESIZE * 4]; /**< Currently allocates the tile as large as needed. */
     Bit16u charmap_address;
-    bx_bool x_dotclockdiv2;
-    bx_bool y_doublescan;
+    bool x_dotclockdiv2;
+    bool y_doublescan;
     // h/v retrace timing
     Bit32u vclk[4];
     Bit32u htotal_usec;
@@ -243,8 +243,9 @@ protected:
     Bit32u vrend_usec;
     // shift values for extensions
     Bit8u  plane_shift;
-    Bit32u plane_offset;
     Bit8u  dac_shift;
+    Bit32u ext_offset;
+    bool   ext_y_dblsize;
     // last active resolution and bpp
     Bit16u last_xres;
     Bit16u last_yres;
@@ -257,17 +258,17 @@ protected:
     Bit16u num_x_tiles;
     Bit16u num_y_tiles;
     // vga override mode
-    bx_bool vga_override;
+    bool vga_override;
 #if BX_SUPPORT_PCI
     bx_nonvga_device_c *nvgadev;
 #endif
   } s;  // state information
 
   int timer_id;
-  bx_bool update_realtime;
-  bx_bool vsync_realtime;
-  bx_param_string_c *vgaext;
-  bx_bool pci_enabled;
+  bool update_realtime;
+  bool vsync_realtime;
+  bx_param_enum_c *vga_ext;
+  bool pci_enabled;
 };
 
 #endif

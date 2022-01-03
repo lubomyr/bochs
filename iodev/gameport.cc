@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gameport.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: gameport.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -57,18 +57,19 @@ UINT STDCALL joyGetPos(UINT, LPJOYINFO);
 
 bx_gameport_c *theGameport = NULL;
 
-int CDECL libgameport_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(gameport)
 {
-  theGameport = new bx_gameport_c();
-  bx_devices.pluginGameport = theGameport;
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theGameport, BX_PLUGIN_GAMEPORT);
+  if (mode == PLUGIN_INIT) {
+    theGameport = new bx_gameport_c();
+    bx_devices.pluginGameport = theGameport;
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theGameport, BX_PLUGIN_GAMEPORT);
+  } else if (mode == PLUGIN_FINI) {
+    bx_devices.pluginGameport = &bx_devices.stubGameport;
+    delete theGameport;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libgameport_LTX_plugin_fini(void)
-{
-  bx_devices.pluginGameport = &bx_devices.stubGameport;
-  delete theGameport;
 }
 
 bx_gameport_c::bx_gameport_c()

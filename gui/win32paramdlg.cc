@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32paramdlg.cc 13461 2018-02-05 21:08:43Z vruppert $
+// $Id: win32paramdlg.cc 14203 2021-03-26 19:12:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2018  Volker Ruppert
+//  Copyright (C) 2009-2021  Volker Ruppert
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -18,12 +18,18 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
+// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
+// platforms that require a special tag on exported symbols, BX_PLUGGABLE
+// is used to know when we are exporting symbols and when we are importing.
+#define BX_PLUGGABLE
+
 #include "win32dialog.h"
+#include "bochs.h"
+#include "siminterface.h"
+#include "win32res.h"
 
 #if BX_USE_WIN32CONFIG
 
-#include "bochs.h"
-#include "win32res.h"
 #include "scrollwin.h"
 
 #define ID_LABEL 1000
@@ -59,7 +65,7 @@ UINT  nextDlgID;
 dlg_list_t *dlg_lists = NULL;
 
 
-bx_bool registerDlgList(UINT lid, bx_list_c *list)
+UINT registerDlgList(UINT lid, bx_list_c *list)
 {
   dlg_list_t *dlg_list = new dlg_list_t;
   dlg_list->list = list;
@@ -835,7 +841,7 @@ void SetParamList(HWND hDlg, bx_list_c *list)
             bx_param_num_c *nparam = (bx_param_num_c*)param;
             if (nparam->get_base() == BASE_HEX) {
               GetWindowText(GetDlgItem(hDlg, ID_PARAM + cid), buffer, 511);
-              sscanf(buffer, "%x", &val);
+              sscanf(buffer, "%llx", &val);
             } else {
               GetWindowText(GetDlgItem(hDlg, ID_PARAM + cid), buffer, 511);
               val = strtoll(buffer, NULL, 10);
@@ -894,6 +900,8 @@ void ProcessDependentList(HWND hDlg, bx_param_c *param, BOOL enabled)
   UINT cid;
   bx_list_c *deplist;
   bx_param_c *dparam;
+  bx_param_string_c *sparam;
+  param_enable_handler enable_handler;
   bx_param_enum_c *eparam;
   Bit64s value;
   Bit64u enable_bitmap, mask;
@@ -913,6 +921,13 @@ void ProcessDependentList(HWND hDlg, bx_param_c *param, BOOL enabled)
         dparam = deplist->get(i);
         if (dparam != param) {
           en = (enable_bitmap & mask) && enabled;
+          if (dparam->get_type() == BXT_PARAM_STRING) {
+            sparam = (bx_param_string_c*)dparam;
+            enable_handler = sparam->get_enable_handler();
+            if (enable_handler) {
+              en = enable_handler(sparam, en);
+            }
+          }
           cid = findDlgIDFromParam(dparam);
           if (cid != 0) {
             if (en != IsWindowEnabled(GetDlgItem(hDlg, ID_PARAM + cid))) {

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.cc 12615 2015-01-25 21:24:13Z sshwarts $
+// $Id: instrument.cc 14160 2021-02-21 09:25:33Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2012 Stanislav Shwartsman
@@ -28,7 +28,7 @@
 #define BX_IA_STATS_ENTRIES (BX_IA_LAST*2) /* /r and /m form */
 
 static struct bx_instr_ia_stats {
-   bx_bool active;
+   bool active;
    Bit32u ia_cnt[BX_IA_STATS_ENTRIES];
    Bit32u total_cnt;
    Bit32u interrupts;

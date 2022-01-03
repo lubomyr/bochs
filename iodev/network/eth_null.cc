@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_null.cc 13257 2017-06-16 08:27:55Z vruppert $
+// $Id: eth_null.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -31,22 +31,21 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libnull_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(null)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libnull_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -63,7 +62,7 @@ public:
   bx_null_pktmover_c(const char *netif, const char *macaddr,
                      eth_rx_handler_t rxh,
                      eth_rx_status_t rxstat,
-                     bx_devmodel_c *dev, const char *script);
+                     logfunctions *netdev, const char *script);
   virtual ~bx_null_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 private:
@@ -83,8 +82,8 @@ public:
 protected:
   eth_pktmover_c *allocate(const char *netif, const char *macaddr,
                            eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_null_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_null_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_null_match;
 
@@ -98,10 +97,10 @@ bx_null_pktmover_c::bx_null_pktmover_c(const char *netif,
                                        const char *macaddr,
                                        eth_rx_handler_t rxh,
                                        eth_rx_status_t rxstat,
-                                       bx_devmodel_c *dev,
+                                       logfunctions *netdev,
                                        const char *script)
 {
-  this->netdev = dev;
+  this->netdev = netdev;
   BX_INFO(("null network driver"));
 #if BX_ETH_NULL_LOGGING
   // Start the rx poll
@@ -149,7 +148,7 @@ void bx_null_pktmover_c::sendpkt(void *buf, unsigned io_len)
 #endif
 }
 
-void bx_null_pktmover_c::rx_timer_handler (void *this_ptr)
+void bx_null_pktmover_c::rx_timer_handler(void *this_ptr)
 {
 #if BX_ETH_NULL_LOGGING
   /// hey wait there is no receive data with a NULL ethernet, is there....
@@ -157,7 +156,7 @@ void bx_null_pktmover_c::rx_timer_handler (void *this_ptr)
   int io_len = 0;
   Bit8u buf[1];
   bx_null_pktmover_c *class_ptr = (bx_null_pktmover_c *) this_ptr;
-  bx_devmodel_c *netdev = class_ptr->netdev;
+  logfunctions *netdev = class_ptr->netdev;
   if (io_len > 0) {
     BX_DEBUG(("receive packet length %u", io_len));
     // dump raw bytes to a file, eventually dump in pcap format so that

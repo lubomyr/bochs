@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: macintosh.cc 13042 2017-01-15 11:44:43Z vruppert $
+// $Id: macintosh.cc 14094 2021-01-30 18:32:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -115,7 +115,7 @@ IMPLEMENT_GUI_PLUGIN_CODE(macintosh)
 
 WindowPtr            win, toolwin, fullwin, backdrop, hidden, SouixWin;
 SInt16               gOldMBarHeight;
-bx_bool              menubarVisible = true, cursorVisible = true;
+bool                 menubarVisible = true, cursorVisible = true;
 RgnHandle            mBarRgn, cnrRgn;
 unsigned             mouse_button_state = 0;
 CTabHandle           gCTable;
@@ -912,7 +912,7 @@ int bx_macintosh_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
   return 0;
 }
 
-bx_bool bx_macintosh_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
+bool bx_macintosh_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
   PaletteHandle thePal, oldpal;
   GDHandle  saveDevice;
@@ -1548,7 +1548,7 @@ PixMapHandle CreatePixMap(unsigned left, unsigned top, unsigned width,
   return pm;
 }
 
-void bx_macintosh_gui_c::mouse_enabled_changed_specific (bx_bool val)
+void bx_macintosh_gui_c::mouse_enabled_changed_specific(bool val)
 {
 }
 

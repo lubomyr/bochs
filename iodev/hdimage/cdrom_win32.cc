@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cdrom_win32.cc 13647 2019-12-08 15:32:23Z vruppert $
+// $Id: cdrom_win32.cc 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2019  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -24,11 +24,6 @@
 // needed by the CDROM emulation in 'harddrv.cc'.  Mostly, just
 // ioctl() calls and such.  Should be fairly easy to add support
 // for your OS if it is not supported yet.
-
-// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
-// platforms that require a special tag on exported symbols, BX_PLUGGABLE
-// is used to know when we are exporting symbols and when we are importing.
-#define BX_PLUGGABLE
 
 #include "bochs.h"
 #if BX_SUPPORT_CDROM
@@ -155,7 +150,7 @@ cdrom_win32_c::~cdrom_win32_c(void)
   }
 }
 
-bx_bool cdrom_win32_c::insert_cdrom(const char *dev)
+bool cdrom_win32_c::insert_cdrom(const char *dev)
 {
   unsigned char buffer[BX_CD_FRAMESIZE];
 
@@ -220,7 +215,7 @@ void cdrom_win32_c::eject_cdrom()
   }
 }
 
-bx_bool cdrom_win32_c::read_toc(Bit8u* buf, int* length, bx_bool msf, int start_track, int format)
+bool cdrom_win32_c::read_toc(Bit8u* buf, int* length, bool msf, int start_track, int format)
 {
   // Read CD TOC. Returns 0 if start track is out of bounds.
 
@@ -276,7 +271,7 @@ Bit32u cdrom_win32_c::capacity()
   }
 }
 
-bx_bool BX_CPP_AttrRegparmN(3) cdrom_win32_c::read_block(Bit8u* buf, Bit32u lba, int blocksize)
+bool BX_CPP_AttrRegparmN(3) cdrom_win32_c::read_block(Bit8u* buf, Bit32u lba, int blocksize)
 {
   // Read a single block from the CD
 

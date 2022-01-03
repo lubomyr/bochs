@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: extplugin.h 13302 2017-10-10 18:06:16Z vruppert $
+// $Id: extplugin.h 14204 2021-03-27 17:23:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2002-2017  The Bochs Project
+// Copyright (C) 2002-2021  The Bochs Project
 //
 // extplugin.h
 //
@@ -27,39 +27,48 @@
 #endif
 #endif
 
-enum plugintype_t {
-  PLUGTYPE_GUI=100,
-  PLUGTYPE_CORE,
-  PLUGTYPE_STANDARD,
-  PLUGTYPE_OPTIONAL,
-  PLUGTYPE_SOUND,
-  PLUGTYPE_NETWORK,
-  PLUGTYPE_USBDEV,
-  PLUGTYPE_VGA,
-  PLUGTYPE_USER
-};
+#define PLUGTYPE_NULL      0x00
+#define PLUGTYPE_CORE      0x01
+#define PLUGTYPE_STANDARD  0x02
+#define PLUGTYPE_OPTIONAL  0x04
+#define PLUGTYPE_VGA       0x08
+#define PLUGTYPE_USB       0x40
+#define PLUGTYPE_CI        0x80
+#define PLUGTYPE_GUI      0x100
+#define PLUGTYPE_IMG      0x200
+#define PLUGTYPE_NET      0x400
+#define PLUGTYPE_SND      0x800
 
-typedef int (CDECL *plugin_init_t)(struct _plugin_t *plugin, plugintype_t type);
-typedef void (CDECL *plugin_fini_t)(void);
+#define PLUGFLAG_PCI 0x01
+
+#define PLUGIN_FINI  0
+#define PLUGIN_INIT  1
+#define PLUGIN_PROBE 2
+#define PLUGIN_FLAGS 3
+
+typedef int (CDECL *plugin_entry_t)(struct _plugin_t *plugin, Bit16u type, Bit8u mode);
 
 typedef struct _plugin_t
 {
-    plugintype_t type;
-    int  initialized;
 #if BX_PLUGINS
+    char *name;
 #if defined(WIN32)
     HINSTANCE handle;
 #else
     lt_dlhandle handle;
 #endif
+#else
+    const char *name;
 #endif
-    char *name;
-    plugin_init_t plugin_init;
-    plugin_fini_t plugin_fini;
+    Bit16u type;
+    Bit8u flags;
+    plugin_entry_t plugin_entry;
+    bool initialized;
+    Bit16u loadtype;
 
+#if BX_PLUGINS
     struct _plugin_t *next;
+#endif
 } plugin_t;
-
-
 
 #endif /* __EXTPLUGIN_H */

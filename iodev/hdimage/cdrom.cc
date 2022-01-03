@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cdrom.cc 12128 2014-01-21 20:56:50Z vruppert $
+// $Id: cdrom.cc 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2014  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -20,11 +20,6 @@
 /////////////////////////////////////////////////////////////////////////
 
 // shared code for the low-level cdrom support
-
-// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
-// platforms that require a special tag on exported symbols, BX_PLUGGABLE
-// is used to know when we are exporting symbols and when we are importing.
-#define BX_PLUGGABLE
 
 #include "bochs.h"
 #include "cdrom.h"
@@ -62,7 +57,7 @@ cdrom_base_c::~cdrom_base_c(void)
   BX_DEBUG(("Exit"));
 }
 
-bx_bool cdrom_base_c::insert_cdrom(const char *dev)
+bool cdrom_base_c::insert_cdrom(const char *dev)
 {
   unsigned char buffer[BX_CD_FRAMESIZE];
   ssize_t ret;
@@ -70,8 +65,13 @@ bx_bool cdrom_base_c::insert_cdrom(const char *dev)
   // Load CD-ROM. Returns 0 if CD is not ready.
   if (dev != NULL) path = strdup(dev);
   BX_INFO(("load cdrom with path='%s'", path));
+
   // all platforms except win32
-  fd = open(path, O_RDONLY);
+  fd = open(path, O_RDONLY
+#ifdef O_BINARY
+            | O_BINARY
+#endif
+           );
   if (fd < 0) {
     BX_ERROR(("open cd failed for '%s': %s", path, strerror(errno)));
     return 0;
@@ -105,7 +105,7 @@ void cdrom_base_c::eject_cdrom()
   }
 }
 
-bx_bool cdrom_base_c::read_toc(Bit8u* buf, int* length, bx_bool msf, int start_track, int format)
+bool cdrom_base_c::read_toc(Bit8u* buf, int* length, bool msf, int start_track, int format)
 {
   unsigned i;
   Bit32u blocks;
@@ -231,7 +231,7 @@ bx_bool cdrom_base_c::read_toc(Bit8u* buf, int* length, bx_bool msf, int start_t
   return 1;
 }
 
-bx_bool BX_CPP_AttrRegparmN(3) cdrom_base_c::read_block(Bit8u* buf, Bit32u lba, int blocksize)
+bool BX_CPP_AttrRegparmN(3) cdrom_base_c::read_block(Bit8u* buf, Bit32u lba, int blocksize)
 {
   // Read a single block from the CD
 
@@ -286,7 +286,7 @@ Bit32u cdrom_base_c::capacity()
   }
 }
 
-bx_bool cdrom_base_c::start_cdrom()
+bool cdrom_base_c::start_cdrom()
 {
   // Spin up the cdrom drive.
 
@@ -297,7 +297,7 @@ bx_bool cdrom_base_c::start_cdrom()
   return 0;
 }
 
-bx_bool cdrom_base_c::seek(Bit32u lba)
+bool cdrom_base_c::seek(Bit32u lba)
 {
   unsigned char buffer[BX_CD_FRAMESIZE];
 

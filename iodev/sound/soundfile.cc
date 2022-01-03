@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundfile.cc 13249 2017-06-02 16:56:58Z vruppert $
+// $Id: soundfile.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,8 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #include "soundlow.h"
 #include "soundmod.h"
 #include "soundfile.h"
@@ -40,17 +41,14 @@
 
 #define LOG_THIS
 
-// sound driver plugin entry points
+// sound driver plugin entry point
 
-int CDECL libfile_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_SND_MODULE(file)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_SND;
+  }
   return 0; // Success
-}
-
-void CDECL libfile_sound_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // bx_soundlow_waveout_file_c class implementation

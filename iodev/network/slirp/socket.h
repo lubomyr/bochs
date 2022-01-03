@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: socket.h 12219 2014-03-02 07:42:24Z vruppert $
+// $Id: socket.h 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski.
@@ -88,8 +88,8 @@ void sorecvfrom(struct socket *);
 int sosendto(struct socket *, struct mbuf *);
 struct socket * tcp_listen(Slirp *, uint32_t, u_int, uint32_t, u_int,
                                int);
-void soisfconnecting(register struct socket *);
-void soisfconnected(register struct socket *);
+void soisfconnecting(struct socket *);
+void soisfconnected(struct socket *);
 void sofwdrain(struct socket *);
 struct iovec; /* For win32 */
 size_t sopreprbuf(struct socket *so, struct iovec *iov, int *np);

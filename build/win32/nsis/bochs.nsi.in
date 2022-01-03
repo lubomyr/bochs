@@ -1,5 +1,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; $Id: bochs.nsi.in 13745 2019-12-29 07:20:50Z vruppert $
+; $Id: bochs.nsi.in 14281 2021-06-13 08:02:33Z vruppert $
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ; Setup Script for NSIS Installer
@@ -107,7 +107,7 @@ VIAddVersionKey "LegalCopyright" "Copyright 2001-2019 The Bochs Project"
   !define MUI_FINISHPAGE_TEXT "Thank you for installing Bochs, think inside the bochs."
 
   !define MUI_FINISHPAGE_LINK "Visit the Bochs website for the latest news, FAQs and support"
-  !define MUI_FINISHPAGE_LINK_LOCATION "http://bochs.sourceforge.net/"
+  !define MUI_FINISHPAGE_LINK_LOCATION "https://bochs.sourceforge.io/"
 
   !define MUI_FINISHPAGE_RUN "$INSTDIR\Bochs.exe"
   !define MUI_FINISHPAGE_RUN_NOTCHECKED
@@ -138,6 +138,7 @@ Section "Bochs Program (required)" SecCore
   File "${SRCDIR}\*.exe"
   File "${SRCDIR}\*.txt"
   File "${SRCDIR}\slirp.conf"
+  File "${SRCDIR}\vnet.conf"
   File "*.ico"
 
   ; Install keymaps
@@ -216,7 +217,7 @@ Section "Add Bochs to the Start Menu" SecStartMenu
 	      "InternetShortcut" "URL" "file://$INSTDIR/docs/index.html"
 
   WriteINIStr "${PGDIR}\Home Page.url" \
-	      "InternetShortcut" "URL" "http://bochs.sourceforge.net/"
+	      "InternetShortcut" "URL" "https://bochs.sourceforge.io/"
 
   CreateShortCut "${PGDIR}\${NAME} Folder.lnk" \
                  "$INSTDIR"
@@ -277,7 +278,7 @@ Section -post
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "DisplayIcon" "$INSTDIR\bochs.ico,0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "Publisher" "The Bochs Project"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "URLInfoAbout" "http://bochs.sourceforge.net"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "URLInfoAbout" "https://bochs.sourceforge.io"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "Readme" '$INSTDIR\Readme.txt'
   WriteRegDWord HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "NoModify" "1"
   WriteRegDWord HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bochs" "NoRepair" "1"
@@ -320,6 +321,7 @@ Section "Uninstall"
   Delete "$INSTDIR\*.exe"
   Delete "$INSTDIR\*.txt"
   Delete "$INSTDIR\slirp.conf"
+  Delete "$INSTDIR\vnet.conf"
   Delete "$INSTDIR\*.ico"
   Delete "$INSTDIR\keymaps\*"
   Delete "$INSTDIR\BIOS-bochs-*"

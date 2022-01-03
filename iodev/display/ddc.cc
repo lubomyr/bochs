@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ddc.cc 13435 2018-01-14 18:44:28Z vruppert $
+// $Id: ddc.cc 14260 2021-05-30 07:28:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2018  The Bochs Project
+//  Copyright (C) 2018-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,7 @@
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-// DDC stub (when ready, this code should return the VESA EDID for the
-// Bochs plug&play monitor)
+// DDC support (returns the VESA EDID for the Bochs plug&play monitor)
 
 // Define BX_PLUGGABLE in files that can be compiled into plugins.  For
 // platforms that require a special tag on exported symbols, BX_PLUGGABLE
@@ -27,7 +26,9 @@
 #define BX_PLUGGABLE
 
 #include "bochs.h"
+#include "gui/siminterface.h"
 #include "ddc.h"
+#include "param_names.h"
 
 #define LOG_THIS
 
@@ -57,7 +58,7 @@ const Bit8u vesa_EDID[128] = {
                                              is supported) */
   0x21,0x19,                       /* 0x0015 Scren size (330 mm * 250 mm) */
   0x78,                            /* 0x0017 Display gamma (2.2) */
-  0x0D,                            /* 0x0018 Feature flags (no DMPS states, RGB, display is continuous frequency) */
+  0x0F,                            /* 0x0018 Feature flags (no DMPS states, RGB, preferred timing mode, display is continuous frequency) */
   0x78,0xF5,                       /* 0x0019 Least significant bits for chromaticity and default white point */
   0xA6,0x55,0x48,0x9B,0x26,0x12,0x50,0x54,
                                    /* 0x001B Most significant bits for chromaticity and default white point */
@@ -148,11 +149,16 @@ const Bit8u vesa_EDID[128] = {
   0x0A,
 
   0x00,                            /* 0x007E Extension block count (none)  */
-  0x94,                            /* 0x007F Checksum */
+  0x00,                            /* 0x007F Checksum (set by constructor) */
 };
 
 bx_ddc_c::bx_ddc_c(void)
 {
+  int fd, ret;
+  struct stat stat_buf;
+  const char *path;
+  Bit8u checksum = 0;
+
   put("DDC");
   s.DCKhost = 1;
   s.DDAhost = 1;
@@ -161,6 +167,43 @@ bx_ddc_c::bx_ddc_c(void)
   s.ddc_ack = 1;
   s.ddc_rw = 1;
   s.edid_index = 0;
+  s.ddc_mode = SIM->get_param_enum(BXPN_DDC_MODE)->get();
+  if (s.ddc_mode == BX_DDC_MODE_BUILTIN) {
+    memcpy(s.edid_data, vesa_EDID, 128);
+    s.edid_extblock = 0;
+  } else if (s.ddc_mode == BX_DDC_MODE_FILE) {
+    path = SIM->get_param_string(BXPN_DDC_FILE)->getptr();
+    fd = open(path, O_RDONLY
+#ifdef O_BINARY
+       | O_BINARY
+#endif
+        );
+    if (fd < 0) {
+      BX_PANIC(("failed to open monitor EDID file '%s'", path));
+    }
+    ret = fstat(fd, &stat_buf);
+    if (ret) {
+      BX_PANIC(("could not fstat() monitor EDID file."));
+    }
+    if ((stat_buf.st_size != 128) && (stat_buf.st_size != 256)) {
+      BX_PANIC(("monitor EDID file size must be 128 or 256 bytes"));
+    } else {
+      s.edid_extblock = (stat_buf.st_size == 256);
+    }
+    ret = ::read(fd, (bx_ptr_t) s.edid_data, (unsigned)stat_buf.st_size);
+    if (ret != stat_buf.st_size) {
+      BX_PANIC(("error reading monitor EDID file."));
+    }
+    close(fd);
+    BX_INFO(("Monitor EDID read from image file '%s'.", path));
+  }
+  s.edid_data[127] = 0;
+  for (int i = 0; i < 128; i++) {
+    checksum += s.edid_data[i];
+  }
+  if (checksum != 0) {
+    s.edid_data[127] = (Bit8u)-checksum;
+  }
 }
 
 bx_ddc_c::~bx_ddc_c(void)
@@ -169,15 +212,18 @@ bx_ddc_c::~bx_ddc_c(void)
 
 Bit8u bx_ddc_c::read()
 {
-  Bit8u retval = (((s.DDAmon & s.DDAhost) << 3) | (s.DCKhost << 2) |
-                  (s.DDAhost << 1) | s.DCKhost);
+  Bit8u retval = (Bit8u)(((s.DDAmon & s.DDAhost) << 3) | (s.DCKhost << 2) |
+                         (s.DDAhost << 1) | (Bit8u)s.DCKhost);
   return retval;
 }
 
-void bx_ddc_c::write(bx_bool dck, bx_bool dda)
+void bx_ddc_c::write(bool dck, bool dda)
 {
-  bx_bool dck_change = 0;
-  bx_bool dda_change = 0;
+  bool dck_change = 0;
+  bool dda_change = 0;
+
+  if (s.ddc_mode == BX_DDC_MODE_DISABLED)
+    return;
 
   if ((dck != s.DCKhost) || (dda != s.DDAhost)) {
     dck_change = (dck != s.DCKhost);
@@ -211,7 +257,7 @@ void bx_ddc_c::write(bx_bool dck, bx_bool dda)
               s.ddc_bitshift--;
             } else {
               s.ddc_ack = 0;
-              BX_DEBUG(("Data = 0x%02x", s.ddc_byte));
+              BX_DEBUG(("Data = 0x%02x (setting offset address)", s.ddc_byte));
               s.edid_index = s.ddc_byte;
               s.DDAmon = s.ddc_ack;
               s.ddc_stage = DDC_STAGE_ACK_OUT;
@@ -255,7 +301,7 @@ void bx_ddc_c::write(bx_bool dck, bx_bool dda)
         switch (s.ddc_stage) {
           case DDC_STAGE_ADDRESS:
           case DDC_STAGE_DATA_IN:
-            s.ddc_byte |= (s.DDAhost << s.ddc_bitshift);
+            s.ddc_byte |= (Bit8u)(s.DDAhost << s.ddc_bitshift);
             break;
           case DDC_STAGE_RW:
             s.ddc_rw = s.DDAhost;
@@ -283,9 +329,8 @@ void bx_ddc_c::write(bx_bool dck, bx_bool dda)
 
 Bit8u bx_ddc_c::get_edid_byte()
 {
-  Bit8u value = vesa_EDID[s.edid_index++];
-  BX_DEBUG(("Sending EDID byte %d (value = 0x%02x)", s.edid_index - 1, value));
-  s.edid_index &= 0x7f;
+  Bit8u value = s.edid_data[s.edid_index++];
+  BX_DEBUG(("Sending EDID byte 0x%02x (value = 0x%02x)", s.edid_index - 1, value));
+  if (!s.edid_extblock) s.edid_index &= 0x7f;
   return value;
-  
 }

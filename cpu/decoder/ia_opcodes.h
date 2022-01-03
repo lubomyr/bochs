@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ia_opcodes.h 13314 2017-10-19 21:27:25Z sshwarts $
+// $Id: ia_opcodes.h 13828 2020-03-28 14:23:54Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2017 Stanislav Shwartsman
@@ -25,7 +25,7 @@
 #define BX_OPCODES_ENUM
 
 enum {
-#define bx_define_opcode(a, b, c, d, s1, s2, s3, s4, e) a,
+#define bx_define_opcode(a, b, c, d, e, f, s1, s2, s3, s4, g) a,
 #include "ia_opcodes.def"
    BX_IA_LAST
 };

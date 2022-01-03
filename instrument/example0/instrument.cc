@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instrument.cc 12655 2015-02-19 20:23:08Z sshwarts $
+// $Id: instrument.cc 14110 2021-01-31 05:41:43Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2006-2015 Stanislav Shwartsman
@@ -35,15 +35,15 @@
 // Use this variable to turn on/off collection of instrumentation data
 // If you are not using the debugger to turn this on/off, then possibly
 // start this at 1 instead of 0.
-static bx_bool active = 1;
+static bool active = 1;
 
 static disassembler bx_disassembler;
 
 static struct instruction_t {
-  bx_bool  ready;         // is current instruction ready to be printed
+  bool  ready;         // is current instruction ready to be printed
   unsigned opcode_length;
   Bit8u    opcode[MAX_OPCODE_LENGTH];
-  bx_bool  is32, is64;
+  bool  is32, is64;
   unsigned num_data_accesses;
   struct {
     bx_address laddr;     // linear address
@@ -52,8 +52,8 @@ static struct instruction_t {
     unsigned size;        // 1 .. 64
     unsigned memtype;
   } data_access[MAX_DATA_ACCESSES];
-  bx_bool is_branch;
-  bx_bool is_taken;
+  bool is_branch;
+  bool is_taken;
   bx_address target_linear;
 } *instruction;
 

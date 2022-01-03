@@ -1,10 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_ehci.h 13150 2017-03-26 08:09:28Z vruppert $
+// $Id: usb_ehci.h 14158 2021-02-20 19:58:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Experimental USB EHCI adapter (partly ported from Qemu)
 //
-//  Copyright (C) 2015-2017  The Bochs Project
+//  Copyright (C) 2015-2021  The Bochs Project
 //
 //  Copyright(c) 2008  Emutex Ltd. (address@hidden)
 //  Copyright(c) 2011-2012 Red Hat, Inc.
@@ -235,19 +235,19 @@ typedef struct {
 
   struct {
     struct {
-      Bit8u   itc;
-      bx_bool iaad;
-      bx_bool ase;
-      bx_bool pse;
-      bx_bool hcreset;
-      bx_bool rs;
+      Bit8u itc;
+      bool  iaad;
+      bool  ase;
+      bool  pse;
+      bool  hcreset;
+      bool  rs;
     } UsbCmd;
     struct {
-      bx_bool ass;
-      bx_bool pss;
-      bx_bool recl;
-      bx_bool hchalted;
-      Bit8u   inti;
+      bool  ass;
+      bool  pss;
+      bool  recl;
+      bool  hchalted;
+      Bit8u inti;
     } UsbSts;
     Bit8u  UsbIntr;
     Bit32u FrIndex;
@@ -260,25 +260,25 @@ typedef struct {
   struct {
     // our data
     usb_device_c *device;   // device connected to this port
-    bx_bool owner_change;
+    bool owner_change;
     struct {
-      bx_bool woe;
-      bx_bool wde;
-      bx_bool wce;
-      Bit8u   ptc;
-      Bit8u   pic;
-      bx_bool po;
-      bx_bool pp;
-      Bit8u   ls;
-      bx_bool pr;
-      bx_bool sus;
-      bx_bool fpr;
-      bx_bool occ;
-      bx_bool oca;
-      bx_bool pec;
-      bx_bool ped;
-      bx_bool csc;
-      bx_bool ccs;
+      bool  woe;
+      bool  wde;
+      bool  wce;
+      Bit8u ptc;
+      Bit8u pic;
+      bool  po;
+      bool  pp;
+      Bit8u ls;
+      bool  pr;
+      bool  sus;
+      bool  fpr;
+      bool  occ;
+      bool  oca;
+      bool  pec;
+      bool  ped;
+      bool  csc;
+      bool  ccs;
     } portsc;
   } usb_port[USB_EHCI_PORTS];
 
@@ -334,9 +334,6 @@ public:
 
   void event_handler(int event, USBPacket *packet, int port);
 
-  static const char *usb_param_handler(bx_param_string_c *param, int set,
-                                       const char *oldval, const char *val, int maxlen);
-
 private:
   bx_uhci_core_c *uhci[3];
   bx_usb_ehci_t hub;
@@ -350,7 +347,7 @@ private:
 
   static void init_device(Bit8u port, bx_list_c *portconf);
   static void remove_device(Bit8u port);
-  static void set_connect_status(Bit8u port, int type, bx_bool connected);
+  static bool set_connect_status(Bit8u port, bool connected);
   static void change_port_owner(int port);
 
   // EHCI core methods ported from QEMU 1.2.2
@@ -364,8 +361,8 @@ private:
   void set_fetch_addr(int async, Bit32u addr);
   Bit32u get_fetch_addr(int async);
 
-  bx_bool async_enabled(void);
-  bx_bool periodic_enabled(void);
+  bool async_enabled(void);
+  bool periodic_enabled(void);
 
   EHCIPacket *alloc_packet(EHCIQueue *q);
   void free_packet(EHCIPacket *p);
@@ -411,15 +408,18 @@ private:
   void ehci_frame_timer(void);
 
 #if BX_USE_USB_EHCI_SMF
-  static bx_bool read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
-  static bx_bool write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
 #else
-  bx_bool read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
-  bx_bool write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  bool read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  bool write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
 #endif
 
   static void runtime_config_handler(void *);
   void runtime_config(void);
+
+  static Bit64s usb_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static bool usb_param_enable_handler(bx_param_c *param, bool en);
 };
 
 #endif  // BX_IODEV_USB_EHCI_H

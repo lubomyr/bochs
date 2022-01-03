@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bxcompat.h 13258 2017-06-17 12:40:13Z vruppert $
+// $Id: bxcompat.h 14074 2021-01-09 16:51:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2013       Volker Ruppert
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,29 +41,6 @@
 #include <fcntl.h>
 #include <string.h>
 
-#ifdef BXIMAGE
-// copied from siminterface.h
-enum {
-  BX_HDIMAGE_MODE_FLAT,
-  BX_HDIMAGE_MODE_CONCAT,
-  BX_HDIMAGE_MODE_EXTDISKSIM,
-  BX_HDIMAGE_MODE_DLL_HD,
-  BX_HDIMAGE_MODE_SPARSE,
-  BX_HDIMAGE_MODE_VMWARE3,
-  BX_HDIMAGE_MODE_VMWARE4,
-  BX_HDIMAGE_MODE_UNDOABLE,
-  BX_HDIMAGE_MODE_GROWING,
-  BX_HDIMAGE_MODE_VOLATILE,
-  BX_HDIMAGE_MODE_VVFAT,
-  BX_HDIMAGE_MODE_VPC,
-  BX_HDIMAGE_MODE_VBOX
-};
-#define BX_HDIMAGE_MODE_LAST     BX_HDIMAGE_MODE_VBOX
-#define BX_HDIMAGE_MODE_UNKNOWN  -1
-
-extern const char *hdimage_mode_names[];
-#endif
-
 // definitions for compatibility with Bochs
 #ifndef UNUSED
 #  define UNUSED(x) ((void)x)
@@ -76,9 +53,9 @@ extern const char *hdimage_mode_names[];
 #define BX_PANIC(x) { (printf) x ; printf("\n"); myexit(1); }
 #define BX_FATAL(x) { (printf) x ; printf("\n"); myexit(1); }
 #else
-#define BX_DEBUG(x) { if (bx_loglev == 3) { (printf) x ; printf("\n"); } }
-#define BX_INFO(x)  { if (bx_loglev >= 2) { (printf) x ; printf("\n"); } }
-#define BX_ERROR(x) { if (bx_loglev >= 1) { (printf) x ; printf("\n"); } }
+#define BX_DEBUG(x) { if (bx_loglev == 3) { (bx_printf) x ; } }
+#define BX_INFO(x)  { if (bx_loglev >= 2) { (bx_printf) x ; } }
+#define BX_ERROR(x) { if (bx_loglev >= 1) { (bx_printf) x ; } }
 #endif
 #define BX_ASSERT(x)
 
@@ -88,7 +65,7 @@ extern int bx_interactive;
 class device_image_t;
 
 void myexit(int code);
-device_image_t* init_image(Bit8u image_mode);
+device_image_t* init_image(const char *image_mode);
 
 #define DEV_hdimage_init_image(a,b,c) init_image(a)
 

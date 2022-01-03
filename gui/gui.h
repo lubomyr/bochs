@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gui.h 13725 2019-12-26 16:14:31Z vruppert $
+// $Id: gui.h 14131 2021-02-07 16:16:06Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2019  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,11 @@
 //  You should have received a copy of the GNU Lesser General Public
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+#ifndef BX_GUI_H
+#define BX_GUI_H
+
+#include "gui/siminterface.h"
 
 // header bar and status bar stuff
 #define BX_HEADER_BAR_Y 32
@@ -44,6 +49,12 @@
 #define BX_TEXT_BLINK_TOGGLE    0x02
 #define BX_TEXT_BLINK_STATE     0x04
 
+// modifier keys
+#define BX_MOD_KEY_SHIFT        0x01
+#define BX_MOD_KEY_CTRL         0x02
+#define BX_MOD_KEY_ALT          0x04
+#define BX_MOD_KEY_CAPS         0x08
+
 // mouse capture toggle feature
 #define BX_MT_KEY_CTRL          0x01
 #define BX_MT_KEY_ALT           0x02
@@ -67,8 +78,8 @@ typedef struct {
   Bit16u  line_compare;
   Bit8u   h_panning;
   Bit8u   v_panning;
-  bx_bool line_graphics;
-  bx_bool split_hpanning;
+  bool line_graphics;
+  bool split_hpanning;
   Bit8u   blink_flags;
   Bit8u   actl_palette[16];
 } bx_vga_tminfo_t;
@@ -78,7 +89,7 @@ typedef struct {
   Bit8u red_shift, green_shift, blue_shift;
   Bit8u is_indexed, is_little_endian;
   unsigned long red_mask, green_mask, blue_mask;
-  bx_bool snapshot_mode;
+  bool snapshot_mode;
 } bx_svga_tileinfo_t;
 
 
@@ -108,7 +119,7 @@ public:
   virtual void handle_events(void) = 0;
   virtual void flush(void) = 0;
   virtual void clear_screen(void) = 0;
-  virtual bx_bool palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue) = 0;
+  virtual bool palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue) = 0;
   virtual void dimension_update(unsigned x, unsigned y, unsigned fheight=0, unsigned fwidth=0, unsigned bpp=8) = 0;
   virtual unsigned create_bitmap(const unsigned char *bmap, unsigned xdim, unsigned ydim) = 0;
   virtual unsigned headerbar_bitmap(unsigned bmap_id, unsigned alignment, void (*f)(void)) = 0;
@@ -116,19 +127,24 @@ public:
   virtual void show_headerbar(void) = 0;
   virtual int get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)  = 0;
   virtual int set_clipboard_text(char *snapshot, Bit32u len) = 0;
-  virtual void mouse_enabled_changed_specific (bx_bool val) = 0;
+  virtual void mouse_enabled_changed_specific (bool val) = 0;
   virtual void exit(void) = 0;
   // new graphics API methods (compatibility mode in gui.cc)
   virtual bx_svga_tileinfo_t *graphics_tile_info(bx_svga_tileinfo_t *info);
   virtual Bit8u *graphics_tile_get(unsigned x, unsigned y, unsigned *w, unsigned *h);
   virtual void graphics_tile_update_in_place(unsigned x, unsigned y, unsigned w, unsigned h);
+  // new text update API
+  virtual void set_font(bool lg) {}
+  virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                         Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                         bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs) {}
   // optional gui methods (stubs or default code in gui.cc)
-  virtual void statusbar_setitem_specific(int element, bx_bool active, bx_bool w) {}
+  virtual void statusbar_setitem_specific(int element, bool active, bool w) {}
   virtual void set_tooltip(unsigned hbar_id, const char *tip) {}
   // set_display_mode() changes the mode between the configuration interface
   // and the simulation.  This is primarily intended for display libraries
-  // which have a full-screen mode such as SDL, term, and svgalib.  The display
-  // mode is set to DISP_MODE_CONFIG before displaying any configuration menus,
+  // which have a full-screen mode such as SDL or term.  The display mode is
+  // set to DISP_MODE_CONFIG before displaying any configuration menus,
   // for panics that requires user input, when entering the debugger, etc.  It
   // is set to DISP_MODE_SIM when the Bochs simulation resumes.  The
   // enum is defined in gui/siminterface.h.
@@ -147,9 +163,9 @@ public:
   virtual void beep_on(float frequency);
   virtual void beep_off();
   virtual void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
-  virtual void set_mouse_mode_absxy(bx_bool mode) {}
+  virtual void set_mouse_mode_absxy(bool mode) {}
 #if BX_USE_GUI_CONSOLE
-  virtual void set_console_edit_mode(bx_bool mode) {}
+  virtual void set_console_edit_mode(bool mode) {}
 #endif
 
   // The following function(s) are defined already, and your
@@ -162,37 +178,50 @@ public:
   void init(int argc, char **argv, unsigned max_xres, unsigned max_yres,
             unsigned x_tilesize, unsigned y_tilesize);
   void cleanup(void);
+  void draw_char_common(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                        Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                        bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs);
+  void text_update_common(Bit8u *old_text, Bit8u *new_text,
+                          Bit16u cursor_address, bx_vga_tminfo_t *tm_info);
   void graphics_tile_update_common(Bit8u *tile, unsigned x, unsigned y);
   bx_svga_tileinfo_t *graphics_tile_info_common(bx_svga_tileinfo_t *info);
   Bit8u* get_snapshot_buffer(void) {return snapshot_buffer;}
-  bx_bool palette_change_common(Bit8u index, Bit8u red, Bit8u green, Bit8u blue);
+  bool palette_change_common(Bit8u index, Bit8u red, Bit8u green, Bit8u blue);
   void update_drive_status_buttons(void);
-  static void     mouse_enabled_changed(bx_bool val);
-  int register_statusitem(const char *text, bx_bool auto_off=0);
+  static void     mouse_enabled_changed(bool val);
+  int register_statusitem(const char *text, bool auto_off=0);
   void unregister_statusitem(int id);
-  void statusbar_setitem(int element, bx_bool active, bx_bool w=0);
+  void statusbar_setitem(int element, bool active, bool w=0);
   static void init_signal_handlers();
   static void toggle_mouse_enable(void);
-  bx_bool mouse_toggle_check(Bit32u key, bx_bool pressed);
+  bool mouse_toggle_check(Bit32u key, bool pressed);
   const char* get_toggle_info(void);
-  bx_bool parse_user_shortcut(const char *val);
+  Bit8u get_modifier_keys(void);
+  Bit8u set_modifier_keys(Bit8u modifier, bool pressed);
+  bool parse_user_shortcut(const char *val);
 #if BX_DEBUGGER && BX_DEBUGGER_GUI
   void init_debug_dialog(void);
   void close_debug_dialog(void);
 #endif
 #if BX_USE_GUI_CONSOLE
-  bx_bool has_gui_console(void) {return console.present;}
-  bx_bool console_running(void) {return console.running;}
-  void console_refresh(bx_bool force);
+  bool has_gui_console(void) {return console.present;}
+  bool console_running(void) {return console.running;}
+  void console_refresh(bool force);
   void console_key_enq(Bit8u key);
   int bx_printf(const char *s);
   char* bx_gets(char *s, int size);
 #else
-  bx_bool has_gui_console(void) {return 0;}
-  bx_bool console_running(void) {return 0;}
-  void console_refresh(bx_bool force) {}
+  bool has_gui_console(void) {return 0;}
+  bool console_running(void) {return 0;}
+  void console_refresh(bool force) {}
   void console_key_enq(Bit8u key) {}
 #endif
+  bool has_command_mode(void) {return command_mode.present;}
+  bool command_mode_active(void) {return command_mode.active;}
+  void set_command_mode(bool active);
+  void set_fullscreen_mode(bool active) {fullscreen_mode = active;}
+  // marklog handler without button, called in gui command mode
+  static void marklog_handler(void);
 
 protected:
   // And these are defined and used privately in gui.cc
@@ -212,7 +241,7 @@ protected:
   void headerbar_click(int x);
   // snapshot helper functions
   static void make_text_snapshot(char **snapshot, Bit32u *length);
-  static Bit32u set_snapshot_mode(bx_bool mode);
+  static Bit32u set_snapshot_mode(bool mode);
   // status bar LED timer
   static void led_timer_handler(void *);
   void led_timer(void);
@@ -224,9 +253,9 @@ protected:
 #endif
 
   // header bar buttons
-  bx_bool floppyA_status;
-  bx_bool floppyB_status;
-  bx_bool cdrom1_status;
+  bool floppyA_status;
+  bool floppyB_status;
+  bool cdrom1_status;
   unsigned floppyA_bmap_id, floppyA_eject_bmap_id, floppyA_hbar_id;
   unsigned floppyB_bmap_id, floppyB_eject_bmap_id, floppyB_hbar_id;
   unsigned cdrom1_bmap_id, cdrom1_eject_bmap_id, cdrom1_hbar_id;
@@ -250,42 +279,47 @@ protected:
     void (*f)(void);
   } bx_headerbar_entry[BX_MAX_HEADERBAR_ENTRIES];
   // text charmap
-  unsigned char vga_charmap[0x2000];
-  bx_bool charmap_updated;
-  bx_bool char_changed[256];
+  Bit8u vga_charmap[0x2000];
+  bool charmap_updated;
+  bool char_changed[256];
   // status bar items
   unsigned statusitem_count;
   int led_timer_index;
   struct {
-    bx_bool in_use;
+    bool in_use;
     char text[8];
-    bx_bool active;
-    bx_bool mode; // read/write
-    bx_bool auto_off;
+    bool active;
+    bool mode; // read/write
+    bool auto_off;
     Bit8u counter;
   } statusitem[BX_MAX_STATUSITEMS];
   // display mode
   disp_mode_t disp_mode;
   // new graphics API (with compatibility mode)
-  bx_bool new_gfx_api;
+  bool new_gfx_api;
   Bit16u host_xres;
   Bit16u host_yres;
   Bit16u host_pitch;
   Bit8u host_bpp;
   Bit8u *framebuffer;
+  // new text update API
+  bool new_text_api;
+  Bit16u cursor_address;
+  bx_vga_tminfo_t tm_info;
   // maximum guest display size and tile size
   unsigned max_xres;
   unsigned max_yres;
   unsigned x_tilesize;
   unsigned y_tilesize;
   // current guest display settings
-  bx_bool guest_textmode;
-  unsigned guest_fsize;
-  unsigned guest_xres;
-  unsigned guest_yres;
-  unsigned guest_bpp;
+  bool guest_textmode;
+  Bit8u   guest_fwidth;
+  Bit8u   guest_fheight;
+  Bit16u  guest_xres;
+  Bit16u  guest_yres;
+  Bit8u   guest_bpp;
   // graphics snapshot
-  bx_bool snapshot_mode;
+  bool snapshot_mode;
   Bit8u *snapshot_buffer;
   struct {
     Bit8u blue;
@@ -293,6 +327,8 @@ protected:
     Bit8u red;
     Bit8u reserved;
   } palette[256];
+  // modifier keys
+  Bit8u keymodstate;
   // mouse toggle setup
   Bit8u toggle_method;
   Bit32u toggle_keystate;
@@ -300,26 +336,37 @@ protected:
   // userbutton shortcut
   Bit32u user_shortcut[4];
   int user_shortcut_len;
+  bool user_shortcut_error;
   // gui dialog capabilities
   Bit32u dialog_caps;
 #if BX_USE_GUI_CONSOLE
   struct {
-    bx_bool present;
-    bx_bool running;
+    bool present;
+    bool running;
     Bit8u *screen;
     Bit8u *oldscreen;
-    unsigned saved_fsize;
-    unsigned saved_xres;
-    unsigned saved_yres;
-    unsigned saved_bpp;
+    Bit8u saved_fwidth;
+    Bit8u saved_fheight;
+    Bit16u saved_xres;
+    Bit16u saved_yres;
+    Bit8u  saved_bpp;
     Bit8u saved_palette[32];
+    Bit8u saved_charmap[0x2000];
     unsigned cursor_x;
     unsigned cursor_y;
+    Bit16u cursor_addr;
     bx_vga_tminfo_t tminfo;
     Bit8u keys[16];
     Bit8u n_keys;
   } console;
 #endif
+  // command mode
+  struct {
+    bool present;
+    bool active;
+  } command_mode;
+  bool fullscreen_mode;
+  Bit32u marker_count;
 };
 
 
@@ -342,8 +389,7 @@ virtual void graphics_tile_update(Bit8u *tile, unsigned x, unsigned y);     \
 virtual void handle_events(void);                                           \
 virtual void flush(void);                                                   \
 virtual void clear_screen(void);                                            \
-virtual bx_bool palette_change(Bit8u index, Bit8u red, Bit8u green,         \
-                               Bit8u blue);                                 \
+virtual bool palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue); \
 virtual void dimension_update(unsigned x, unsigned y, unsigned fheight=0,   \
                           unsigned fwidth=0, unsigned bpp=8);               \
 virtual unsigned create_bitmap(const unsigned char *bmap,                   \
@@ -354,7 +400,7 @@ virtual void replace_bitmap(unsigned hbar_id, unsigned bmap_id);            \
 virtual void show_headerbar(void);                                          \
 virtual int get_clipboard_text(Bit8u **bytes, Bit32s *nbytes);              \
 virtual int set_clipboard_text(char *snapshot, Bit32u len);                 \
-virtual void mouse_enabled_changed_specific (bx_bool val);                  \
+virtual void mouse_enabled_changed_specific(bool val);                  \
 virtual void exit(void);                                                    \
 /* end of DECLARE_GUI_VIRTUAL_METHODS */
 
@@ -530,12 +576,17 @@ enum {
 // says:
 //   static bx_sdl_gui_c *theGui;
 
-#define IMPLEMENT_GUI_PLUGIN_CODE(gui_name)                           \
-  int CDECL lib##gui_name##_gui_plugin_init(plugin_t *plugin,         \
-          plugintype_t type) {                                        \
-    genlog->info("installing %s module as the Bochs GUI", #gui_name); \
-    theGui = new bx_##gui_name##_gui_c ();                            \
-    bx_gui = theGui;                                                  \
-    return(0); /* Success */                                          \
-  }                                                                   \
-  void CDECL lib##gui_name##_gui_plugin_fini(void) { }
+#define IMPLEMENT_GUI_PLUGIN_CODE(gui_name)                             \
+  PLUGIN_ENTRY_FOR_GUI_MODULE(gui_name)                                 \
+  {                                                                     \
+    if (mode == PLUGIN_INIT) {                                          \
+      genlog->info("installing %s module as the Bochs GUI", #gui_name); \
+      theGui = new bx_##gui_name##_gui_c ();                            \
+      bx_gui = theGui;                                                  \
+    } else if (mode == PLUGIN_PROBE) {                                  \
+      return (int)PLUGTYPE_GUI;                                         \
+    }                                                                   \
+    return(0); /* Success */                                            \
+  }
+
+#endif

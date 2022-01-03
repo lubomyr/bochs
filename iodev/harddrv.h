@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: harddrv.h 13478 2018-03-27 17:47:46Z vruppert $
+// $Id: harddrv.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -42,15 +42,15 @@ class cdrom_base_c;
 
 typedef struct {
   struct {
-    bx_bool busy;
-    bx_bool drive_ready;
-    bx_bool write_fault;
-    bx_bool seek_complete;
-    bx_bool drq;
-    bx_bool corrected_data;
-    bx_bool index_pulse;
+    bool busy;
+    bool drive_ready;
+    bool write_fault;
+    bool seek_complete;
+    bool drq;
+    bool corrected_data;
+    bool index_pulse;
     unsigned index_pulse_count;
-    bx_bool err;
+    bool err;
   } status;
   Bit8u    error_register;
   Bit8u    head_no;
@@ -82,13 +82,13 @@ typedef struct {
   Bit32u   drq_index;
   Bit8u    current_command;
   Bit8u    multiple_sectors;
-  bx_bool  lba_mode;
-  bx_bool  packet_dma;
+  bool     lba_mode;
+  bool     packet_dma;
   Bit8u    mdma_mode;
   Bit8u    udma_mode;
   struct {
-    bx_bool reset;       // 0=normal, 1=reset controller
-    bx_bool disable_irq; // 0=allow irq, 1=disable irq
+    bool reset;       // 0=normal, 1=reset controller
+    bool disable_irq; // 0=allow irq, 1=disable irq
   } control;
   Bit8u    reset_in_progress;
   Bit8u    features;
@@ -100,7 +100,7 @@ typedef struct {
     Bit8u  hcyl;
   } hob;
   Bit32u   num_sectors;
-  bx_bool  lba48;
+  bool  lba48;
 } controller_t;
 
 struct sense_info_t {
@@ -130,8 +130,8 @@ Bit32u read_32bit(const Bit8u* buf) BX_CPP_AttrRegparmN(1);
 
 struct cdrom_t
 {
-  bx_bool ready;
-  bx_bool locked;
+  bool ready;
+  bool locked;
   cdrom_base_c *cd;
   Bit32u max_lba;
   Bit32u curr_lba;
@@ -169,12 +169,9 @@ public:
   virtual ~bx_hard_drive_c();
   virtual void     init();
   virtual void     reset(unsigned type);
-  virtual Bit32u   get_first_cd_handle(void);
-  virtual bx_bool  get_cd_media_status(Bit32u handle);
-  virtual bx_bool  set_cd_media_status(Bit32u handle, bx_bool status);
 #if BX_SUPPORT_PCI
-  virtual bx_bool  bmdma_read_sector(Bit8u channel, Bit8u *buffer, Bit32u *sector_size);
-  virtual bx_bool  bmdma_write_sector(Bit8u channel, Bit8u *buffer);
+  virtual bool     bmdma_read_sector(Bit8u channel, Bit8u *buffer, Bit32u *sector_size);
+  virtual bool     bmdma_write_sector(Bit8u channel, Bit8u *buffer);
   virtual void     bmdma_complete(Bit8u channel);
 #endif
   virtual void     register_state(void);
@@ -204,28 +201,30 @@ public:
 
 private:
 
-  BX_HD_SMF bx_bool calculate_logical_address(Bit8u channel, Bit64s *sector) BX_CPP_AttrRegparmN(2);
+  BX_HD_SMF bool calculate_logical_address(Bit8u channel, Bit64s *sector) BX_CPP_AttrRegparmN(2);
   BX_HD_SMF void increment_address(Bit8u channel, Bit64s *sector) BX_CPP_AttrRegparmN(2);
   BX_HD_SMF void identify_drive(Bit8u channel);
   BX_HD_SMF void identify_ATAPI_drive(Bit8u channel);
   BX_HD_SMF void command_aborted(Bit8u channel, unsigned command);
 
-  BX_HD_SMF void init_send_atapi_command(Bit8u channel, Bit8u command, int req_length, int alloc_length, bx_bool lazy = 0);
+  BX_HD_SMF void init_send_atapi_command(Bit8u channel, Bit8u command, int req_length, int alloc_length, bool lazy = 0);
   BX_HD_SMF void ready_to_send_atapi(Bit8u channel) BX_CPP_AttrRegparmN(1);
   BX_HD_SMF void raise_interrupt(Bit8u channel) BX_CPP_AttrRegparmN(1);
-  BX_HD_SMF void atapi_cmd_error(Bit8u channel, sense_t sense_key, asc_t asc, bx_bool show);
+  BX_HD_SMF void atapi_cmd_error(Bit8u channel, sense_t sense_key, asc_t asc, bool show);
   BX_HD_SMF void init_mode_sense_single(Bit8u channel, const void* src, int size);
   BX_HD_SMF void atapi_cmd_nop(controller_t *controller) BX_CPP_AttrRegparmN(1);
-  BX_HD_SMF bx_bool bmdma_present(void);
+  BX_HD_SMF bool bmdma_present(void);
   BX_HD_SMF void set_signature(Bit8u channel, Bit8u id);
-  BX_HD_SMF bx_bool ide_read_sector(Bit8u channel, Bit8u *buffer, Bit32u buffer_size);
-  BX_HD_SMF bx_bool ide_write_sector(Bit8u channel, Bit8u *buffer, Bit32u buffer_size);
-  BX_HD_SMF void lba48_transform(controller_t *controller, bx_bool lba48);
+  BX_HD_SMF bool ide_read_sector(Bit8u channel, Bit8u *buffer, Bit32u buffer_size);
+  BX_HD_SMF bool ide_write_sector(Bit8u channel, Bit8u *buffer, Bit32u buffer_size);
+  BX_HD_SMF void lba48_transform(controller_t *controller, bool lba48);
   BX_HD_SMF void start_seek(Bit8u channel);
 
-  static Bit64s cdrom_status_handler(bx_param_c *param, int set, Bit64s val);
-  static const char* cdrom_path_handler(bx_param_string_c *param, int set,
-                                        const char *oldval, const char *val, int maxlen);
+  BX_HD_SMF bool set_cd_media_status(Bit32u handle, bool status);
+
+  static Bit64s cdrom_status_handler(bx_param_c *param, bool set, Bit64s val);
+  static const char* cdrom_path_handler(bx_param_string_c *param, bool set,
+                       const char *oldval, const char *val, int maxlen);
 
   // FIXME:
   // For each ATA channel we should have one controller struct
@@ -238,7 +237,7 @@ private:
       // they are fetched and returned via a return(), so
       // there's no need to keep them in x86 endian format.
       Bit16u id_drive[256];
-      bx_bool identify_set;
+      bool identify_set;
 
       controller_t controller;
       cdrom_t cdrom;
@@ -253,7 +252,7 @@ private:
       Bit8u model_no[41];
       int statusbar_id;
       Bit8u device_num; // for ATAPI identify & inquiry
-      bx_bool status_changed;
+      bool status_changed;
       int seek_timer_index;
     } drives[2];
     unsigned drive_select;
@@ -266,7 +265,7 @@ private:
 
   int rt_conf_id;
   Bit8u cdrom_count;
-  bx_bool pci_enabled;
+  bool pci_enabled;
 };
 
 #endif

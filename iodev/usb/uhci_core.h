@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: uhci_core.h 13150 2017-03-26 08:09:28Z vruppert $
+// $Id: uhci_core.h 14148 2021-02-16 17:04:04Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2017  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -51,14 +51,14 @@ typedef struct {
   //  Bit 1 = host controller reset
   //  Bit 0 = run/stop schedule
   struct {
-    bx_bool max_packet_size; //(bit 7) 0 = 32 bytes, 1 = 64 bytes
-    bx_bool configured;      //(bit 6)
-    bx_bool debug;           //(bit 5)
-    bx_bool resume;          //(bit 4)
-    bx_bool suspend;         //(bit 3)
-    bx_bool reset;           //(bit 2)
-    bx_bool host_reset;      //(bit 1)
-    bx_bool schedule;        //(bit 0) 0 = Stop, 1 = Run
+    bool  max_packet_size; //(bit 7) 0 = 32 bytes, 1 = 64 bytes
+    bool  configured;      //(bit 6)
+    bool  debug;           //(bit 5)
+    bool  resume;          //(bit 4)
+    bool  suspend;         //(bit 3)
+    bool  reset;           //(bit 2)
+    bool  host_reset;      //(bit 1)
+    bool  schedule;        //(bit 0) 0 = Stop, 1 = Run
   } usb_command;
 
   // Status Register
@@ -70,13 +70,13 @@ typedef struct {
   //  Bit 1 = USB error interrupt
   //  Bit 0 = USB interrupt
   struct {
-    bx_bool host_halted;     //(bit 5)
-    bx_bool host_error;      //(bit 4)
-    bx_bool pci_error;       //(bit 3)
-    bx_bool resume;          //(bit 2)
-    bx_bool error_interrupt; //(bit 1)
-    bx_bool interrupt;       //(bit 0)
-    Bit8u   status2; // bit 0 and 1 are used to generate the interrupt
+    bool  host_halted;     //(bit 5)
+    bool  host_error;      //(bit 4)
+    bool  pci_error;       //(bit 3)
+    bool  resume;          //(bit 2)
+    bool  error_interrupt; //(bit 1)
+    bool  interrupt;       //(bit 0)
+    Bit8u status2; // bit 0 and 1 are used to generate the interrupt
   } usb_status;
 
   // Interrupt Enable Register
@@ -86,10 +86,10 @@ typedef struct {
   //  Bit 1 = enable resume
   //  Bit 0 = enable timeout/crc
   struct {
-    bx_bool short_packet; //(bit 3)
-    bx_bool on_complete;  //(bit 2)
-    bx_bool resume;       //(bit 1)
-    bx_bool timeout_crc;  //(bit 0)
+    bool  short_packet; //(bit 3)
+    bool  on_complete;  //(bit 2)
+    bool  resume;       //(bit 1)
+    bool  timeout_crc;  //(bit 0)
   } usb_enable;
 
   // Frame Number Register
@@ -136,19 +136,19 @@ typedef struct {
     usb_device_c *device;   // device connected to this port
 
     // bit reps of actual port
-    bx_bool suspend;
-    bx_bool reset;
-    bx_bool low_speed;
-    bx_bool resume;
-    bx_bool line_dminus;
-    bx_bool line_dplus;
-    bx_bool able_changed;
-    bx_bool enabled;
-    bx_bool connect_changed;
-    bx_bool status;
+    bool suspend;
+    bool reset;
+    bool low_speed;
+    bool resume;
+    bool line_dminus;
+    bool line_dplus;
+    bool able_changed;
+    bool enabled;
+    bool connect_changed;
+    bool status;
   } usb_port[USB_UHCI_PORTS];
 
-  Bit8u   devfunc;
+  Bit8u  devfunc;
 } bx_uhci_core_t;
 
 #pragma pack (push, 1)
@@ -166,8 +166,8 @@ struct TD {
 struct HCSTACK {
   Bit32u  next;
   Bit8u   d;   // if queue, denotes VERT or HORZ
-  bx_bool q;
-  bx_bool t;
+  bool    q;
+  bool    t;
 };
 
 class bx_uhci_core_c : public bx_pci_device_c {
@@ -176,7 +176,7 @@ public:
   virtual ~bx_uhci_core_c();
   virtual void init_uhci(Bit8u devfunc, Bit16u devid, Bit8u headt, Bit8u intp);
   virtual void reset_uhci(unsigned);
-  virtual void register_state(bx_list_c *parent);
+  void    uhci_register_state(bx_list_c *parent);
   virtual void after_restore_state(void);
   virtual void set_port_device(int port, usb_device_c *dev);
   virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
@@ -186,20 +186,20 @@ public:
 protected:
   bx_uhci_core_t hub;
   Bit8u          global_reset;
-  bx_bool        busy;
+  bool           busy;
 
   USBAsync *packets;
 
   void update_irq(void);
 
   int  broadcast_packet(USBPacket *p);
-  void set_connect_status(Bit8u port, int type, bx_bool connected);
+  bool set_connect_status(Bit8u port, bool connected);
 
   static void uhci_timer_handler(void *);
   void uhci_timer(void);
-  bx_bool DoTransfer(Bit32u address, Bit32u queue_num, struct TD *);
-  void set_status(struct TD *td, bx_bool stalled, bx_bool data_buffer_error, bx_bool babble,
-    bx_bool nak, bx_bool crc_time_out, bx_bool bitstuff_error, Bit16u act_len);
+  bool DoTransfer(Bit32u address, Bit32u queue_num, struct TD *);
+  void set_status(struct TD *td, bool stalled, bool data_buffer_error, bool babble,
+    bool nak, bool crc_time_out, bool bitstuff_error, Bit16u act_len);
 
   static Bit32u read_handler(void *this_ptr, Bit32u address, unsigned io_len);
   static void   write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: tlb.h 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: tlb.h 14133 2021-02-08 13:06:44Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2015-2019 Stanislav Shwartsman
@@ -90,40 +90,40 @@ const Bit32u TLB_GlobalPage    = 0x80000000;
 
 // check if page from a TLB entry can be written
 #define isWriteOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x04 << (user)) & BX_CPU_THIS_PTR wr_pkey[tlbEntry->pkey])
+  (tlbEntry->accessBits & (0x04 << unsigned(user)) & BX_CPU_THIS_PTR wr_pkey[tlbEntry->pkey])
 
 // check if page from a TLB entry can be read
 #define isReadOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x01 << (user)) & BX_CPU_THIS_PTR rd_pkey[tlbEntry->pkey])
+  (tlbEntry->accessBits & (0x01 << unsigned(user)) & BX_CPU_THIS_PTR rd_pkey[tlbEntry->pkey])
 
 #if BX_SUPPORT_CET
 // check if page from a TLB entry can be written for shadow stack access
 #define isShadowStackWriteOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x40 << (user)) & BX_CPU_THIS_PTR wr_pkey[tlbEntry->pkey])
+  (tlbEntry->accessBits & (0x40 << unsigned(user)) & BX_CPU_THIS_PTR wr_pkey[tlbEntry->pkey])
 
 // check if page from a TLB entry can be read
 #define isShadowStackReadOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x10 << (user)) & BX_CPU_THIS_PTR rd_pkey[tlbEntry->pkey])
+  (tlbEntry->accessBits & (0x10 << unsigned(user)) & BX_CPU_THIS_PTR rd_pkey[tlbEntry->pkey])
 #endif
 
 #else // ! BX_SUPPORT_PKEYS
 
 // check if page from a TLB entry can be written
 #define isWriteOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x04 << (user)))
+  (tlbEntry->accessBits & (0x04 << unsigned(user)))
 
 // check if page from a TLB entry can be read
 #define isReadOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x01 << (user)))
+  (tlbEntry->accessBits & (0x01 << unsigned(user)))
 
 #if BX_SUPPORT_CET
 // check if page from a TLB entry can be written for shadow stack access
 #define isShadowStackWriteOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x40 << (user)))
+  (tlbEntry->accessBits & (0x40 << unsigned(user)))
 
 // check if page from a TLB entry can be read
 #define isShadowStackReadOK(tlbEntry, user) \
-  (tlbEntry->accessBits & (0x10 << (user)))
+  (tlbEntry->accessBits & (0x10 << unsigned(user)))
 #endif
 
 #endif
@@ -165,7 +165,7 @@ struct bx_TLB_entry
 
   bx_TLB_entry() { invalidate(); }
 
-  BX_CPP_INLINE bx_bool valid() const { return lpf != BX_INVALID_TLB_ENTRY; }
+  BX_CPP_INLINE bool valid() const { return lpf != BX_INVALID_TLB_ENTRY; }
 
   BX_CPP_INLINE void invalidate() {
     lpf = BX_INVALID_TLB_ENTRY;
@@ -179,7 +179,7 @@ template <unsigned size>
 struct TLB {
   bx_TLB_entry entry[size];
 #if BX_CPU_LEVEL >= 5
-  bx_bool split_large;
+  bool split_large;
 #endif
 
 public:

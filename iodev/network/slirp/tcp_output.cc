@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: tcp_output.cc 12269 2014-04-02 17:38:09Z vruppert $
+// $Id: tcp_output.cc 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1982, 1986, 1988, 1990, 1993
@@ -61,11 +61,11 @@ static const u_char  tcp_outflags[TCP_NSTATES] = {
 int
 tcp_output(struct tcpcb *tp)
 {
-	register struct socket *so = tp->t_socket;
-	register long len, win;
+	struct socket *so = tp->t_socket;
+	long len, win;
 	int off, flags, error;
-	register struct mbuf *m;
-	register struct tcpiphdr *ti;
+	struct mbuf *m;
+	struct tcpiphdr *ti;
 	u_char opt[MAX_TCPOPTLEN];
 	unsigned optlen, hdrlen;
 	int idle, sendalot;
@@ -313,7 +313,7 @@ send:
 		 * give data to the user when a buffer fills or
 		 * a PUSH comes in.)
 		 */
-		if (off + len == so->so_snd.sb_cc)
+		if (off + len == (long)so->so_snd.sb_cc)
 			flags |= TH_PUSH;
 	} else {
 		m = m_get(so->slirp);

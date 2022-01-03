@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.cc 13769 2020-01-03 21:17:15Z vruppert $
+// $Id: usb_msd.cc 14225 2021-04-17 09:30:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
 //
 //  Copyright (c) 2006 CodeSourcery.
 //  Written by Paul Brook
-//  Copyright (C) 2009-2020  The Bochs Project
+//  Copyright (C) 2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -39,16 +39,14 @@
 
 #define LOG_THIS
 
-// USB device plugin entry points
+// USB device plugin entry point
 
-int CDECL libusb_msd_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_msd)
 {
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_USB;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_msd_dev_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 //
@@ -59,10 +57,13 @@ class bx_usb_msd_locator_c : public usbdev_locator_c {
 public:
   bx_usb_msd_locator_c(void) : usbdev_locator_c("usb_msd") {}
 protected:
-  usb_device_c *allocate(usbdev_type devtype, const char *args) {
-    return (new usb_msd_device_c(devtype, args));
+  usb_device_c *allocate(const char *devname) {
+    return (new usb_msd_device_c(devname));
   }
 } bx_usb_msd_match;
+
+#define USB_MSD_TYPE_DISK  0
+#define USB_MSD_TYPE_CDROM 1
 
 enum USBMSDMode {
   USB_MSDM_CBW,
@@ -333,44 +334,37 @@ static const Bit8u bx_msd_bos_descriptor3[] = {
 
 void usb_msd_restore_handler(void *dev, bx_list_c *conf);
 
-static int usb_cdrom_count = 0;
+static Bit8u usb_cdrom_count = 0;
 
-usb_msd_device_c::usb_msd_device_c(usbdev_type type, const char *filename)
+usb_msd_device_c::usb_msd_device_c(const char *devname)
 {
   char pname[10];
   char label[32];
-  char tmpfname[BX_PATHNAME_LEN];
-  char *ptr1, *ptr2;
   bx_param_string_c *path;
   bx_param_enum_c *status;
 
-  d.type = type;
+  if (!strcmp(devname, "disk")) {
+    d.type = USB_MSD_TYPE_DISK;
+  } else {
+    d.type = USB_MSD_TYPE_CDROM;
+  }
   d.minspeed = USB_SPEED_FULL;
   d.maxspeed = USB_SPEED_SUPER;
   d.speed = d.minspeed;
   memset((void*)&s, 0, sizeof(s));
-  if (d.type == USB_DEV_TYPE_DISK) {
+  if (d.type == USB_MSD_TYPE_DISK) {
     strcpy(d.devname, "BOCHS USB HARDDRIVE");
-    strcpy(tmpfname, filename);
-    ptr1 = strtok(tmpfname, ":");
-    ptr2 = strtok(NULL, ":");
-    if ((ptr2 == NULL) || (strlen(ptr1) < 2)) {
-      s.image_mode = BX_HDIMAGE_MODE_FLAT;
-      strcpy(s.fname, filename);
-    } else {
-      s.image_mode = SIM->hdimage_get_mode(ptr1);
-      strcpy(s.fname, filename+strlen(ptr1)+1);
-    }
+    s.fname[0] = 0;
+    s.image_mode = strdup("flat");
     s.journal[0] = 0;
     s.size = 0;
     s.sect_size = 512;
-  } else if (d.type == USB_DEV_TYPE_CDROM) {
+  } else if (d.type == USB_MSD_TYPE_CDROM) {
     strcpy(d.devname, "BOCHS USB CDROM");
-    strcpy(s.fname, filename);
     // config options
     bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
-    sprintf(pname, "cdrom%d", ++usb_cdrom_count);
-    sprintf(label, "USB CD-ROM #%d Configuration", usb_cdrom_count);
+    sprintf(pname, "cdrom%u", ++usb_cdrom_count);
+    sprintf(label, "USB CD-ROM #%u Configuration", usb_cdrom_count);
     s.config = new bx_list_c(usb_rt, pname, label);
     s.config->set_options(bx_list_c::SERIES_ASK | bx_list_c::USE_BOX_TITLE);
     s.config->set_device_param(this);
@@ -399,12 +393,12 @@ usb_msd_device_c::usb_msd_device_c(usbdev_type type, const char *filename)
 
 usb_msd_device_c::~usb_msd_device_c(void)
 {
-  d.sr->clear();
   if (s.scsi_dev != NULL)
     delete s.scsi_dev;
   if (s.hdimage != NULL) {
     s.hdimage->close();
     delete s.hdimage;
+    free(s.image_mode);
   } else if (s.cdrom != NULL) {
     delete s.cdrom;
     if (SIM->is_wx_selected()) {
@@ -416,19 +410,40 @@ usb_msd_device_c::~usb_msd_device_c(void)
   }
 }
 
-bx_bool usb_msd_device_c::set_option(const char *option)
+bool usb_msd_device_c::set_option(const char *option)
 {
+  char filename[BX_PATHNAME_LEN];
+  char *ptr1, *ptr2;
   char *suffix;
 
-  if (!strncmp(option, "journal:", 8)) {
-    if (d.type == USB_DEV_TYPE_DISK) {
+  if (!strncmp(option, "path:", 5)) {
+    strcpy(filename, option+5);
+    if (d.type == USB_MSD_TYPE_DISK) {
+      ptr1 = strtok(filename, ":");
+      ptr2 = strtok(NULL, ":");
+      if ((ptr2 == NULL) || (strlen(ptr1) < 2)) {
+        free(s.image_mode);
+        s.image_mode = strdup("flat");
+        strcpy(s.fname, option+5);
+      } else {
+        free(s.image_mode);
+        s.image_mode = strdup(ptr1);
+        strcpy(s.fname, ptr2);
+      }
+    } else {
+      strcpy(s.fname, filename);
+      SIM->get_param_string("path", s.config)->set(s.fname);
+    }
+    return 1;
+  } else if (!strncmp(option, "journal:", 8)) {
+    if (d.type == USB_MSD_TYPE_DISK) {
       strcpy(s.journal, option+8);
       return 1;
     } else {
       BX_ERROR(("Option 'journal' is only valid for USB disks"));
     }
   } else if (!strncmp(option, "size:", 5)) {
-    if ((d.type == USB_DEV_TYPE_DISK) && (s.image_mode == BX_HDIMAGE_MODE_VVFAT)) {
+    if ((d.type == USB_MSD_TYPE_DISK) && (!strcmp(s.image_mode, "vvfat"))) {
       s.size = (int)strtol(option+5, &suffix, 10);
       if (!strcmp(suffix, "G")) {
         s.size <<= 10;
@@ -447,7 +462,7 @@ bx_bool usb_msd_device_c::set_option(const char *option)
       BX_ERROR(("Option 'size' is only valid for USB VVFAT disks"));
     }
   } else if (!strncmp(option, "sect_size:", 10)) {
-    if (d.type == USB_DEV_TYPE_DISK) {
+    if (d.type == USB_MSD_TYPE_DISK) {
       s.sect_size = (unsigned)strtol(option+10, &suffix, 10);
       if (strlen(suffix) > 0) {
         BX_ERROR(("Option 'sect_size': ignoring extra data"));
@@ -464,28 +479,33 @@ bx_bool usb_msd_device_c::set_option(const char *option)
   return 0;
 }
 
-bx_bool usb_msd_device_c::init()
+bool usb_msd_device_c::init()
 {
-  if (d.type == USB_DEV_TYPE_DISK) {
-    s.hdimage = DEV_hdimage_init_image(s.image_mode, 0, s.journal);
-    if (s.image_mode == BX_HDIMAGE_MODE_VVFAT) {
-      Bit64u hdsize = ((Bit64u)s.size) << 20;
-      s.hdimage->cylinders = (unsigned)(hdsize/16.0/63.0/512.0);
-      s.hdimage->heads = 16;
-      s.hdimage->spt = 63;
-      s.hdimage->sect_size = 512;
+  if (d.type == USB_MSD_TYPE_DISK) {
+    if (strlen(s.fname) > 0) {
+      s.hdimage = DEV_hdimage_init_image(s.image_mode, 0, s.journal);
+      if (!strcmp(s.image_mode, "vvfat")) {
+        Bit64u hdsize = ((Bit64u)s.size) << 20;
+        s.hdimage->cylinders = (unsigned)(hdsize/16.0/63.0/512.0);
+        s.hdimage->heads = 16;
+        s.hdimage->spt = 63;
+        s.hdimage->sect_size = 512;
+      } else {
+        s.hdimage->sect_size = s.sect_size;
+      }
+      if (s.hdimage->open(s.fname) < 0) {
+        BX_ERROR(("could not open hard drive image file '%s'", s.fname));
+        return 0;
+      } else {
+        s.scsi_dev = new scsi_device_t(s.hdimage, 0, usb_msd_command_complete, (void*)this);
+      }
+      sprintf(s.info_txt, "USB HD: path='%s', mode='%s', sect_size=%d", s.fname,
+              s.image_mode, s.hdimage->sect_size);
     } else {
-      s.hdimage->sect_size = s.sect_size;
-    }
-    if (s.hdimage->open(s.fname) < 0) {
-      BX_ERROR(("could not open hard drive image file '%s'", s.fname));
+      BX_ERROR(("USB HD: disk image not specified"));
       return 0;
-    } else {
-      s.scsi_dev = new scsi_device_t(s.hdimage, 0, usb_msd_command_complete, (void*)this);
     }
-    sprintf(s.info_txt, "USB HD: path='%s', mode='%s', sect_size=%d", s.fname,
-            hdimage_mode_names[s.image_mode], s.hdimage->sect_size);
-  } else if (d.type == USB_DEV_TYPE_CDROM) {
+  } else if (d.type == USB_MSD_TYPE_CDROM) {
     s.cdrom = DEV_hdimage_init_cdrom(s.fname);
     s.scsi_dev = new scsi_device_t(s.cdrom, 0, usb_msd_command_complete, (void*)this);
     if (set_inserted(1)) {
@@ -529,12 +549,12 @@ const char* usb_msd_device_c::get_info()
 void usb_msd_device_c::register_state_specific(bx_list_c *parent)
 {
   s.sr_list = new bx_list_c(parent, "s", "USB MSD Device State");
-  if (d.type == USB_DEV_TYPE_CDROM) {
+  if (d.type == USB_MSD_TYPE_CDROM) {
     bx_list_c *rt_config = new bx_list_c(s.sr_list, "rt_config");
     rt_config->add(s.config->get_by_name("path"));
     rt_config->add(s.config->get_by_name("status"));
     rt_config->set_restore_handler(this, usb_msd_restore_handler);
-  } else if ((d.type == USB_DEV_TYPE_DISK) && (s.hdimage != NULL)) {
+  } else if ((d.type == USB_MSD_TYPE_DISK) && (s.hdimage != NULL)) {
     s.hdimage->register_state(s.sr_list);
   }
   BXRS_DEC_PARAM_FIELD(s.sr_list, mode, s.mode);
@@ -669,7 +689,7 @@ int usb_msd_device_c::handle_data(USBPacket *p)
 
   switch (p->pid) {
     case USB_TOKEN_OUT:
-      usb_dump_packet(data, len);
+      usb_dump_packet(data, len, 0, p->devaddr, USB_DIR_OUT | p->devep, USB_TRANS_TYPE_BULK, false, true);
       if (devep != 2)
         goto fail;
 
@@ -795,7 +815,7 @@ int usb_msd_device_c::handle_data(USBPacket *p)
           BX_ERROR(("USB MSD handle_data: unexpected mode at USB_TOKEN_IN: (0x%02X)", s.mode));
           goto fail;
       }
-      if (ret > 0) usb_dump_packet(data, ret);
+      if (ret > 0) usb_dump_packet(data, ret, 0, p->devaddr, USB_DIR_IN | p->devep, USB_TRANS_TYPE_BULK, false, true);
       break;
 
     default:
@@ -842,6 +862,8 @@ void usb_msd_device_c::send_status(USBPacket *p)
   csw.residue = htod32(s.residue);
   csw.status = s.result;
   memcpy(p->data, &csw, BX_MIN(p->len, 13));
+
+  usb_dump_packet(p->data, BX_MIN(p->len, 13), 0, p->devaddr, USB_DIR_IN | p->devep, USB_TRANS_TYPE_BULK, false, false);
 }
 
 void usb_msd_device_c::usb_msd_command_complete(void *this_ptr, int reason, Bit32u tag, Bit32u arg)
@@ -865,7 +887,6 @@ void usb_msd_device_c::command_complete(int reason, Bit32u tag, Bit32u arg)
       if ((s.data_len == 0) && (s.mode == USB_MSDM_DATAOUT)) {
         send_status(p);
         s.mode = USB_MSDM_CBW;
-        usb_dump_packet(p->data, p->len);
       } else if (s.mode == USB_MSDM_CSW) {
         send_status(p);
         s.mode = USB_MSDM_CBW;
@@ -890,7 +911,7 @@ void usb_msd_device_c::command_complete(int reason, Bit32u tag, Bit32u arg)
   s.scsi_buf = s.scsi_dev->scsi_get_buf(tag);
   if (p) {
     if ((s.scsi_len > 0) && (s.mode == USB_MSDM_DATAIN)) {
-      usb_dump_packet(s.scsi_buf, p->len);
+      usb_dump_packet(s.scsi_buf, p->len, 0, p->devaddr, USB_DIR_OUT | p->devep, USB_TRANS_TYPE_BULK, false, true);
     }
     copy_data();
     if (s.usb_len == 0) {
@@ -910,7 +931,7 @@ void usb_msd_device_c::cancel_packet(USBPacket *p)
   s.scsi_len = 0;
 }
 
-bx_bool usb_msd_device_c::set_inserted(bx_bool value)
+bool usb_msd_device_c::set_inserted(bool value)
 {
   const char *path;
 
@@ -934,19 +955,23 @@ bx_bool usb_msd_device_c::set_inserted(bx_bool value)
   return value;
 }
 
-bx_bool usb_msd_device_c::get_inserted()
+bool usb_msd_device_c::get_inserted()
 {
   return s.scsi_dev->get_inserted();
 }
 
-bx_bool usb_msd_device_c::get_locked()
+bool usb_msd_device_c::get_locked()
 {
-  return s.scsi_dev->get_locked();
+  if (s.scsi_dev != NULL) {
+    return s.scsi_dev->get_locked();
+  } else {
+    return 0;
+  }
 }
 
 void usb_msd_device_c::runtime_config(void)
 {
-  if (d.type == USB_DEV_TYPE_CDROM) {
+  if (d.type == USB_MSD_TYPE_CDROM) {
     if (s.status_changed) {
       set_inserted(0);
       if (SIM->get_param_enum("status", s.config)->get() == BX_INSERTED) {
@@ -961,7 +986,7 @@ void usb_msd_device_c::runtime_config(void)
 #define LOG_THIS cdrom->
 
 // USB cdrom runtime parameter handlers
-const char *usb_msd_device_c::cdrom_path_handler(bx_param_string_c *param, int set,
+const char *usb_msd_device_c::cdrom_path_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val, int maxlen)
 {
   usb_msd_device_c *cdrom;
@@ -985,7 +1010,7 @@ const char *usb_msd_device_c::cdrom_path_handler(bx_param_string_c *param, int s
   return val;
 }
 
-Bit64s usb_msd_device_c::cdrom_status_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s usb_msd_device_c::cdrom_status_handler(bx_param_c *param, bool set, Bit64s val)
 {
   usb_msd_device_c *cdrom;
 

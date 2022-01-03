@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gameport.h 10289 2011-03-31 16:54:06Z vruppert $
+// $Id: gameport.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003-2009  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -38,16 +38,16 @@ public:
   virtual void init(void);
   virtual void reset(unsigned type);
   virtual void register_state(void);
-  virtual void set_enabled(bx_bool val) {enabled = val;}
+  virtual void set_enabled(bool val) {enabled = val;}
 
 private:
-  bx_bool enabled;
+  bool    enabled;
   int     joyfd;
   Bit8u   port;
   Bit16u  delay_x;
   Bit16u  delay_y;
-  bx_bool timer_x;
-  bx_bool timer_y;
+  bool    timer_x;
+  bool    timer_y;
   Bit64u  write_usec;
 
   BX_GAMEPORT_SMF void poll_joydev(void);

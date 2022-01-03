@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: hdimage.cc 13506 2018-05-11 07:44:49Z vruppert $
+// $Id: hdimage.cc 14229 2021-04-18 17:20:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -19,18 +19,16 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 /////////////////////////////////////////////////////////////////////////
 
-// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
-// platforms that require a special tag on exported symbols, BX_PLUGGABLE
-// is used to know when we are exporting symbols and when we are importing.
-#define BX_PLUGGABLE
-
 #ifdef BXIMAGE
 #include "config.h"
 #include "misc/bxcompat.h"
 #include "osdep.h"
 #include "misc/bswap.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "gui/siminterface.h"
+#include "param_names.h"
+#include "plugin.h"
 #include "cdrom.h"
 #include "cdrom_amigaos.h"
 #include "cdrom_misc.h"
@@ -38,11 +36,6 @@
 #include "cdrom_win32.h"
 #endif
 #include "hdimage.h"
-#include "vmware3.h"
-#include "vmware4.h"
-#include "vvfat.h"
-#include "vpc-img.h"
-#include "vbox.h"
 
 #if BX_HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -57,99 +50,125 @@
 #define O_ACCMODE (O_WRONLY | O_RDWR)
 #endif
 
-#define LOG_THIS theHDImageCtl->
+#define LOG_THIS bx_hdimage_ctl.
 
 #ifndef BXIMAGE
 
-bx_hdimage_ctl_c* theHDImageCtl = NULL;
+bx_hdimage_ctl_c bx_hdimage_ctl;
 
-int CDECL libhdimage_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
-{
-  if (type == PLUGTYPE_CORE) {
-    theHDImageCtl = new bx_hdimage_ctl_c;
-    bx_devices.pluginHDImageCtl = theHDImageCtl;
-    return 0; // Success
-  } else {
-    return -1;
-  }
-}
+const Bit8u n_hdimage_builtin_modes = 7;
 
-void CDECL libhdimage_LTX_plugin_fini(void)
-{
-  delete theHDImageCtl;
-}
+const char *builtin_mode_names[n_hdimage_builtin_modes] = {
+  "flat",
+  "concat",
+  "sparse",
+  "dll",
+  "growing",
+  "undoable",
+  "volatile"
+};
+
+const char **hdimage_mode_names;
 
 bx_hdimage_ctl_c::bx_hdimage_ctl_c()
 {
   put("hdimage", "IMG");
 }
 
-device_image_t* bx_hdimage_ctl_c::init_image(Bit8u image_mode, Bit64u disk_size, const char *journal)
+void bx_hdimage_ctl_c::init(void)
+{
+  Bit8u count = n_hdimage_builtin_modes;
+
+  count += PLUG_get_plugins_count(PLUGTYPE_IMG);
+  hdimage_mode_names = (const char**) malloc((count + 1) * sizeof(char*));
+  for (Bit8u i = 0; i < n_hdimage_builtin_modes; i++) {
+    hdimage_mode_names[i] = builtin_mode_names[i];
+  }
+  Bit8u n = 0;
+  for (Bit8u i = n_hdimage_builtin_modes; i < count; i++) {
+    hdimage_mode_names[i] = PLUG_get_plugin_name(PLUGTYPE_IMG, n);
+    n++;
+  }
+  hdimage_mode_names[count] = NULL;
+}
+
+const char **bx_hdimage_ctl_c::get_mode_names(void)
+{
+  return hdimage_mode_names;
+}
+
+int bx_hdimage_ctl_c::get_mode_id(const char *mode)
+{
+  int i = 0;
+
+  while (hdimage_mode_names[i] != NULL) {
+    if (!strcmp(mode, hdimage_mode_names[i])) return i;
+    i++;
+  }
+  return -1;
+}
+
+void bx_hdimage_ctl_c::list_modules(void)
+{
+  char list[60];
+  Bit8u i = 0;
+  size_t len = 0, len1;
+
+  BX_INFO(("Disk image modules"));
+  list[0] = 0;
+  while (hdimage_mode_names[i] != NULL) {
+    len1 = strlen(hdimage_mode_names[i]);
+    if ((len + len1 + 1) > 58) {
+      BX_INFO((" %s", list));
+      list[0] = 0;
+      len = 0;
+    }
+    strcat(list, " ");
+    strcat(list, hdimage_mode_names[i]);
+    len = strlen(list);
+    i++;
+  }
+  if (len > 0) {
+    BX_INFO((" %s", list));
+  }
+}
+
+void bx_hdimage_ctl_c::exit(void)
+{
+  free(hdimage_mode_names);
+  hdimage_locator_c::cleanup();
+}
+
+device_image_t* bx_hdimage_ctl_c::init_image(const char *image_mode, Bit64u disk_size, const char *journal)
 {
   device_image_t *hdimage = NULL;
 
   // instantiate the right class
-  switch (image_mode) {
-
-    case BX_HDIMAGE_MODE_FLAT:
-      hdimage = new flat_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_CONCAT:
-      hdimage = new concat_image_t();
-      break;
-
-#if EXTERNAL_DISK_SIMULATOR
-    case BX_HDIMAGE_MODE_EXTDISKSIM:
-      hdimage = new EXTERNAL_DISK_SIMULATOR_CLASS();
-      break;
-#endif //EXTERNAL_DISK_SIMULATOR
-
+  if (!strcmp(image_mode, "flat")) {
+    hdimage = new flat_image_t();
+  } else if (!strcmp(image_mode, "concat")) {
+    hdimage = new concat_image_t();
 #ifdef WIN32
-    case BX_HDIMAGE_MODE_DLL_HD:
-      hdimage = new dll_image_t();
-      break;
+  } else if (!strcmp(image_mode, "dll")) {
+    hdimage = new dll_image_t();
 #endif //DLL_HD_SUPPORT
-
-    case BX_HDIMAGE_MODE_SPARSE:
-      hdimage = new sparse_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VMWARE3:
-      hdimage = new vmware3_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VMWARE4:
-      hdimage = new vmware4_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_UNDOABLE:
-      hdimage = new undoable_image_t(journal);
-      break;
-
-    case BX_HDIMAGE_MODE_GROWING:
-      hdimage = new growing_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VOLATILE:
-      hdimage = new volatile_image_t(journal);
-      break;
-
-    case BX_HDIMAGE_MODE_VVFAT:
-      hdimage = new vvfat_image_t(disk_size, journal);
-      break;
-
-    case BX_HDIMAGE_MODE_VPC:
-      hdimage = new vpc_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VBOX:
-      hdimage = new vbox_image_t();
-      break;
-
-    default:
-      BX_PANIC(("Disk image mode '%s' not available", hdimage_mode_names[image_mode]));
-      break;
+  } else if (!strcmp(image_mode, "sparse")) {
+    hdimage = new sparse_image_t();
+  } else if (!strcmp(image_mode, "undoable")) {
+    hdimage = new undoable_image_t(journal);
+  } else if (!strcmp(image_mode, "growing")) {
+    hdimage = new growing_image_t();
+  } else if (!strcmp(image_mode, "volatile")) {
+    hdimage = new volatile_image_t(journal);
+  } else {
+    if (!hdimage_locator_c::module_present(image_mode)) {
+#if BX_PLUGINS
+      PLUG_load_plugin_var(image_mode, PLUGTYPE_IMG);
+#else
+      BX_PANIC(("Disk image mode '%s' not available", image_mode));
+#endif
+    }
+    hdimage = hdimage_locator_c::create(image_mode, disk_size, journal);
   }
   return hdimage;
 }
@@ -165,7 +184,113 @@ cdrom_base_c* bx_hdimage_ctl_c::init_cdrom(const char *dev)
 
 #endif // ifndef BXIMAGE
 
+hdimage_locator_c *hdimage_locator_c::all = NULL;
+
+//
+// Each disk image module has a static locator class that registers
+// here
+//
+hdimage_locator_c::hdimage_locator_c(const char *mode)
+{
+  hdimage_locator_c *ptr;
+
+  this->mode = mode;
+  this->next = NULL;
+  if (all == NULL) {
+    all = this;
+  } else {
+    ptr = all;
+    while (ptr->next) ptr = ptr->next;
+    ptr->next = this;
+  }
+}
+
+hdimage_locator_c::~hdimage_locator_c()
+{
+  hdimage_locator_c *ptr = 0;
+
+  if (this == all) {
+    all = all->next;
+  } else {
+    ptr = all;
+    while (ptr != NULL) {
+      if (ptr->next != this) {
+        ptr = ptr->next;
+      } else {
+        break;
+      }
+    }
+  }
+  if (ptr) {
+    ptr->next = this->next;
+  }
+}
+
+bool hdimage_locator_c::module_present(const char *mode)
+{
+  hdimage_locator_c *ptr;
+
+  for (ptr = all; ptr != NULL; ptr = ptr->next) {
+    if (strcmp(mode, ptr->mode) == 0)
+      return 1;
+  }
+  return 0;
+}
+
+void hdimage_locator_c::cleanup()
+{
+#if BX_PLUGINS && !defined(BXIMAGE)
+  while (all != NULL) {
+    PLUG_unload_plugin_type(all->mode, PLUGTYPE_IMG);
+  }
+#endif
+}
+
+//
+// Called by common hdimage code to locate and create a device_image_t
+// object
+//
+device_image_t*
+hdimage_locator_c::create(const char *mode, Bit64u disk_size, const char *journal)
+{
+  hdimage_locator_c *ptr = 0;
+
+  for (ptr = all; ptr != NULL; ptr = ptr->next) {
+    if (strcmp(mode, ptr->mode) == 0)
+      return (ptr->allocate(disk_size, journal));
+  }
+  return NULL;
+}
+
+bool hdimage_locator_c::detect_image_mode(int fd, Bit64u disk_size,
+                                          const char **image_mode)
+{
+  hdimage_locator_c *ptr = 0;
+
+  for (ptr = all; ptr != NULL; ptr = ptr->next) {
+    if (ptr->check_format(fd, disk_size) == HDIMAGE_FORMAT_OK) {
+      *image_mode = ptr->mode;
+      return 1;
+    }
+  }
+  return 0;
+}
+
 // helper functions
+
+#ifdef BXIMAGE
+int bx_create_image_file(const char *filename)
+{
+  int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC
+#ifdef O_BINARY
+                | O_BINARY
+#endif
+                , S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP
+                );
+  return fd;
+}
+#endif
+
 int bx_read_image(int fd, Bit64s offset, void *buf, int count)
 {
   if (lseek(fd, offset, SEEK_SET) == -1) {
@@ -292,30 +417,30 @@ int hdimage_open_file(const char *pathname, int flags, Bit64u *fsize, FILETIME *
   return fd;
 }
 
-int hdimage_detect_image_mode(const char *pathname)
+bool hdimage_detect_image_mode(const char *pathname, const char **image_mode)
 {
-  int result = BX_HDIMAGE_MODE_UNKNOWN;
+  bool result = false;
   Bit64u image_size = 0;
 
+#if BX_PLUGINS && !defined(BXIMAGE)
+  PLUG_load_plugin_var("*", PLUGTYPE_IMG);
+#endif
   int fd = hdimage_open_file(pathname, O_RDONLY, &image_size, NULL);
   if (fd < 0) {
     return result;
   }
 
   if (sparse_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_SPARSE;
-  } else if (vmware3_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_VMWARE3;
-  } else if (vmware4_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_VMWARE4;
+    *image_mode = "sparse";
+    result = true;
   } else if (growing_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_GROWING;
-  } else if (vpc_image_t::check_format(fd, image_size) >= HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_VPC;
-  } else if (vbox_image_t::check_format(fd, image_size) >= HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_VBOX;
+    *image_mode = "growing";
+    result = true;
+  } else if (hdimage_locator_c::detect_image_mode(fd, image_size, image_mode)) {
+    result = true;
   } else if (flat_image_t::check_format(fd, image_size) == HDIMAGE_FORMAT_OK) {
-    result = BX_HDIMAGE_MODE_FLAT;
+    *image_mode = "flat";
+    result = true;
   }
   ::close(fd);
 
@@ -355,7 +480,7 @@ Bit16u fat_datetime(FILETIME time, int return_time)
 Bit64s hdimage_save_handler(void *class_ptr, bx_param_c *param)
 {
   char imgname[BX_PATHNAME_LEN];
-  char path[BX_PATHNAME_LEN];
+  char path[BX_PATHNAME_LEN+1];
 
   param->get_param_path(imgname, BX_PATHNAME_LEN);
   if (!strncmp(imgname, "bochs.", 6)) {
@@ -371,7 +496,7 @@ Bit64s hdimage_save_handler(void *class_ptr, bx_param_c *param)
 void hdimage_restore_handler(void *class_ptr, bx_param_c *param, Bit64s value)
 {
   char imgname[BX_PATHNAME_LEN];
-  char path[BX_PATHNAME_LEN];
+  char path[BX_PATHNAME_LEN+1];
 
   if (value != 0) {
     param->get_param_path(imgname, BX_PATHNAME_LEN);
@@ -383,12 +508,12 @@ void hdimage_restore_handler(void *class_ptr, bx_param_c *param, Bit64s value)
   }
 }
 
-bx_bool hdimage_backup_file(int fd, const char *backup_fname)
+bool hdimage_backup_file(int fd, const char *backup_fname)
 {
   char *buf;
   off_t offset;
   int nread, size;
-  bx_bool ret = 1;
+  bool ret = 1;
 
   int backup_fd = ::open(backup_fname, O_RDWR | O_CREAT | O_TRUNC
 #ifdef O_BINARY
@@ -424,10 +549,10 @@ bx_bool hdimage_backup_file(int fd, const char *backup_fname)
 }
 #endif
 
-bx_bool hdimage_copy_file(const char *src, const char *dst)
+bool hdimage_copy_file(const char *src, const char *dst)
 {
 #ifdef WIN32
-  return (bx_bool)CopyFile(src, dst, FALSE);
+  return (bool)CopyFile(src, dst, FALSE);
 #elif defined(linux)
   pid_t pid, ws;
 
@@ -449,7 +574,7 @@ bx_bool hdimage_copy_file(const char *src, const char *dst)
   char *buf;
   off_t offset;
   int nread, size;
-  bx_bool ret = 1;
+  bool ret = 1;
 
   fd1 = ::open(src, O_RDONLY
 #ifdef O_BINARY
@@ -498,6 +623,7 @@ bx_bool hdimage_copy_file(const char *src, const char *dst)
 
 device_image_t::device_image_t()
 {
+  cylinders = 0;
   hd_size = 0;
   sect_size = 512;
 }
@@ -577,7 +703,7 @@ int flat_image_t::check_format(int fd, Bit64u imgsize)
 }
 
 #ifndef BXIMAGE
-bx_bool flat_image_t::save_state(const char *backup_fname)
+bool flat_image_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(fd, backup_fname);
 }
@@ -792,9 +918,9 @@ ssize_t concat_image_t::write(const void* buf, size_t count)
 }
 
 #ifndef BXIMAGE
-bx_bool concat_image_t::save_state(const char *backup_fname)
+bool concat_image_t::save_state(const char *backup_fname)
 {
-  bx_bool ret = 1;
+  bool ret = 1;
   char tempfn[BX_PATHNAME_LEN];
 
   for (int index = 0; index < maxfd; index++) {
@@ -883,7 +1009,7 @@ int sparse_image_t::read_header()
   data_start = 0;
   while ((size_t)data_start < preamble_size) data_start += pagesize;
 
-  bx_bool did_mmap = 0;
+  bool did_mmap = 0;
 
 #ifdef _POSIX_MAPPED_FILES
   // Try to memory map from the beginning of the file (0 is trivially a page multiple)
@@ -1269,7 +1395,7 @@ ssize_t sparse_image_t::write(const void* buf, size_t count)
 
   if (update_pagetable_count != 0)
   {
-    bx_bool done = 0;
+    bool done = 0;
     off_t pagetable_write_from = sizeof(header) + (sizeof(Bit32u) * update_pagetable_start);
     size_t write_bytecount = update_pagetable_count * sizeof(Bit32u);
 
@@ -1330,8 +1456,66 @@ int sparse_image_t::check_format(int fd, Bit64u imgsize)
   return HDIMAGE_FORMAT_OK;
 }
 
-#ifndef BXIMAGE
-bx_bool sparse_image_t::save_state(const char *backup_fname)
+#ifdef BXIMAGE
+int sparse_image_t::create_image(const char *pathname, Bit64u size)
+{
+  Bit64u numpages;
+  sparse_header_t header;
+  size_t sizesofar;
+  int padtopagesize;
+
+  memset(&header, 0, sizeof(header));
+  header.magic = htod32(SPARSE_HEADER_MAGIC);
+  header.version = htod32(SPARSE_HEADER_VERSION);
+
+  header.pagesize = htod32((1 << 10) * 32); // Use 32 KB Pages - could be configurable
+  numpages = (size / dtoh32(header.pagesize)) + 1;
+
+  header.numpages = htod32((Bit32u)numpages);
+  header.disk = htod64(size);
+
+  if (numpages != dtoh32(header.numpages)) {
+    BX_FATAL(("ERROR: The disk image is too large for a sparse image!"));
+    // Could increase page size here.
+    // But note this only happens at 128 Terabytes!
+  }
+
+  int fd = bx_create_image_file(pathname);
+  if (fd < 0)
+    BX_FATAL(("ERROR: failed to create sparse image file"));
+  if (bx_write_image(fd, 0, &header, sizeof(header)) != sizeof(header)) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write header!"));
+  }
+
+  Bit32u *pagetable = new Bit32u[dtoh32(header.numpages)];
+  if (pagetable == NULL)
+    BX_FATAL(("ERROR: The disk image is not complete - could not create pagetable!"));
+  for (Bit32u i=0; i<dtoh32(header.numpages); i++)
+    pagetable[i] = htod32(SPARSE_PAGE_NOT_ALLOCATED);
+
+  if (bx_write_image(fd, sizeof(header), pagetable, 4 * dtoh32(header.numpages)) != (int)(4 * dtoh32(header.numpages))) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write pagetable!"));
+  }
+  delete [] pagetable;
+
+  sizesofar = SPARSE_HEADER_SIZE + (4 * dtoh32(header.numpages));
+  padtopagesize = dtoh32(header.pagesize) - (sizesofar & (dtoh32(header.pagesize) - 1));
+
+  Bit8u *padding = new Bit8u[padtopagesize];
+  memset(padding, 0, padtopagesize);
+
+  if (bx_write_image(fd, sizesofar, padding, padtopagesize) != padtopagesize) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write padding!"));
+  }
+  delete [] padding;
+  ::close(fd);
+  return 0;
+}
+#else
+bool sparse_image_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(fd, backup_fname);
 }
@@ -1720,7 +1904,7 @@ Bit32u redolog_t::get_timestamp()
   return dtoh32(header.specific.timestamp);
 }
 
-bx_bool redolog_t::set_timestamp(Bit32u timestamp)
+bool redolog_t::set_timestamp(Bit32u timestamp)
 {
   header.specific.timestamp = htod32(timestamp);
   // Update header
@@ -1809,7 +1993,7 @@ ssize_t redolog_t::write(const void* buf, size_t count)
   Bit32u i;
   Bit64s block_offset, bitmap_offset, catalog_offset;
   ssize_t written;
-  bx_bool update_catalog = 0;
+  bool update_catalog = 0;
 
   if (count != 512) {
     BX_PANIC(("redolog : write() with count not 512"));
@@ -1980,7 +2164,7 @@ int redolog_t::commit(device_image_t *base_image)
 #endif
 
 #ifndef BXIMAGE
-bx_bool redolog_t::save_state(const char *backup_fname)
+bool redolog_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(fd, backup_fname);
 }
@@ -2058,8 +2242,17 @@ int growing_image_t::check_format(int fd, Bit64u imgsize)
   return redolog_t::check_format(fd, REDOLOG_SUBTYPE_GROWING);
 }
 
-#ifndef BXIMAGE
-bx_bool growing_image_t::save_state(const char *backup_fname)
+#ifdef BXIMAGE
+int growing_image_t::create_image(const char *pathname, Bit64u size)
+{
+  redolog = new redolog_t;
+  if (redolog->create(pathname, REDOLOG_SUBTYPE_GROWING, size) < 0)
+    BX_FATAL(("Can't create growing mode image"));
+  redolog->close();
+  return 0;
+}
+#else
+bool growing_image_t::save_state(const char *backup_fname)
 {
   return redolog->save_state(backup_fname);
 }
@@ -2072,7 +2265,7 @@ void growing_image_t::restore_state(const char *backup_fname)
     BX_PANIC(("Can't open growing image backup '%s'", backup_fname));
     return;
   } else {
-    bx_bool okay = (temp_redolog->get_size() == redolog->get_size());
+    bool okay = (temp_redolog->get_size() == redolog->get_size());
     temp_redolog->close();
     delete temp_redolog;
     if (!okay) {
@@ -2093,7 +2286,7 @@ void growing_image_t::restore_state(const char *backup_fname)
 
 // compare hd_size and modification time of r/o disk and journal
 
-bx_bool coherency_check(device_image_t *ro_disk, redolog_t *redolog)
+bool coherency_check(device_image_t *ro_disk, redolog_t *redolog)
 {
   Bit32u timestamp1, timestamp2;
   char buffer[24];
@@ -2141,18 +2334,19 @@ undoable_image_t::~undoable_image_t()
 
 int undoable_image_t::open(const char* pathname, int flags)
 {
+  const char* image_mode = NULL;
+
   UNUSED(flags);
   if (access(pathname, F_OK) < 0) {
     BX_PANIC(("r/o disk image doesn't exist"));
   }
-  int mode = hdimage_detect_image_mode(pathname);
-  if (mode == BX_HDIMAGE_MODE_UNKNOWN) {
+  if (!hdimage_detect_image_mode(pathname, &image_mode)) {
     BX_PANIC(("r/o disk image mode not detected"));
     return -1;
   } else {
-    BX_INFO(("base image mode = '%s'", hdimage_mode_names[mode]));
+    BX_INFO(("base image mode = '%s'", image_mode));
   }
-  ro_disk = DEV_hdimage_init_image(mode, 0, NULL);
+  ro_disk = DEV_hdimage_init_image(image_mode, 0, NULL);
   if (ro_disk == NULL) {
     return -1;
   }
@@ -2240,7 +2434,7 @@ ssize_t undoable_image_t::write(const void* buf, size_t count)
 }
 
 #ifndef BXIMAGE
-bx_bool undoable_image_t::save_state(const char *backup_fname)
+bool undoable_image_t::save_state(const char *backup_fname)
 {
   return redolog->save_state(backup_fname);
 }
@@ -2253,7 +2447,7 @@ void undoable_image_t::restore_state(const char *backup_fname)
     BX_PANIC(("Can't open undoable redolog backup '%s'", backup_fname));
     return;
   } else {
-    bx_bool okay = coherency_check(ro_disk, temp_redolog);
+    bool okay = coherency_check(ro_disk, temp_redolog);
     temp_redolog->close();
     delete temp_redolog;
     if (!okay) return;
@@ -2295,19 +2489,19 @@ int volatile_image_t::open(const char* pathname, int flags)
 {
   int filedes;
   Bit32u timestamp;
+  const char* image_mode = NULL;
 
   UNUSED(flags);
   if (access(pathname, F_OK) < 0) {
     BX_PANIC(("r/o disk image doesn't exist"));
   }
-  int mode = hdimage_detect_image_mode(pathname);
-  if (mode == BX_HDIMAGE_MODE_UNKNOWN) {
+  if (!hdimage_detect_image_mode(pathname, &image_mode)) {
     BX_PANIC(("r/o disk image mode not detected"));
     return -1;
   } else {
-    BX_INFO(("base image mode = '%s'", hdimage_mode_names[mode]));
+    BX_INFO(("base image mode = '%s'", image_mode));
   }
-  ro_disk = DEV_hdimage_init_image(mode, 0, NULL);
+  ro_disk = DEV_hdimage_init_image(image_mode, 0, NULL);
   if (ro_disk == NULL) {
     return -1;
   }
@@ -2414,7 +2608,7 @@ ssize_t volatile_image_t::write(const void* buf, size_t count)
 }
 
 #ifndef BXIMAGE
-bx_bool volatile_image_t::save_state(const char *backup_fname)
+bool volatile_image_t::save_state(const char *backup_fname)
 {
   return redolog->save_state(backup_fname);
 }
@@ -2427,7 +2621,7 @@ void volatile_image_t::restore_state(const char *backup_fname)
     BX_PANIC(("Can't open volatile redolog backup '%s'", backup_fname));
     return;
   } else {
-    bx_bool okay = coherency_check(ro_disk, temp_redolog);
+    bool okay = coherency_check(ro_disk, temp_redolog);
     temp_redolog->close();
     delete temp_redolog;
     if (!okay) return;

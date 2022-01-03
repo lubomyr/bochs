@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmexit.cc 13726 2019-12-26 16:48:33Z sshwarts $
+// $Id: vmexit.cc 14300 2021-07-03 14:31:14Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2015 Stanislav Shwartsman
@@ -26,12 +26,14 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
+#include "pc_system.h"
+
 #if BX_SUPPORT_VMX
 
 #include "decoder/ia_opcodes.h"
 
 // BX_READ(0) form means nnn(), rm(); BX_WRITE(1) form means rm(), nnn()
-Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
+Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bool rw_form)
 {
   Bit32u instr_info = 0;
 
@@ -45,7 +47,7 @@ Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
     case VMX_VMEXIT_INVVPID:
     case VMX_VMEXIT_INVPCID:
 #endif
-      if (rw_form == BX_READ)
+      if (rw_form == BX_WRITE)
         instr_info |= i->dst() << 28;
       else
         instr_info |= i->src() << 28;
@@ -84,7 +86,7 @@ Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
   if (i->modC0()) {
     // reg/reg format
     instr_info |= (1 << 10);
-    if (rw_form == BX_READ)
+    if (rw_form == BX_WRITE)
       instr_info |= i->src() << 3;
     else
       instr_info |= i->dst() << 3;
@@ -113,7 +115,7 @@ Bit32u gen_instruction_info(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
   return instr_info;
 }
 
-void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_Instruction(bxInstruction_c *i, Bit32u reason, bx_bool rw_form)
+void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_Instruction(bxInstruction_c *i, Bit32u reason, bool rw_form)
 {
   Bit64u qualification = 0;
   Bit32u instr_info = 0;
@@ -199,24 +201,24 @@ void BX_CPU_C::VMexit_ExtInterrupt(void)
   }
 }
 
-void BX_CPU_C::VMexit_Event(unsigned type, unsigned vector, Bit16u errcode, bx_bool errcode_valid, Bit64u qualification)
+void BX_CPU_C::VMexit_Event(unsigned type, unsigned vector, Bit16u errcode, bool errcode_valid, Bit64u qualification)
 {
   if (! BX_CPU_THIS_PTR in_vmx_guest) return;
 
   VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
-  bx_bool vmexit = 0;
+  bool vmexit = false;
   VMX_vmexit_reason reason = VMX_VMEXIT_EXCEPTION_NMI;
 
   switch(type) {
     case BX_EXTERNAL_INTERRUPT:
       reason = VMX_VMEXIT_EXTERNAL_INTERRUPT;
       if (PIN_VMEXIT(VMX_VM_EXEC_CTRL1_EXTERNAL_INTERRUPT_VMEXIT))
-         vmexit = 1;
+         vmexit = true;
       break;
 
     case BX_NMI:
       if (PIN_VMEXIT(VMX_VM_EXEC_CTRL1_NMI_EXITING))
-         vmexit = 1;
+         vmexit = true;
       break;
 
     case BX_PRIVILEGED_SOFTWARE_INTERRUPT:
@@ -225,8 +227,8 @@ void BX_CPU_C::VMexit_Event(unsigned type, unsigned vector, Bit16u errcode, bx_b
       BX_ASSERT(vector < BX_CPU_HANDLED_EXCEPTIONS);
       if (vector == BX_PF_EXCEPTION) {
          // page faults are specially treated
-         bx_bool err_match = ((errcode & vm->vm_pf_mask) == vm->vm_pf_match);
-         bx_bool bitmap = (vm->vm_exceptions_bitmap >> BX_PF_EXCEPTION) & 1;
+         bool err_match = ((errcode & vm->vm_pf_mask) == vm->vm_pf_match);
+         bool bitmap = (vm->vm_exceptions_bitmap >> BX_PF_EXCEPTION) & 1;
          vmexit = (err_match == bitmap);
       }
       else {
@@ -320,32 +322,32 @@ void BX_CPP_AttrRegparmN(2) BX_CPU_C::VMexit_MSR(unsigned op, Bit32u msr)
 {
   BX_ASSERT(BX_CPU_THIS_PTR in_vmx_guest);
 
-  bx_bool vmexit = 0;
-  if (! VMEXIT(VMX_VM_EXEC_CTRL2_MSR_BITMAPS)) vmexit = 1;
+  bool vmexit = false;
+  if (! VMEXIT(VMX_VM_EXEC_CTRL2_MSR_BITMAPS)) vmexit = true;
   else {
     VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
     Bit8u field;
 
     if (msr >= BX_VMX_HI_MSR_START) {
-       if (msr > BX_VMX_HI_MSR_END) vmexit = 1;
+       if (msr > BX_VMX_HI_MSR_END) vmexit = true;
        else {
          // check MSR-HI bitmaps
          bx_phy_address pAddr = vm->msr_bitmap_addr + ((msr - BX_VMX_HI_MSR_START) >> 3) + 1024 + ((op == VMX_VMEXIT_RDMSR) ? 0 : 2048);
          access_read_physical(pAddr, 1, &field);
          BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr, 1, MEMTYPE(resolve_memtype(pAddr)), BX_READ, BX_MSR_BITMAP_ACCESS, &field);
          if (field & (1 << (msr & 7)))
-            vmexit = 1;
+            vmexit = true;
        }
     }
     else {
-       if (msr > BX_VMX_LO_MSR_END) vmexit = 1;
+       if (msr > BX_VMX_LO_MSR_END) vmexit = true;
        else {
          // check MSR-LO bitmaps
          bx_phy_address pAddr = vm->msr_bitmap_addr + (msr >> 3) + ((op == VMX_VMEXIT_RDMSR) ? 0 : 2048);
          access_read_physical(pAddr, 1, &field);
          BX_NOTIFY_PHY_MEMORY_ACCESS(pAddr, 1, MEMTYPE(resolve_memtype(pAddr)), BX_READ, BX_MSR_BITMAP_ACCESS, &field);
          if (field & (1 << (msr & 7)))
-            vmexit = 1;
+            vmexit = true;
        }
     }
   }
@@ -366,11 +368,11 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_IO(bxInstruction_c *i, unsigned por
   BX_ASSERT(BX_CPU_THIS_PTR in_vmx_guest);
   BX_ASSERT(port <= 0xFFFF);
 
-  bool vmexit = 0;
+  bool vmexit = false;
 
   if (VMEXIT(VMX_VM_EXEC_CTRL2_IO_BITMAPS)) {
      // always VMEXIT on port "wrap around" case
-     if ((port + len) > 0x10000) vmexit = 1;
+     if ((port + len) > 0x10000) vmexit = true;
      else {
         Bit8u bitmap[2];
         bx_phy_address pAddr;
@@ -400,10 +402,10 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_IO(bxInstruction_c *i, unsigned por
         combined_bitmap = (combined_bitmap << 8) | bitmap[0];
 
         unsigned mask = ((1 << len) - 1) << (port & 7);
-        if (combined_bitmap & mask) vmexit = 1;
+        if (combined_bitmap & mask) vmexit = true;
      }
   }
-  else if (VMEXIT(VMX_VM_EXEC_CTRL2_IO_VMEXIT)) vmexit = 1;
+  else if (VMEXIT(VMX_VM_EXEC_CTRL2_IO_VMEXIT)) vmexit = true;
 
   if (vmexit) {
      BX_DEBUG(("VMEXIT: I/O port 0x%04x", port));
@@ -492,7 +494,7 @@ void BX_CPP_AttrRegparmN(3) BX_CPU_C::VMexit_IO(bxInstruction_c *i, unsigned por
 // [63:32] | reserved
 //
 
-bx_bool BX_CPU_C::VMexit_CLTS(void)
+bool BX_CPU_C::VMexit_CLTS(void)
 {
   BX_ASSERT(BX_CPU_THIS_PTR in_vmx_guest);
 
@@ -518,13 +520,13 @@ Bit32u BX_CPP_AttrRegparmN(2) BX_CPU_C::VMexit_LMSW(bxInstruction_c *i, Bit32u m
 
   VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
   Bit32u mask = vm->vm_cr0_mask & 0xF; /* LMSW affects only low 4 bits */
-  bx_bool vmexit = 0;
+  bool vmexit = false;
 
   if ((mask & msw & 0x1) != 0 && (vm->vm_cr0_read_shadow & 0x1) == 0)
-    vmexit = 1;
+    vmexit = true;
 
   if ((mask & vm->vm_cr0_read_shadow & 0xE) != (mask & msw & 0xE))
-    vmexit = 1;
+    vmexit = true;
 
   if (vmexit) {
     BX_DEBUG(("VMEXIT: CR0 write by LMSW of value 0x%04x", msw));
@@ -665,7 +667,7 @@ Bit16u BX_CPU_C::VMX_Get_Current_VPID(void)
 #endif
 
 #if BX_SUPPORT_VMX >= 2
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::Vmexit_Vmread(bxInstruction_c *i)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::Vmexit_Vmread(bxInstruction_c *i)
 {
   BX_ASSERT(BX_CPU_THIS_PTR in_vmx_guest);
 
@@ -692,7 +694,7 @@ bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::Vmexit_Vmread(bxInstruction_c *i)
   return false;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::Vmexit_Vmwrite(bxInstruction_c *i)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::Vmexit_Vmwrite(bxInstruction_c *i)
 {
   BX_ASSERT(BX_CPU_THIS_PTR in_vmx_guest);
 

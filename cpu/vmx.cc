@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmx.cc 13764 2020-01-03 17:35:02Z sshwarts $
+// $Id: vmx.cc 14319 2021-07-23 10:13:48Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2019 Stanislav Shwartsman
@@ -34,11 +34,11 @@
 extern VMCS_Mapping vmcs_map;
 
 #if BX_SUPPORT_VMX >= 2
-extern bx_bool isValidMSR_PAT(Bit64u pat_msr);
+extern bool isValidMSR_PAT(Bit64u pat_msr);
 #endif
 
 #if BX_SUPPORT_CET
-extern bx_bool is_invalid_cet_control(bx_address val);
+extern bool is_invalid_cet_control(bx_address val);
 #endif
 
 extern const char *segname[];
@@ -435,7 +435,7 @@ Bit32u BX_CPU_C::VMXReadRevisionID(bx_phy_address pAddr)
 }
 
 #if BX_SUPPORT_VMX >= 2
-bx_bool BX_CPU_C::is_eptptr_valid(Bit64u eptptr)
+bool BX_CPU_C::is_eptptr_valid(Bit64u eptptr)
 {
   // [2:0] EPT paging-structure memory type
   //       0 = Uncacheable (UC)
@@ -1053,7 +1053,7 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
 {
   VMCS_CACHE *vm = &BX_CPU_THIS_PTR vmcs;
   VMCS_HOST_STATE *host_state = &vm->host_state;
-  bx_bool x86_64_host = 0, x86_64_guest = 0;
+  bool x86_64_host = false, x86_64_guest = false;
 
   //
   // VM Host State Checks Related to Address-Space Size
@@ -1061,11 +1061,11 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
 
   Bit32u vmexit_ctrls = vm->vmexit_ctrls;
   if (vmexit_ctrls & VMX_VMEXIT_CTRL1_HOST_ADDR_SPACE_SIZE) {
-     x86_64_host = 1;
+     x86_64_host = true;
   }
   Bit32u vmentry_ctrls = vm->vmentry_ctrls;
   if (vmentry_ctrls & VMX_VMENTRY_CTRL1_X86_64_GUEST) {
-     x86_64_guest = 1;
+     x86_64_guest = true;
   }
 
 #if BX_SUPPORT_X86_64
@@ -1222,6 +1222,10 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
        BX_ERROR(("VMFAIL: VMCS host SSP non canonical or invalid"));
        return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
     }
+    if ((host_state->ssp & 0x3) != 0) {
+       BX_ERROR(("VMFAIL: VMCS host SSP[1:0] not zero"));
+       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
 
     host_state->interrupt_ssp_table_address = VMread_natural(VMCS_HOST_INTERRUPT_SSP_TABLE_ADDR);
     if (!IsCanonical(host_state->interrupt_ssp_table_address)) {
@@ -1230,7 +1234,17 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
     }
 
     if ((host_state->cr4 & BX_CR4_CET_MASK) && (host_state->cr0 & BX_CR0_WP_MASK) == 0) {
-      BX_ERROR(("VMENTER FAIL: VMCS host CR4.CET=1 when CR0.WP=0"));
+      BX_ERROR(("FAIL: VMCS host CR4.CET=1 when CR0.WP=0"));
+      return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
+    }
+  }
+#endif
+
+#if BX_SUPPORT_PKEYS
+  if (vmexit_ctrls & VMX_VMEXIT_CTRL1_LOAD_HOST_PKRS) {
+    host_state->pkrs = VMread64(VMCS_64BIT_HOST_IA32_PKRS);
+    if (GET32H(host_state->pkrs) != 0) {
+      BX_ERROR(("VMFAIL: invalid host IA32_PKRS value"));
       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
     }
   }
@@ -1245,8 +1259,8 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
       BX_ERROR(("VMFAIL: VMCS host EFER reserved bits set !"));
       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
     }
-    bx_bool lme = (host_state->efer_msr >>  8) & 0x1;
-    bx_bool lma = (host_state->efer_msr >> 10) & 0x1;
+    bool lme = (host_state->efer_msr >>  8) & 0x1;
+    bool lma = (host_state->efer_msr >> 10) & 0x1;
     if (lma != lme || lma != x86_64_host) {
       BX_ERROR(("VMFAIL: VMCS host EFER (0x%08x) inconsistent value !", (Bit32u) host_state->efer_msr));
       return VMXERR_VMENTRY_INVALID_VM_HOST_STATE_FIELD;
@@ -1279,9 +1293,9 @@ VMX_error_code BX_CPU_C::VMenterLoadCheckHostState(void)
   return VMXERR_NO_ERROR;
 }
 
-BX_CPP_INLINE bx_bool IsLimitAccessRightsConsistent(Bit32u limit, Bit32u ar)
+BX_CPP_INLINE bool IsLimitAccessRightsConsistent(Bit32u limit, Bit32u ar)
 {
-  bx_bool g = (ar >> 15) & 1;
+  bool g = (ar >> 15) & 1;
 
   // access rights reserved bits set
   if (ar & 0xfffe0f00) return 0;
@@ -1325,16 +1339,16 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
      return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
   }
 
-  bx_bool v8086_guest = 0;
+  bool v8086_guest = false;
   if (guest.rflags & EFlagsVMMask)
-     v8086_guest = 1;
+     v8086_guest = true;
 
-  bx_bool x86_64_guest = 0; // can't be 1 if X86_64 is not supported (checked before)
+  bool x86_64_guest = false; // can't be 1 if X86_64 is not supported (checked before)
   Bit32u vmentry_ctrls = vm->vmentry_ctrls;
 #if BX_SUPPORT_X86_64
   if (vmentry_ctrls & VMX_VMENTRY_CTRL1_X86_64_GUEST) {
      BX_DEBUG(("VMENTER to x86-64 guest"));
-     x86_64_guest = 1;
+     x86_64_guest = true;
   }
 #endif
 
@@ -1352,8 +1366,8 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
         return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
      }
 
-     bx_bool pe = (guest.cr0 & BX_CR0_PE_MASK) != 0;
-     bx_bool pg = (guest.cr0 & BX_CR0_PG_MASK) != 0;
+     bool pe = (guest.cr0 & BX_CR0_PE_MASK) != 0;
+     bool pg = (guest.cr0 & BX_CR0_PG_MASK) != 0;
      if (pg && !pe) {
         BX_ERROR(("VMENTER FAIL: VMCS unrestricted guest CR0.PG without CR0.PE"));
         return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
@@ -1374,9 +1388,9 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   }
 
 #if BX_SUPPORT_VMX >= 2
-  bx_bool real_mode_guest = 0;
+  bool real_mode_guest = false;
   if (! (guest.cr0 & BX_CR0_PE_MASK))
-     real_mode_guest = 1;
+     real_mode_guest = true;
 #endif
 
   guest.cr3 = VMread_natural(VMCS_GUEST_CR3);
@@ -1444,11 +1458,25 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
        BX_ERROR(("VMFAIL: VMCS guest SSP non canonical or invalid"));
        return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
     }
+    if ((guest.ssp & 0x3) != 0) {
+       BX_ERROR(("VMFAIL: VMCS guest SSP[1:0] not zero"));
+       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+    }
 
     guest.interrupt_ssp_table_address = VMread_natural(VMCS_GUEST_INTERRUPT_SSP_TABLE_ADDR);
     if (!IsCanonical(guest.interrupt_ssp_table_address)) {
        BX_ERROR(("VMFAIL: VMCS guest INTERRUPT_SSP_TABLE_ADDR non canonical or invalid"));
        return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
+    }
+  }
+#endif
+
+#if BX_SUPPORT_PKEYS
+  if (vmentry_ctrls & VMX_VMENTRY_CTRL1_LOAD_GUEST_PKRS) {
+    guest.pkrs = VMread64(VMCS_64BIT_GUEST_IA32_PKRS);
+    if (GET32H(guest.pkrs) != 0) {
+      BX_ERROR(("VMFAIL: invalid guest IA32_PKRS value"));
+      return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
     }
   }
 #endif
@@ -1463,7 +1491,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
      Bit32u limit = VMread32(VMCS_32BIT_GUEST_ES_LIMIT + 2*n);
      Bit32u ar = VMread32(VMCS_32BIT_GUEST_ES_ACCESS_RIGHTS + 2*n);
      ar = vmx_unpack_ar_field(ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
-     bx_bool invalid = (ar >> 16) & 1;
+     bool invalid = (ar >> 16) & 1;
 
      set_segment_ar_data(&guest.sregs[n], !invalid,
                   (Bit16u) selector, base, limit, (Bit16u) ar);
@@ -1662,7 +1690,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   Bit32u ldtr_limit = VMread32(VMCS_32BIT_GUEST_LDTR_LIMIT);
   Bit32u ldtr_ar = VMread32(VMCS_32BIT_GUEST_LDTR_ACCESS_RIGHTS);
   ldtr_ar = vmx_unpack_ar_field(ldtr_ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
-  bx_bool ldtr_invalid = (ldtr_ar >> 16) & 1;
+  bool ldtr_invalid = (ldtr_ar >> 16) & 1;
   if (set_segment_ar_data(&guest.ldtr, !ldtr_invalid, 
          (Bit16u) ldtr_selector, ldtr_base, ldtr_limit, (Bit16u)(ldtr_ar)))
   {
@@ -1704,7 +1732,7 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   Bit32u tr_limit = VMread32(VMCS_32BIT_GUEST_TR_LIMIT);
   Bit32u tr_ar = VMread32(VMCS_32BIT_GUEST_TR_ACCESS_RIGHTS);
   tr_ar = vmx_unpack_ar_field(tr_ar, BX_CPU_THIS_PTR vmcs_map->get_access_rights_format());
-  bx_bool tr_invalid = (tr_ar >> 16) & 1;
+  bool tr_invalid = (tr_ar >> 16) & 1;
 
 #if BX_SUPPORT_X86_64
   if (! IsCanonical(tr_base)) {
@@ -1790,8 +1818,8 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
       BX_ERROR(("VMENTER FAIL: VMCS guest EFER reserved bits set !"));
       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
     }
-    bx_bool lme = (guest.efer_msr >>  8) & 0x1;
-    bx_bool lma = (guest.efer_msr >> 10) & 0x1;
+    bool lme = (guest.efer_msr >>  8) & 0x1;
+    bool lma = (guest.efer_msr >> 10) & 0x1;
     if (lma != x86_64_guest) {
       BX_ERROR(("VMENTER FAIL: VMCS guest EFER.LMA doesn't match x86_64_guest !"));
       return VMX_VMEXIT_VMENTRY_FAILURE_GUEST_STATE;
@@ -2041,6 +2069,12 @@ Bit32u BX_CPU_C::VMenterLoadCheckGuestState(Bit64u *qualification)
   }
 #endif
 
+#if BX_SUPPORT_PKEYS
+  if (vmentry_ctrls & VMX_VMENTRY_CTRL1_LOAD_GUEST_PKRS) {
+    set_PKeys(BX_CPU_THIS_PTR pkru, guest.pkrs);
+  }
+#endif
+
   BX_CPU_THIS_PTR async_event = 0;
 
   setEFlags((Bit32u) guest.rflags);
@@ -2154,7 +2188,7 @@ void BX_CPU_C::VMenterInjectEvents(void)
     }
   }
 
-  bx_bool is_INT = 0;
+  bool is_INT = false;
   switch(type) {
     case BX_EXTERNAL_INTERRUPT:
     case BX_HARDWARE_EXCEPTION:
@@ -2172,12 +2206,12 @@ void BX_CPU_C::VMenterInjectEvents(void)
 
     case BX_PRIVILEGED_SOFTWARE_INTERRUPT:
       BX_CPU_THIS_PTR EXT = 1;
-      is_INT = 1;
+      is_INT = true;
       break;
 
     case BX_SOFTWARE_INTERRUPT:
     case BX_SOFTWARE_EXCEPTION:
-      is_INT = 1;
+      is_INT = true;
       break;
 
     default:
@@ -2322,9 +2356,15 @@ void BX_CPU_C::VMexitSaveGuestState(void)
   }
 #endif
 
+#if BX_SUPPORT_PKEYS
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_PKS)) {
+    VMwrite64(VMCS_64BIT_GUEST_IA32_PKRS, BX_CPU_THIS_PTR pkrs);
+  }
+#endif
+
   for (n=0; n<6; n++) {
      Bit32u selector = BX_CPU_THIS_PTR sregs[n].selector.value;
-     bx_bool invalid = !BX_CPU_THIS_PTR sregs[n].cache.valid;
+     bool invalid = !BX_CPU_THIS_PTR sregs[n].cache.valid;
      bx_address base = BX_CPU_THIS_PTR sregs[n].cache.u.segment.base;
      Bit32u limit = BX_CPU_THIS_PTR sregs[n].cache.u.segment.limit_scaled;
      Bit32u ar = (get_descriptor_h(&BX_CPU_THIS_PTR sregs[n].cache) & 0x00f0ff00) >> 8;
@@ -2338,7 +2378,7 @@ void BX_CPU_C::VMexitSaveGuestState(void)
 
   // save guest LDTR
   Bit32u ldtr_selector = BX_CPU_THIS_PTR ldtr.selector.value;
-  bx_bool ldtr_invalid = !BX_CPU_THIS_PTR ldtr.cache.valid;
+  bool ldtr_invalid = !BX_CPU_THIS_PTR ldtr.cache.valid;
   bx_address ldtr_base = BX_CPU_THIS_PTR ldtr.cache.u.segment.base;
   Bit32u ldtr_limit = BX_CPU_THIS_PTR ldtr.cache.u.segment.limit_scaled;
   Bit32u ldtr_ar = (get_descriptor_h(&BX_CPU_THIS_PTR ldtr.cache) & 0x00f0ff00) >> 8;
@@ -2351,7 +2391,7 @@ void BX_CPU_C::VMexitSaveGuestState(void)
 
   // save guest TR
   Bit32u tr_selector = BX_CPU_THIS_PTR tr.selector.value;
-  bx_bool tr_invalid = !BX_CPU_THIS_PTR tr.cache.valid;
+  bool tr_invalid = !BX_CPU_THIS_PTR tr.cache.valid;
   bx_address tr_base = BX_CPU_THIS_PTR tr.cache.u.segment.base;
   Bit32u tr_limit = BX_CPU_THIS_PTR tr.cache.u.segment.limit_scaled;
   Bit32u tr_ar = (get_descriptor_h(&BX_CPU_THIS_PTR tr.cache) & 0x00f0ff00) >> 8;
@@ -2444,14 +2484,14 @@ void BX_CPU_C::VMexitSaveGuestState(void)
 void BX_CPU_C::VMexitLoadHostState(void)
 {
   VMCS_HOST_STATE *host_state = &BX_CPU_THIS_PTR vmcs.host_state;
-  bx_bool x86_64_host = 0;
+  bool x86_64_host = false;
   BX_CPU_THIS_PTR tsc_offset = 0;
 
 #if BX_SUPPORT_X86_64
   Bit32u vmexit_ctrls = BX_CPU_THIS_PTR vmcs.vmexit_ctrls;
   if (vmexit_ctrls & VMX_VMEXIT_CTRL1_HOST_ADDR_SPACE_SIZE) {
      BX_DEBUG(("VMEXIT to x86-64 host"));
-     x86_64_host = 1;
+     x86_64_host = true;
   }
 
 #if BX_SUPPORT_VMX >= 2
@@ -2610,6 +2650,12 @@ void BX_CPU_C::VMexitLoadHostState(void)
     SSP = host_state->ssp;
     BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table = host_state->interrupt_ssp_table_address;
     BX_CPU_THIS_PTR msr.ia32_cet_control[0] = host_state->msr_ia32_s_cet;
+  }
+#endif
+
+#if BX_SUPPORT_PKEYS
+  if (vmexit_ctrls & VMX_VMEXIT_CTRL1_LOAD_HOST_PKRS) {
+    set_PKeys(BX_CPU_THIS_PTR pkru, host_state->pkrs);
   }
 #endif
 
@@ -3634,7 +3680,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVEPT(bxInstruction_c *i)
     exception(BX_UD_EXCEPTION, 0);
 
   if (BX_CPU_THIS_PTR in_vmx_guest) {
-    VMexit_Instruction(i, VMX_VMEXIT_INVEPT);
+    VMexit_Instruction(i, VMX_VMEXIT_INVEPT, BX_WRITE);
   }
 
   if (CPL != 0) {
@@ -3692,7 +3738,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVVPID(bxInstruction_c *i)
     exception(BX_UD_EXCEPTION, 0);
 
   if (BX_CPU_THIS_PTR in_vmx_guest) {
-    VMexit_Instruction(i, VMX_VMEXIT_INVVPID);
+    VMexit_Instruction(i, VMX_VMEXIT_INVVPID, BX_WRITE);
   }
 
   if (CPL != 0) {
@@ -3786,7 +3832,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::INVPCID(bxInstruction_c *i)
   // INVPCID will always #UD in legacy VMX mode
   if (BX_CPU_THIS_PTR in_vmx_guest) {
     if (VMEXIT(VMX_VM_EXEC_CTRL2_INVLPG_VMEXIT)) {
-      VMexit_Instruction(i, VMX_VMEXIT_INVPCID);
+      VMexit_Instruction(i, VMX_VMEXIT_INVPCID, BX_WRITE);
     }
   }
 #endif
@@ -4027,6 +4073,9 @@ void BX_CPU_C::register_vmx_state(bx_param_c *parent)
   BXRS_HEX_PARAM_FIELD(host, ia32_s_cet_msr, BX_CPU_THIS_PTR vmcs.host_state.msr_ia32_s_cet);
   BXRS_HEX_PARAM_FIELD(host, SSP, BX_CPU_THIS_PTR vmcs.host_state.ssp);
   BXRS_HEX_PARAM_FIELD(host, interrupt_ssp_table_address, BX_CPU_THIS_PTR vmcs.host_state.interrupt_ssp_table_address);
+#endif
+#if BX_SUPPORT_PKEYS
+  BXRS_HEX_PARAM_FIELD(host, pkrs, BX_CPU_THIS_PTR vmcs.host_state.pkrs);
 #endif
 }
 

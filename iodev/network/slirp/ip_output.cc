@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ip_output.cc 13202 2017-04-20 18:51:18Z vruppert $
+// $Id: ip_output.cc 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1982, 1986, 1988, 1990, 1993
@@ -59,9 +59,9 @@ int
 ip_output(struct socket *so, struct mbuf *m0)
 {
 	Slirp *slirp = m0->slirp;
-	register struct ip *ip;
-	register struct mbuf *m = m0;
-	register int hlen = sizeof(struct ip );
+	struct ip *ip;
+	struct mbuf *m = m0;
+	int hlen = sizeof(struct ip );
 	int len, off, error = 0;
 
 	DEBUG_CALL("ip_output");
@@ -117,7 +117,7 @@ ip_output(struct socket *so, struct mbuf *m0)
 	m0 = m;
 	mhlen = sizeof (struct ip);
 	for (off = hlen + len; off < (uint16_t)ip->ip_len; off += len) {
-	  register struct ip *mhip;
+	  struct ip *mhip;
 	  m = m_get(slirp);
           if (m == NULL) {
 	    error = -1;

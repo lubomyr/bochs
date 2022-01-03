@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: generic_cpuid.h 12895 2016-03-02 20:44:42Z sshwarts $
+// $Id: generic_cpuid.h 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2015 Stanislav Shwartsman
@@ -88,8 +88,6 @@ private:
 
   Bit32u get_std2_cpuid_features(void) const;
   Bit32u get_ext2_cpuid_features(void) const;
-  Bit32u get_ext3_cpuid_features(void) const;
-  Bit32u get_ext4_cpuid_features(void) const;
   Bit32u get_extended_cpuid_features(void) const;
 #endif
 

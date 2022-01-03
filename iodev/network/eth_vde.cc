@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_vde.cc 13257 2017-06-16 08:27:55Z vruppert $
+// $Id: eth_vde.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003       Renzo Davoli
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -29,22 +29,21 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_VDE
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libvde_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(vde)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libvde_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -87,7 +86,7 @@ class bx_vde_pktmover_c : public eth_pktmover_c {
 public:
   bx_vde_pktmover_c(const char *netif, const char *macaddr,
                     eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                    bx_devmodel_c *dev, const char *script);
+                    logfunctions *netdev, const char *script);
   virtual ~bx_vde_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 private:
@@ -95,7 +94,9 @@ private:
   int rx_timer_index;
   static void rx_timer_handler(void *);
   void rx_timer();
+#if BX_ETH_VDE_LOGGING
   FILE *txlog, *txlog_txt, *rxlog, *rxlog_txt;
+#endif
   int fddata;
   struct sockaddr_un dataout;
 };
@@ -111,8 +112,8 @@ public:
 protected:
   eth_pktmover_c *allocate(const char *netif, const char *macaddr,
                            eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_vde_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_vde_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_vde_match;
 
@@ -126,12 +127,12 @@ bx_vde_pktmover_c::bx_vde_pktmover_c(const char *netif,
                                      const char *macaddr,
                                      eth_rx_handler_t rxh,
                                      eth_rx_status_t rxstat,
-                                     bx_devmodel_c *dev,
+                                     logfunctions *netdev,
                                      const char *script)
 {
   int flags;
 
-  this->netdev = dev;
+  this->netdev = netdev;
   //if (strncmp (netif, "vde", 3) != 0) {
    // BX_PANIC (("eth_vde: interface name (%s) must be vde", netif));
   //}

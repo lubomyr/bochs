@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpudb.h 13570 2019-09-24 20:26:14Z sshwarts $
+// $Id: cpudb.h 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2011-2017 Stanislav Shwartsman
+//   Copyright (c) 2011-2021 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -52,6 +52,7 @@ bx_define_cpudb(broadwell_ult)
 bx_define_cpudb(corei7_skylake_x)
 bx_define_cpudb(corei3_cnl)
 bx_define_cpudb(corei7_icelake_u)
+bx_define_cpudb(tigerlake)
 #endif
 #endif
 #endif

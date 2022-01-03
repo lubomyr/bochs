@@ -1,6 +1,6 @@
 %{
 /////////////////////////////////////////////////////////////////////////
-// $Id: lexer.l 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: lexer.l 14051 2021-01-02 12:12:02Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
@@ -123,7 +123,6 @@ nmi             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_NMI); }
 tlb             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_TLB); }
 u               |
 disasm          { BEGIN(DISASM); bxlval.sval = strdup(bxtext); return(BX_TOKEN_DISASM); }
-hex             { bxlval.sval = strdup(bxtext); return(BX_TOKEN_HEX); }
 instrument      { bxlval.sval = strdup(bxtext); return(BX_TOKEN_INSTRUMENT); }
 stop            { bxlval.sval = strdup(bxtext); return(BX_TOKEN_STOP); }
 doit            { bxlval.sval = strdup(bxtext); return(BX_TOKEN_DOIT); }

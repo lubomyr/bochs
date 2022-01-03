@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: tftp.h 12262 2014-03-27 21:09:09Z vruppert $
+// $Id: tftp.h 14117 2021-02-01 12:42:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /* tftp defines */
@@ -8,9 +8,9 @@
 
 #define TFTP_SESSIONS_MAX 3
 
-#define TFTP_SERVER	69
+#define TFTP_SERVER      69
 
-#define TFTP_BUFFER_SIZE   1024
+#define TFTP_BUFFER_SIZE 1432
 
 struct tftp_t {
   struct ip ip;
@@ -37,7 +37,7 @@ struct tftp_session {
     struct in_addr client_ip;
     uint16_t client_port;
     uint32_t block_nr;
-    bx_bool  write;
+    bool     write;
     unsigned options;
     size_t   tsize_val;
     unsigned blksize_val;

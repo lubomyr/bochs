@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: mbuf.cc 13595 2019-11-11 21:44:38Z vruppert $
+// $Id: mbuf.cc 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1995 Danny Gasparovski
@@ -69,7 +69,7 @@ void m_cleanup(Slirp *slirp)
 struct mbuf *
 m_get(Slirp *slirp)
 {
-	register struct mbuf *m;
+	struct mbuf *m;
 	int flags = 0;
 
 	DEBUG_CALL("m_get");

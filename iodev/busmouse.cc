@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: busmouse.cc 13160 2017-03-30 18:08:15Z vruppert $
+// $Id: busmouse.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2017  The Bochs Project
+//  Copyright (C) 2004-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -79,18 +79,19 @@ bx_busm_c *theBusMouse = NULL;
 #define READ_Y_HIGH   (READ_Y | READ_HIGH)
 
 
-int CDECL libbusmouse_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(busmouse)
 {
-  // Create one instance of the busmouse device object.
-  theBusMouse = new bx_busm_c();
-  // Register this device.
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theBusMouse, BX_PLUGIN_BUSMOUSE);
+  if (mode == PLUGIN_INIT) {
+    // Create one instance of the busmouse device object.
+    theBusMouse = new bx_busm_c();
+    // Register this device.
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theBusMouse, BX_PLUGIN_BUSMOUSE);
+  } else if (mode == PLUGIN_FINI) {
+    delete theBusMouse;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return 0; // Success
-}
-
-void CDECL libbusmouse_LTX_plugin_fini(void)
-{
-  delete theBusMouse;
 }
 
 bx_busm_c::bx_busm_c()
@@ -106,7 +107,7 @@ bx_busm_c::~bx_busm_c()
 
 void bx_busm_c::init(void)
 {
-  BX_DEBUG(("Init $Id: busmouse.cc 13160 2017-03-30 18:08:15Z vruppert $"));
+  BX_DEBUG(("Init $Id: busmouse.cc 14163 2021-02-26 20:37:49Z vruppert $"));
 
   BX_BUSM_THIS type = SIM->get_param_enum(BXPN_MOUSE_TYPE)->get();
 
@@ -352,7 +353,7 @@ void bx_busm_c::write(Bit32u address, Bit32u value, unsigned io_len)
   }
 }
 
-void bx_busm_c::mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy)
+void bx_busm_c::mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy)
 {
   ((bx_busm_c*)dev)->mouse_enq(delta_x, delta_y, delta_z, button_state);
 }
@@ -402,7 +403,7 @@ void bx_busm_c::mouse_enq(int delta_x, int delta_y, int delta_z, unsigned button
 void bx_busm_c::update_mouse_data()
 {
   int delta_x, delta_y;
-  bx_bool hold;
+  bool hold;
 
   if (BX_BUSM_THIS mouse_delayed_dx > 127) {
     delta_x = 127;

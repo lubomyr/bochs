@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_xhci.cc 13519 2018-05-27 18:33:07Z sshwarts $
+// $Id: usb_xhci.cc 14226 2021-04-17 17:48:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2010-2017  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2011-2018  The Bochs Project
+//                2011-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -159,12 +159,8 @@ Bit32s usb_xhci_options_parser(const char *context, int num_params, char *params
     for (int i = 1; i < num_params; i++) {
       if (!strncmp(params[i], "enabled=", 8)) {
         SIM->get_param_bool(BXPN_XHCI_ENABLED)->set(atol(&params[i][8]));
-      } else if (!strncmp(params[i], "port", 4)) {
-        if (SIM->parse_usb_port_params(context, 0, params[i], BX_N_USB_XHCI_PORTS, base) < 0) {
-          return -1;
-        }
-      } else if (!strncmp(params[i], "options", 7)) {
-        if (SIM->parse_usb_port_params(context, 1, params[i], BX_N_USB_XHCI_PORTS, base) < 0) {
+      } else if (!strncmp(params[i], "port", 4) || !strncmp(params[i], "options", 7)) {
+        if (SIM->parse_usb_port_params(context, params[i], BX_N_USB_XHCI_PORTS, base) < 0) {
           return -1;
         }
       } else {
@@ -184,25 +180,28 @@ Bit32s usb_xhci_options_save(FILE *fp)
   return 0;
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libusb_xhci_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_xhci)
 {
-  theUSB_XHCI = new bx_usb_xhci_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_XHCI, BX_PLUGIN_USB_XHCI);
-  // add new configuration parameter for the config interface
-  SIM->init_usb_options("xHCI", "xhci", BX_N_USB_XHCI_PORTS);
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("usb_xhci", usb_xhci_options_parser, usb_xhci_options_save);
+  if (mode == PLUGIN_INIT) {
+    theUSB_XHCI = new bx_usb_xhci_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUSB_XHCI, BX_PLUGIN_USB_XHCI);
+    // add new configuration parameter for the config interface
+    SIM->init_usb_options("xHCI", "xhci", BX_N_USB_XHCI_PORTS);
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("usb_xhci", usb_xhci_options_parser, usb_xhci_options_save);
+  } else if (mode == PLUGIN_FINI) {
+    SIM->unregister_addon_option("usb_xhci");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
+    delete theUSB_XHCI;
+    menu->remove("xhci");
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_xhci_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("usb_xhci");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.usb");
-  delete theUSB_XHCI;
-  menu->remove("xhci");
 }
 
 // the device object
@@ -223,7 +222,9 @@ bx_usb_xhci_c::~bx_usb_xhci_c()
 
   for (int i=0; i<USB_XHCI_PORTS; i++) {
     sprintf(pname, "port%d.device", i+1);
-    SIM->get_param_string(pname, SIM->get_param(BXPN_USB_XHCI))->set_handler(NULL);
+    SIM->get_param_enum(pname, SIM->get_param(BXPN_USB_XHCI))->set_handler(NULL);
+    sprintf(pname, "port%d.options", i+1);
+    SIM->get_param_string(pname, SIM->get_param(BXPN_USB_XHCI))->set_enable_handler(NULL);
     remove_device(i);
   }
 
@@ -238,7 +239,8 @@ void bx_usb_xhci_c::init(void)
   unsigned i;
   char pname[6];
   bx_list_c *xhci, *port;
-  bx_param_string_c *device;
+  bx_param_enum_c *device;
+  bx_param_string_c *options;
 
   /*  If you wish to set DEBUG=report in the code, instead of
    *  in the configuration, simply uncomment this line.  I use
@@ -299,8 +301,10 @@ void bx_usb_xhci_c::init(void)
     sprintf(pname, "port%d", i+1);
     port = (bx_list_c*)SIM->get_param(pname, xhci);
     xhci_rt->add(port);
-    device = (bx_param_string_c*)port->get_by_name("device");
+    device = (bx_param_enum_c*)port->get_by_name("device");
     device->set_handler(usb_param_handler);
+    options = (bx_param_string_c*)port->get_by_name("options");
+    options->set_enable_handler(usb_param_enable_handler);
     BX_XHCI_THIS hub.usb_port[i].device = NULL;
     BX_XHCI_THIS hub.usb_port[i].portsc.ccs = 0;
     BX_XHCI_THIS hub.usb_port[i].portsc.csc = 0;
@@ -545,7 +549,7 @@ void bx_usb_xhci_c::reset_hc()
       sprintf(pname, "port%d", i+1);
       init_device(i, (bx_list_c*)SIM->get_param(pname, SIM->get_param(BXPN_USB_XHCI)));
     } else {
-      usb_set_connect_status(i, BX_XHCI_THIS hub.usb_port[i].device->get_type(), 1);
+      usb_set_connect_status(i, 1);
     }
   }
 
@@ -677,7 +681,7 @@ void bx_usb_xhci_c::reset_port_usb3(int port, const int reset_type)
  * Callee checks to be sure the Halted bit is set first.
  * We return 0 == no error, 1 = error
  */
-bx_bool bx_usb_xhci_c::save_hc_state(void)
+bool bx_usb_xhci_c::save_hc_state(void)
 {
   int i, j;
   Bit64u addr;
@@ -718,7 +722,7 @@ bx_bool bx_usb_xhci_c::save_hc_state(void)
 /*
  * See comments at save_hc_state above
  */
-bx_bool bx_usb_xhci_c::restore_hc_state(void)
+bool bx_usb_xhci_c::restore_hc_state(void)
 {
   int i, j;
   Bit64u addr;
@@ -978,23 +982,19 @@ void bx_usb_xhci_c::after_restore_state(void)
 
 void bx_usb_xhci_c::init_device(Bit8u port, bx_list_c *portconf)
 {
-  usbdev_type type;
   char pname[BX_PATHNAME_LEN];
-  const char *devname = NULL;
 
-  devname = ((bx_param_string_c*)portconf->get_by_name("device"))->getptr(); 
-  if (devname == NULL) return; 
-  if (!strlen(devname) || !strcmp(devname, "none")) return;
-
-  if (BX_XHCI_THIS hub.usb_port[port].device != NULL) {
-    BX_ERROR(("init_device(): port%d already in use", port+1));
-    return;
-  }
-  sprintf(pname, "usb_xhci.hub.port%d.device", port+1);
-  bx_list_c *sr_list = (bx_list_c*)SIM->get_param(pname, SIM->get_bochs_root());
-  type = DEV_usb_init_device(portconf, BX_XHCI_THIS_PTR, &BX_XHCI_THIS hub.usb_port[port].device, sr_list);
-  if (BX_XHCI_THIS hub.usb_port[port].device != NULL) {
-    usb_set_connect_status(port, type, 1);
+  if (DEV_usb_init_device(portconf, BX_XHCI_THIS_PTR, &BX_XHCI_THIS hub.usb_port[port].device)) {
+    if (usb_set_connect_status(port, 1)) {
+      portconf->get_by_name("options")->set_enabled(0);
+      sprintf(pname, "usb_xhci.hub.port%d.device", port+1);
+      bx_list_c *sr_list = (bx_list_c*)SIM->get_param(pname, SIM->get_bochs_root());
+      BX_XHCI_THIS hub.usb_port[port].device->register_state(sr_list);
+    } else {
+      ((bx_param_enum_c*)portconf->get_by_name("device"))->set_by_name("none");
+      ((bx_param_string_c*)portconf->get_by_name("options"))->set("none");
+      usb_set_connect_status(port, 0);
+    }
   }
 }
 
@@ -1008,7 +1008,7 @@ void bx_usb_xhci_c::remove_device(Bit8u port)
 
 void bx_usb_xhci_c::update_irq(unsigned interrupter)
 {
-  bx_bool level = 0;
+  bool level = 0;
 
   if ((BX_XHCI_THIS hub.op_regs.HcCommand.inte) &&
       (BX_XHCI_THIS hub.runtime_regs.interrupter[interrupter].iman.ie)) {
@@ -1018,7 +1018,7 @@ void bx_usb_xhci_c::update_irq(unsigned interrupter)
   DEV_pci_set_irq(BX_XHCI_THIS devfunc, BX_XHCI_THIS pci_conf[0x3d], level);
 }
 
-bx_bool bx_usb_xhci_c::read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_usb_xhci_c::read_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   Bit32u val = 0, val_hi = 0;
   int i, speed = 0;
@@ -1376,7 +1376,7 @@ bx_bool bx_usb_xhci_c::read_handler(bx_phy_address addr, unsigned len, void *dat
   return 1;
 }
 
-bx_bool bx_usb_xhci_c::write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
+bool bx_usb_xhci_c::write_handler(bx_phy_address addr, unsigned len, void *data, void *param)
 {
   Bit32u value = *((Bit32u *) data);
   Bit32u value_hi = *((Bit32u *) ((Bit8u *) data + 4));
@@ -1935,8 +1935,8 @@ void bx_usb_xhci_c::process_transfer_ring(const int slot, const int ep)
   int port_num = BX_XHCI_THIS hub.slots[slot].slot_context.rh_port_num;
   USBAsync *p;
   Bit8u cur_direction = (ep & 1) ? USB_TOKEN_IN : USB_TOKEN_OUT; // for NORMAL without SETUP
-  bx_bool is_transfer_trb, is_immed_data, ioc, spd_occurred = 0;
-  bx_bool first_event_trb_encountered = 0;
+  bool is_transfer_trb, is_immed_data, ioc, spd_occurred = 0;
+  bool first_event_trb_encountered = 0;
   Bit32u bytes_not_transferred = 0;
   int comp_code = 0;
   Bit8u immed_data[8];
@@ -2100,7 +2100,7 @@ void bx_usb_xhci_c::process_transfer_ring(const int slot, const int ep)
       // is there a transfer to be done?
       if (is_transfer_trb) {
         p = find_async_packet(&BX_XHCI_THIS packets, org_addr);
-        bx_bool completion = (p != NULL);
+        bool completion = (p != NULL);
         if (completion && !p->done) {
           return;
         }
@@ -2484,7 +2484,7 @@ void bx_usb_xhci_c::process_command_ring(void)
 
       case CONFIG_EP: {
         slot = TRB_GET_SLOT(trb.command);  // slots are 1 based
-        bx_bool dc = TRB_DC(trb.command);
+        bool dc = TRB_DC(trb.command);
         if (BX_XHCI_THIS hub.slots[slot].enabled) {
           get_dwords((bx_phy_address) trb.parameter, (Bit32u*)buffer, (CONTEXT_SIZE + (CONTEXT_SIZE * 32)) >> 2);
           DEV_MEM_READ_PHYSICAL((bx_phy_address) trb.parameter,     4, (Bit8u*)&d_flags);
@@ -2573,7 +2573,7 @@ void bx_usb_xhci_c::process_command_ring(void)
             BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.tr_dequeue_pointer = 
               BX_XHCI_THIS hub.slots[slot].ep_context[ep].enqueue_pointer = (trb.parameter & (Bit64u) ~0xF);
             BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.dcs =
-              BX_XHCI_THIS hub.slots[slot].ep_context[ep].rcs = (bx_bool) (trb.parameter & 1);
+              BX_XHCI_THIS hub.slots[slot].ep_context[ep].rcs = (bool) (trb.parameter & 1);
             BX_XHCI_THIS hub.slots[slot].ep_context[ep].edtla = 0;
             update_ep_context(slot, ep);
             comp_code = TRB_SUCCESS;
@@ -2717,11 +2717,11 @@ void bx_usb_xhci_c::init_event_ring(const unsigned interrupter)
 }
 
 void bx_usb_xhci_c::write_event_TRB(const unsigned interrupter, const Bit64u parameter, const Bit32u status, 
-                                    const Bit32u command, const bx_bool fire_int)
+                                    const Bit32u command, const bool fire_int)
 {
   // write the TRB
   write_TRB((bx_phy_address) BX_XHCI_THIS hub.ring_members.event_rings[interrupter].cur_trb, parameter, status, 
-    command | BX_XHCI_THIS hub.ring_members.event_rings[interrupter].rcs); // set the cycle bit
+    command | (Bit32u)BX_XHCI_THIS hub.ring_members.event_rings[interrupter].rcs); // set the cycle bit
 
   // calculate position for next event TRB
   BX_XHCI_THIS hub.ring_members.event_rings[interrupter].cur_trb += 16;
@@ -2929,13 +2929,13 @@ void bx_usb_xhci_c::copy_ep_to_buffer(Bit32u *buffer32, const int slot, const in
                 (BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.ep_type << 3) |
                 (BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.cerr << 1);
   buffer32[2] = ((Bit32u)BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.tr_dequeue_pointer) |
-                 BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.dcs;
+                 (Bit32u)BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.dcs;
   buffer32[3] =  (Bit32u)(BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.tr_dequeue_pointer >> 32);
   buffer32[4] = (BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.max_esit_payload << 16) |
                  BX_XHCI_THIS hub.slots[slot].ep_context[ep].ep_context.average_trb_len;
 }
 
-bx_bool bx_usb_xhci_c::validate_slot_context(const struct SLOT_CONTEXT *slot_context)
+bool bx_usb_xhci_c::validate_slot_context(const struct SLOT_CONTEXT *slot_context)
 {
   // specs:6.2.2.3:   Only checks the Interrupter Target and Max Latency fields for validity
   //  See also 4.6.7
@@ -2951,7 +2951,7 @@ bx_bool bx_usb_xhci_c::validate_slot_context(const struct SLOT_CONTEXT *slot_con
 //  the specified amount.  Win7 uses this to detect the actual EP0's max packet size...
 //  For example, the descriptor might return 64, but the device really only handles
 //   8-byte control transfers.
-bx_bool bx_usb_xhci_c::validate_ep_context(const struct EP_CONTEXT *ep_context, int speed, int ep_num)
+bool bx_usb_xhci_c::validate_ep_context(const struct EP_CONTEXT *ep_context, int speed, int ep_num)
 {
   // Only the Max_packet Size is evaluated (for an evaluate ep command) ???
 
@@ -3078,21 +3078,15 @@ void bx_usb_xhci_c::runtime_config(void)
 {
   int i;
   char pname[6];
-  usbdev_type type = USB_DEV_TYPE_NONE;
 
   for (i = 0; i < BX_N_USB_XHCI_PORTS; i++) {
     // device change support
     if ((BX_XHCI_THIS device_change & (1 << i)) != 0) {
       if (!BX_XHCI_THIS hub.usb_port[i].portsc.ccs) {
-        BX_INFO(("USB port #%d: device connect", i+1));
         sprintf(pname, "port%d", i + 1);
         init_device(i, (bx_list_c*)SIM->get_param(pname, SIM->get_param(BXPN_USB_XHCI)));
       } else {
-        BX_INFO(("USB port #%d: device disconnect", i+1));
-        if (BX_XHCI_THIS hub.usb_port[i].device != NULL) {
-          type = BX_XHCI_THIS hub.usb_port[i].device->get_type();
-        }
-        usb_set_connect_status(i, type, 0);
+        usb_set_connect_status(i, 0);
       }
       BX_XHCI_THIS device_change &= ~(1 << i);
     }
@@ -3141,63 +3135,58 @@ void bx_usb_xhci_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_l
   }
 }
 
-void bx_usb_xhci_c::usb_set_connect_status(Bit8u port, int type, bx_bool connected)
+bool bx_usb_xhci_c::usb_set_connect_status(Bit8u port, bool connected)
 {
-  const bx_bool ccs_org = BX_XHCI_THIS hub.usb_port[port].portsc.ccs;
-  const bx_bool ped_org = BX_XHCI_THIS hub.usb_port[port].portsc.ped;
+  const bool ccs_org = BX_XHCI_THIS hub.usb_port[port].portsc.ccs;
+  const bool ped_org = BX_XHCI_THIS hub.usb_port[port].portsc.ped;
 
   usb_device_c *device = BX_XHCI_THIS hub.usb_port[port].device;
   if (device != NULL) {
-    if (device->get_type() == type) {
-      if (connected) {
-        if ((device->get_speed() == USB_SPEED_SUPER) &&
-            !BX_XHCI_THIS hub.usb_port[port].is_usb3) {
-          BX_PANIC(("Super-speed device not supported on USB2 port."));
-          usb_set_connect_status(port, type, 0);
-          return;
+    if (connected) {
+      if ((device->get_speed() == USB_SPEED_SUPER) &&
+          !BX_XHCI_THIS hub.usb_port[port].is_usb3) {
+        BX_PANIC(("Super-speed device not supported on USB2 port."));
+        return 0;
+      }
+      if (BX_XHCI_THIS hub.usb_port[port].is_usb3) {
+        if (!device->set_speed(USB_SPEED_SUPER)) {
+          BX_PANIC(("Only super-speed devices supported on USB3 port."));
+          return 0;
         }
-        if (BX_XHCI_THIS hub.usb_port[port].is_usb3) {
-          if (!device->set_speed(USB_SPEED_SUPER)) {
-            BX_PANIC(("Only super-speed devices supported on USB3 port."));
-            usb_set_connect_status(port, type, 0);
-            return;
-          }
+      }
+      switch (device->get_speed()) {
+        case USB_SPEED_LOW:
+          BX_XHCI_THIS hub.usb_port[port].portsc.speed = 2;
+          break;
+        case USB_SPEED_FULL:
+          BX_XHCI_THIS hub.usb_port[port].portsc.speed = 1;
+          break;
+        case USB_SPEED_HIGH:
+          BX_XHCI_THIS hub.usb_port[port].portsc.speed = 3;
+          break;
+        case USB_SPEED_SUPER:
+          BX_XHCI_THIS hub.usb_port[port].portsc.speed = 4;
+          break;
+        default:
+          BX_PANIC(("USB device returned invalid speed value"));
+          return 0;
+      }
+      BX_XHCI_THIS hub.usb_port[port].portsc.ccs = 1;
+      if (!device->get_connected()) {
+        if (!device->init()) {
+          BX_ERROR(("port #%d: connect failed", port+1));
+          return 0;
+        } else {
+          BX_INFO(("port #%d: connect: %s", port+1, device->get_info()));
         }
-        switch (device->get_speed()) {
-          case USB_SPEED_LOW:
-            BX_XHCI_THIS hub.usb_port[port].portsc.speed = 2;
-            break;
-          case USB_SPEED_FULL:
-            BX_XHCI_THIS hub.usb_port[port].portsc.speed = 1;
-            break;
-          case USB_SPEED_HIGH:
-            BX_XHCI_THIS hub.usb_port[port].portsc.speed = 3;
-            break;
-          case USB_SPEED_SUPER:
-            BX_XHCI_THIS hub.usb_port[port].portsc.speed = 4;
-            break;
-          default:
-            BX_PANIC(("USB device returned invalid speed value"));
-            usb_set_connect_status(port, type, 0);
-            return;
-        }
-        BX_XHCI_THIS hub.usb_port[port].portsc.ccs = 1;
-        if (!device->get_connected()) {
-          if (!device->init()) {
-            usb_set_connect_status(port, type, 0);
-            BX_ERROR(("port #%d: connect failed", port+1));
-            return;
-          } else {
-            BX_INFO(("port #%d: connect: %s", port+1, device->get_info()));
-          }
-        }
-        device->set_event_handler(BX_XHCI_THIS_PTR, xhci_event_handler, port);
-      } else { // not connected
+      }
+      device->set_event_handler(BX_XHCI_THIS_PTR, xhci_event_handler, port);
+    } else { // not connected
+        BX_INFO(("port #%d: device disconnect", port+1));
         BX_XHCI_THIS hub.usb_port[port].portsc.ccs = 0;
         BX_XHCI_THIS hub.usb_port[port].portsc.ped = 0;
         BX_XHCI_THIS hub.usb_port[port].portsc.speed = 0;
         remove_device(port);
-      }
     }
     if (ccs_org != BX_XHCI_THIS hub.usb_port[port].portsc.ccs)
       BX_XHCI_THIS hub.usb_port[port].portsc.csc = 1;
@@ -3210,28 +3199,41 @@ void bx_usb_xhci_c::usb_set_connect_status(Bit8u port, int type, bx_bool connect
       write_event_TRB(0, ((port + 1) << 24), TRB_SET_COMP_CODE(1), TRB_SET_TYPE(PORT_STATUS_CHANGE), 1);
     }
   }
+  return connected;
 }
 
 // USB runtime parameter handler
-const char *bx_usb_xhci_c::usb_param_handler(bx_param_string_c *param, int set,
-                                           const char *oldval, const char *val, int maxlen)
+Bit64s bx_usb_xhci_c::usb_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   int portnum;
 
   if (set) {
     portnum = atoi((param->get_parent())->get_name()+4) - 1;
-    bx_bool empty = ((strlen(val) == 0) || (!strcmp(val, "none")));
+    bool empty = (val == 0);
     if ((portnum >= 0) && (portnum < USB_XHCI_PORTS)) {
       if (empty && BX_XHCI_THIS hub.usb_port[portnum].portsc.ccs) {
         BX_XHCI_THIS device_change |= (1 << portnum);
       } else if (!empty && !BX_XHCI_THIS hub.usb_port[portnum].portsc.ccs) {
         BX_XHCI_THIS device_change |= (1 << portnum);
+      } else if (val != ((bx_param_enum_c*)param)->get()) {
+        BX_ERROR(("usb_param_handler(): port #%d already in use", portnum+1));
+        val = ((bx_param_enum_c*)param)->get();
       }
     } else {
       BX_PANIC(("usb_param_handler called with unexpected parameter '%s'", param->get_name()));
     }
   }
   return val;
+}
+
+// USB runtime parameter enable handler
+bool bx_usb_xhci_c::usb_param_enable_handler(bx_param_c *param, bool en)
+{
+  int portnum = atoi((param->get_parent())->get_name()+4) - 1;
+  if (en && (BX_XHCI_THIS hub.usb_port[portnum].device != NULL)) {
+    en = 0;
+  }
+  return en;
 }
 
 void bx_usb_xhci_c::dump_xhci_core(const int slots, const int eps)

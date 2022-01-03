@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_printer.cc 13241 2017-05-28 08:13:06Z vruppert $
+// $Id: usb_printer.cc 14225 2021-04-17 09:30:58Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2017  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,16 +34,14 @@
 
 #define LOG_THIS
 
-// USB device plugin entry points
+// USB device plugin entry point
 
-int CDECL libusb_printer_dev_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(usb_printer)
 {
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_USB;
+  }
   return 0; // Success
-}
-
-void CDECL libusb_printer_dev_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 //
@@ -54,8 +52,8 @@ class bx_usb_printer_locator_c : public usbdev_locator_c {
 public:
   bx_usb_printer_locator_c(void) : usbdev_locator_c("usb_printer") {}
 protected:
-  usb_device_c *allocate(usbdev_type devtype, const char *args) {
-    return (new usb_printer_device_c(devtype, args));
+  usb_device_c *allocate(const char *devname) {
+    return (new usb_printer_device_c());
   }
 } bx_usb_printer_match;
 
@@ -135,15 +133,14 @@ static const Bit8u bx_device_id_string[] =
   "VP:0800,FL,B0;"
   "VJ: ;";
 
-static int usb_printer_count = 0;
+static Bit8u usb_printer_count = 0;
 
-usb_printer_device_c::usb_printer_device_c(usbdev_type type, const char *filename)
+usb_printer_device_c::usb_printer_device_c()
 {
-  char pname[10];
+  char pname[12];
   char label[32];
   bx_param_string_c *fname;
 
-  d.type = type;
   d.speed = d.minspeed = d.maxspeed = USB_SPEED_FULL;
   memset((void*)&s, 0, sizeof(s));
   strcpy(d.devname, "USB Printer");
@@ -154,17 +151,16 @@ usb_printer_device_c::usb_printer_device_c(usbdev_type type, const char *filenam
   d.vendor_desc = "Hewlett-Packard";
   d.product_desc = "Deskjet 920C";
   d.serial_num = "HU18L6P2DNBI";
-  s.fname = filename;
+  s.fname[0] = 0;
   s.fp = NULL;
   // config options
   bx_list_c *usb_rt = (bx_list_c*)SIM->get_param(BXPN_MENU_RUNTIME_USB);
-  sprintf(pname, "printer%d", ++usb_printer_count);
-  sprintf(label, "USB Printer #%d Configuration", usb_printer_count);
+  sprintf(pname, "printer%u", ++usb_printer_count);
+  sprintf(label, "USB Printer #%u Configuration", usb_printer_count);
   s.config = new bx_list_c(usb_rt, pname, label);
   s.config->set_options(bx_list_c::SHOW_PARENT | bx_list_c::USE_BOX_TITLE);
   s.config->set_device_param(this);
   fname = new bx_param_filename_c(s.config, "file", "File", "", "", BX_PATHNAME_LEN);
-  fname->set(s.fname);
   fname->set_handler(printfile_handler);
   if (SIM->is_wx_selected()) {
     bx_list_c *usb = (bx_list_c*)SIM->get_param("ports.usb");
@@ -175,7 +171,6 @@ usb_printer_device_c::usb_printer_device_c(usbdev_type type, const char *filenam
 
 usb_printer_device_c::~usb_printer_device_c(void)
 {
-  d.sr->clear();
   if (s.fp != NULL) {
     fclose(s.fp);
   }
@@ -187,17 +182,31 @@ usb_printer_device_c::~usb_printer_device_c(void)
   usb_rt->remove(s.config->get_name());
 }
 
-bx_bool usb_printer_device_c::init()
+bool usb_printer_device_c::set_option(const char *option)
 {
-  s.fp = fopen(s.fname, "w+b");
-  if (s.fp == NULL) {
-    BX_ERROR(("Could not create/open %s", s.fname));
-    return 0;
-  } else {
-    sprintf(s.info_txt, "USB printer: file=%s", s.fname);
-    d.connected = 1;
+  if (!strncmp(option, "file:", 5)) {
+    strcpy(s.fname, option+5);
+    SIM->get_param_string("file", s.config)->set(s.fname);
     return 1;
   }
+  return 0;
+}
+
+bool usb_printer_device_c::init()
+{
+  if (strlen(s.fname) > 0) {
+    s.fp = fopen(s.fname, "w+b");
+    if (s.fp == NULL) {
+      BX_ERROR(("Could not create/open '%s'", s.fname));
+    } else {
+      sprintf(s.info_txt, "USB printer: file='%s'", s.fname);
+      d.connected = 1;
+      return 1;
+    }
+  } else {
+    BX_ERROR(("USB printer: missing output file"));
+  }
+  return 0;
 }
 
 const char* usb_printer_device_c::get_info()
@@ -290,7 +299,7 @@ int usb_printer_device_c::handle_data(USBPacket *p)
     case USB_TOKEN_OUT:
       if (p->devep == 2) {
         BX_DEBUG(("Sent %i bytes to the 'usb printer': %s", p->len, s.fname));
-        usb_dump_packet(p->data, p->len);
+        usb_dump_packet(p->data, p->len, 0, p->devaddr, USB_DIR_OUT | p->devep, USB_TRANS_TYPE_CONTROL, false, true);
         if (s.fp != NULL) {
           fwrite(p->data, 1, p->len, s.fp);
         }
@@ -312,7 +321,7 @@ fail:
 #define LOG_THIS printer->
 
 // USB printer runtime parameter handlers
-const char *usb_printer_device_c::printfile_handler(bx_param_string_c *param, int set,
+const char *usb_printer_device_c::printfile_handler(bx_param_string_c *param, bool set,
                                                     const char *oldval, const char *val,
                                                     int maxlen)
 {
@@ -327,9 +336,17 @@ const char *usb_printer_device_c::printfile_handler(bx_param_string_c *param, in
       if (printer->s.fp != NULL) {
         fclose(printer->s.fp);
       }
-      printer->s.fp = fopen(val, "w+b");
-      if (printer->s.fp == NULL) {
-        BX_ERROR(("Could not create/open %s", val));
+      if (strcmp(val, "none")) {
+        printer->s.fp = fopen(val, "w+b");
+        if (printer->s.fp != NULL) {
+          strcpy(printer->s.fname, val);
+          sprintf(printer->s.info_txt, "USB printer: file='%s'", printer->s.fname);
+        } else {
+          BX_ERROR(("Could not create/open '%s'", val));
+          printer->s.fname[0] = 0;
+        }
+      } else {
+        printer->s.fname[0] = 0;
       }
     } else {
       BX_PANIC(("printfile_handler: printer not found"));

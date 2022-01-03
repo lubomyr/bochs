@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vncsrv.cc 13293 2017-09-10 15:55:13Z vruppert $
+// $Id: vncsrv.cc 14277 2021-06-11 14:46:38Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2000  Psyon.Org!
@@ -7,7 +7,7 @@
 //    Donald Becker
 //    http://www.psyon.org
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -36,7 +36,6 @@
 // TODO:
 // fix random segfaults in dimension_update()
 // fix Windows (MinGW) support
-// fixes for clients not supporting 'rfbEncodingNewFBSize'
 // fix cursor shape after dimension update()
 
 
@@ -67,10 +66,13 @@ public:
   bx_vncsrv_gui_c(void) : screen(NULL) {}
   DECLARE_GUI_VIRTUAL_METHODS()
   DECLARE_GUI_NEW_VIRTUAL_METHODS()
+  virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                         Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                         bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs);
   virtual void set_display_mode(disp_mode_t newmode);
   void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
-  void statusbar_setitem_specific(int element, bx_bool active, bx_bool w);
-  virtual void set_mouse_mode_absxy(bx_bool mode);
+  void statusbar_setitem_specific(int element, bool active, bool w);
+  virtual void set_mouse_mode_absxy(bool mode);
 #if BX_SHOW_IPS
   void show_ips(Bit32u ips_count);
 #endif
@@ -106,11 +108,10 @@ IMPLEMENT_GUI_PLUGIN_CODE(vncsrv)
 
 #endif
 
-static bx_bool client_connected;
-static bx_bool desktop_resizable = 1;
+static bool client_connected;
 #if BX_SHOW_IPS
-static bx_bool rfbHideIPS = 0;
-static bx_bool rfbIPSupdate = 0;
+static bool rfbHideIPS = 0;
+static bool rfbIPSupdate = 0;
 static char rfbIPStext[40];
 #endif
 
@@ -127,7 +128,7 @@ static struct _rfbBitmaps {
 #define MOUSE    0
 #define MAX_KEY_EVENTS 512
 static struct _rfbKeyboardEvent {
-    bx_bool type;
+    bool type;
     int key;
     int down;
     int x;
@@ -145,15 +146,13 @@ static BX_MUTEX(bKeyboardInUse);
 #define BX_RFB_DEF_YDIM 480
 
 #ifdef BX_LITTLE_ENDIAN
-const rfbPixel status_led_green = 0x0000ff00;
+const rfbPixel status_leds[3] = {0x0000ff00, 0x000040ff, 0x0000ffff};
 const rfbPixel status_gray_text = 0x00808080;
-const rfbPixel status_led_red = 0x000040ff;
 const rfbPixel headerbar_bg = 0x00d0d0d0;
 const rfbPixel headerbar_fg = 0x00101010;
 #else
-const rfbPixel status_led_green = 0x00ff0000;
+const rfbPixel status_leds[3] = {0x00ff0000, 0xff400000, 0xffff0000};
 const rfbPixel status_gray_text = 0x80808000;
-const rfbPixel status_led_red = 0x00ff4000;
 const rfbPixel headerbar_bg = 0xd0d0d000;
 const rfbPixel headerbar_fg = 0x10101000;
 #endif
@@ -161,25 +160,21 @@ const rfbPixel headerbar_fg = 0x10101000;
 static rfbPixel rfbPalette[256];
 
 static bool rfbServerDown = false;
+static rfbClientPtr clientPtr = NULL;
 
 static unsigned rfbWindowX, rfbWindowY;
 static unsigned rfbDimensionX, rfbDimensionY;
 static long rfbHeaderbarY;
 static long rfbTileX = 0;
 static long rfbTileY = 0;
-static unsigned long rfbCursorX = 0;
-static unsigned long rfbCursorY = 0;
 static unsigned long rfbOriginLeft = 0;
 static unsigned long rfbOriginRight = 0;
-static bx_bool rfbMouseModeAbsXY = 0;
+static bool rfbMouseModeAbsXY = 0;
 static unsigned rfbStatusbarY = 18;
 static unsigned rfbStatusitemPos[12] = {
   0, 170, 210, 250, 290, 330, 370, 410, 450, 490, 530, 570
 };
-static bx_bool rfbStatusitemActive[12];
-
-static unsigned int text_rows = 25, text_cols = 80;
-static unsigned int font_height = 16, font_width = 8;
+static bool rfbStatusitemActive[12];
 
 inline rfbPixel rfbMapRGB(U32 red, U32 green, U32 blue) {
     U16 redMax = theGui->screen->serverFormat.redMax;
@@ -197,11 +192,11 @@ inline rfbPixel rfbMapRGB(U32 red, U32 green, U32 blue) {
 void vncStartThread();
 void DrawBitmap(int x, int y, int width, int height, char *bmap, rfbPixel fg,
         rfbPixel bg);
-void DrawChar(int x, int y, int width, int height, int fonty, char *bmap,
-        rfbPixel fg, rfbPixel bg, bx_bool gfxchar);
+void DrawChar(int x, int y, int width, int height, int fontx, int fonty,
+              char *bmap, rfbPixel fg, rfbPixel bg, bool gfxchar);
 void UpdateScreen(rfbPixel *newBits, int x, int y, int width, int height);
 void SendUpdate(int x, int y, int width, int height);
-void vncSetStatusText(int element, const char *text, bx_bool active, bx_bool w = 0);
+void vncSetStatusText(int element, const char *text, bool active, Bit8u color = 0);
 static Bit32u convertStringToRfbKey(const char *string);
 
 void clientgone(rfbClientPtr cl);
@@ -241,6 +236,8 @@ void bx_vncsrv_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
     }
   }
 
+  console.present = 1;
+
   // parse vncsrv specific options
   if (argc > 1) {
     for (i = 1; i < argc; i++) {
@@ -256,6 +253,8 @@ void bx_vncsrv_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
         BX_INFO(("hide IPS display in status bar"));
         rfbHideIPS = 1;
 #endif
+      } else if (!strcmp(argv[i], "no_gui_console")) {
+        console.present = 0;
       } else {
         BX_PANIC(("Unknown rfb option '%s'", argv[i]));
       }
@@ -325,7 +324,7 @@ void bx_vncsrv_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 #endif
 
   new_gfx_api = 1;
-  console.present = 1;
+  new_text_api = 1;
 }
 
 void bx_vncsrv_gui_c::handle_events(void)
@@ -363,97 +362,36 @@ void bx_vncsrv_gui_c::clear_screen(void)
   SendUpdate(0, rfbHeaderbarY, rfbDimensionX, rfbDimensionY);
 }
 
+void bx_vncsrv_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc,
+                                Bit16u yc, Bit8u fw, Bit8u fh, Bit8u fx,
+                                Bit8u fy, bool gfxcharw9, Bit8u cs, Bit8u ce,
+                                bool curs)
+{
+  rfbPixel fgcol = rfbPalette[fc];
+  rfbPixel bgcol = rfbPalette[bc];
+
+  yc += rfbHeaderbarY;
+  DrawChar(xc, yc, fw, fh, fx, fy, (char *)&vga_charmap[ch << 5], fgcol, bgcol,
+           gfxcharw9);
+  SendUpdate(xc, yc, fw, fh);
+  if (curs && (ce >= fy) && (cs < (fh + fy))) {
+    if (cs > fy) {
+      yc += (cs - fy);
+      fh -= (cs - fy);
+    }
+    if ((ce - cs + 1) < fh) {
+      fh = ce - cs + 1;
+    }
+    DrawChar(xc, yc, fw, fh, fx, cs, (char *)&vga_charmap[ch << 5], bgcol,
+             fgcol, gfxcharw9);
+  }
+}
+
 void bx_vncsrv_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
         unsigned long cursor_x, unsigned long cursor_y,
         bx_vga_tminfo_t *tm_info)
 {
-  Bit8u *old_line, *new_line;
-  Bit8u cAttr, cChar;
-  unsigned int curs, hchars, offset, rows, x, y, xc, yc, i;
-  bx_bool force_update = 0, gfxchar, blink_state, blink_mode;
-  rfbPixel text_palette[16];
-  rfbPixel fgcolor, bgcolor;
-
-  for (i = 0; i < 16; i++) {
-    text_palette[i] = rfbPalette[tm_info->actl_palette[i]];
-  }
-
-  blink_mode = (tm_info->blink_flags & BX_TEXT_BLINK_MODE) > 0;
-  blink_state = (tm_info->blink_flags & BX_TEXT_BLINK_STATE) > 0;
-  if (blink_mode) {
-    if (tm_info->blink_flags & BX_TEXT_BLINK_TOGGLE)
-      force_update = 1;
-  }
-  if (charmap_updated) {
-    force_update = 1;
-    charmap_updated = 0;
-  }
-
-  // first invalidate character at previous and new cursor location
-  if ((rfbCursorY < text_rows) && (rfbCursorX < text_cols)) {
-    curs = rfbCursorY * tm_info->line_offset + rfbCursorX * 2;
-    old_text[curs] = ~new_text[curs];
-  }
-  if ((tm_info->cs_start <= tm_info->cs_end) && (tm_info->cs_start < font_height)
-      && (cursor_y < text_rows) && (cursor_x < text_cols)) {
-    curs = cursor_y * tm_info->line_offset + cursor_x * 2;
-    old_text[curs] = ~new_text[curs];
-  } else {
-    curs = 0xffff;
-  }
-
-  rows = text_rows;
-  y = 0;
-  do {
-    hchars = text_cols;
-    new_line = new_text;
-    old_line = old_text;
-    offset = y * tm_info->line_offset;
-    yc = y * font_height + rfbHeaderbarY;
-    x = 0;
-    do {
-      if (force_update || (old_text[0] != new_text[0])
-          || (old_text[1] != new_text[1])) {
-        cChar = new_text[0];
-
-        if (blink_mode) {
-          cAttr = new_text[1] & 0x7F;
-          if (!blink_state && (new_text[1] & 0x80))
-            cAttr = (cAttr & 0x70) | (cAttr >> 4);
-        } else {
-          cAttr = new_text[1];
-        }
-        fgcolor = text_palette[cAttr & 0x0F];
-        bgcolor = text_palette[cAttr >> 4];
-
-        gfxchar = tm_info->line_graphics && ((cChar & 0xE0) == 0xC0);
-        xc = x * font_width;
-        DrawChar(xc, yc, font_width, font_height, 0,
-            (char *) &vga_charmap[cChar << 5], fgcolor, bgcolor,
-            gfxchar);
-
-        SendUpdate(xc, yc, font_width, font_height);
-
-        if (offset == curs) {
-          DrawChar(xc, yc + tm_info->cs_start, font_width,
-              tm_info->cs_end - tm_info->cs_start + 1,
-              tm_info->cs_start,
-              (char *) &vga_charmap[cChar << 5], bgcolor, fgcolor,
-              gfxchar);
-        }
-      }
-      x++;
-      new_text += 2;
-      old_text += 2;
-      offset += 2;
-    } while (--hchars);
-    y++;
-    new_text = new_line + tm_info->line_offset;
-    old_text = old_line + tm_info->line_offset;
-  } while (--rows);
-
-  rfbCursorX = cursor_x;
-  rfbCursorY = cursor_y;
+  // present for compatibility
 }
 
 int bx_vncsrv_gui_c::get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)
@@ -466,7 +404,7 @@ int bx_vncsrv_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
   return 0;
 }
 
-bx_bool bx_vncsrv_gui_c::palette_change(U8 index, U8 red,
+bool bx_vncsrv_gui_c::palette_change(U8 index, U8 red,
         U8 green, U8 blue)
 {
   rfbPalette[index] = rfbMapRGB(red, green, blue);
@@ -517,17 +455,12 @@ void bx_vncsrv_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight,
     BX_PANIC(("%d bpp graphics mode not supported", bpp));
   }
   guest_textmode = (fheight > 0);
-  guest_fsize = (fheight << 4) | fwidth;
+  guest_fwidth = fwidth;
+  guest_fheight = fheight;
   guest_xres = x;
   guest_yres = y;
-  if (guest_textmode) {
-    font_height = fheight;
-    font_width = fwidth;
-    text_cols = x / fwidth;
-    text_rows = y / fheight;
-  }
   if ((x != rfbDimensionX) || (y != rfbDimensionY)) {
-    if (desktop_resizable) {
+    if (clientPtr->useNewFBSize) {
       if ((x > BX_RFB_MAX_XDIM) || (y > BX_RFB_MAX_YDIM)) {
         BX_PANIC(("dimension_update(): VNC doesn't support graphics mode %dx%d", x, y));
       }
@@ -662,7 +595,7 @@ void bx_vncsrv_gui_c::exit(void)
   BX_DEBUG(("bx_vncsrv_gui_c::exit()"));
 }
 
-void bx_vncsrv_gui_c::mouse_enabled_changed_specific(bx_bool val)
+void bx_vncsrv_gui_c::mouse_enabled_changed_specific(bool val)
 {
 }
 
@@ -713,7 +646,7 @@ void bx_vncsrv_gui_c::graphics_tile_update_in_place(unsigned x0, unsigned y0,
 }
 void bx_vncsrv_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
 {
-  if (desktop_resizable) {
+  if (clientPtr->useNewFBSize) {
     *xres = BX_RFB_MAX_XDIM;
     *yres = BX_RFB_MAX_YDIM;
   } else {
@@ -723,13 +656,17 @@ void bx_vncsrv_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
   *bpp = 32;
 }
 
-void bx_vncsrv_gui_c::statusbar_setitem_specific(int element, bx_bool active,
-        bx_bool w)
+void bx_vncsrv_gui_c::statusbar_setitem_specific(int element, bool active,
+        bool w)
 {
-  vncSetStatusText(element + 1, statusitem[element].text, active, w);
+  Bit8u color = 0;
+  if (w) {
+    color = statusitem[element].auto_off ? 1 : 2;
+  }
+  vncSetStatusText(element + 1, statusitem[element].text, active, color);
 }
 
-void bx_vncsrv_gui_c::set_mouse_mode_absxy(bx_bool mode)
+void bx_vncsrv_gui_c::set_mouse_mode_absxy(bool mode)
 {
   rfbMouseModeAbsXY = mode;
 }
@@ -1136,6 +1073,7 @@ void vncStartThread()
   BX_THREAD_VAR(thread_var);
 
   BX_THREAD_CREATE(vncServerThreadInit, NULL, thread_var);
+  UNUSED(thread_var);
 }
 
 void DrawBitmap(int x, int y, int width, int height, char *bmap,
@@ -1159,16 +1097,16 @@ void DrawBitmap(int x, int y, int width, int height, char *bmap,
   delete [] newBits;
 }
 
-void DrawChar(int x, int y, int width, int height, int fonty, char *bmap,
-        rfbPixel fgcolor, rfbPixel bgcolor, bx_bool gfxchar)
+void DrawChar(int x, int y, int width, int height, int fontx, int fonty,
+              char *bmap, rfbPixel fgcolor, rfbPixel bgcolor, bool gfxchar)
 {
   static rfbPixel newBits[18 * 32];
   unsigned char mask;
   int bytes = width * height;
-  bx_bool dwidth = (width > 9);
+  bool dwidth = (width > 9);
 
   for (int i = 0; i < bytes; i += width) {
-    mask = 0x80;
+    mask = 0x80 >> fontx;
     for (int j = 0; j < width; j++) {
       if (mask > 0) {
         newBits[i + j] = (bmap[fonty] & mask) ? fgcolor : bgcolor;
@@ -1211,7 +1149,7 @@ void SendUpdate(int x, int y, int width, int height)
   rfbMarkRectAsModified(theGui->screen, x, y, x + width, y + height);
 }
 
-void vncSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
+void vncSetStatusText(int element, const char *text, bool active, Bit8u color)
 {
   char *newBits;
   unsigned xleft, xsize, i, len;
@@ -1227,8 +1165,8 @@ void vncSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
 
   rfbPixel fgcolor = active ? headerbar_fg : status_gray_text;
   rfbPixel bgcolor = 0;
-  if (element > 0) {
-    bgcolor = active ? (w ? status_led_red : status_led_green) : headerbar_bg;
+  if ((element > 0) && active) {
+    bgcolor = status_leds[color];
   } else {
     bgcolor = headerbar_bg;
   }
@@ -1238,7 +1176,7 @@ void vncSetStatusText(int element, const char *text, bx_bool active, bx_bool w)
   delete [] newBits;
   len = ((element > 0) && (strlen(text) > 4)) ? 4 : strlen(text);
   for (i = 0; i < len; i++) {
-    DrawChar(xleft + i * 8 + 2, rfbWindowY - rfbStatusbarY + 5, 8, 8, 0,
+    DrawChar(xleft + i * 8 + 2, rfbWindowY - rfbStatusbarY + 5, 8, 8, 0, 0,
              (char *) &sdl_font8x8[(unsigned) text[i]][0], fgcolor, bgcolor, 0);
   }
 
@@ -1263,7 +1201,7 @@ void newframebuffer(rfbScreenInfoPtr screen, int width, int height)
 
 void dokey(rfbBool down, rfbKeySym key, rfbClientPtr cl)
 {
-  bx_bool mouse_toggle = 0;
+  bool mouse_toggle = 0;
 
   if ((key == XK_Control_L) || (key == XK_Control_R)) {
     mouse_toggle = bx_gui->mouse_toggle_check(BX_MT_KEY_CTRL, down);
@@ -1327,6 +1265,7 @@ enum rfbNewClientAction newclient(rfbClientPtr cl)
 {
   cl->clientData = NULL;
   cl->clientGoneHook = clientgone;
+  clientPtr = cl;
   client_connected = 1;
   return RFB_CLIENT_ACCEPT;
 }

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sb16.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: sb16.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -161,30 +161,35 @@ Bit32s sb16_options_save(FILE *fp)
   return SIM->write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_SOUND_SB16), NULL, 0);
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libsb16_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(sb16)
 {
-  theSB16Device = new bx_sb16_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theSB16Device, BX_PLUGIN_SB16);
-  // add new configuration parameter for the config interface
-  sb16_init_options();
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("sb16", sb16_options_parser, sb16_options_save);
+  if (mode == PLUGIN_INIT) {
+    theSB16Device = new bx_sb16_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theSB16Device, BX_PLUGIN_SB16);
+    // add new configuration parameter for the config interface
+    sb16_init_options();
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("sb16", sb16_options_parser, sb16_options_save);
+    bx_devices.add_sound_device();
+  } else if (mode == PLUGIN_FINI) {
+    delete theSB16Device;
+    SIM->unregister_addon_option("sb16");
+    ((bx_list_c*)SIM->get_param("sound"))->remove("sb16");
+    bx_devices.remove_sound_device();
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libsb16_LTX_plugin_fini(void)
-{
-  delete theSB16Device;
-  SIM->unregister_addon_option("sb16");
-  ((bx_list_c*)SIM->get_param("sound"))->remove("sb16");
 }
 
 // some shortcuts to save typing
 #define LOGFILE         BX_SB16_THIS logfile
-#define MPU             BX_SB16_THIS mpu401
-#define DSP             BX_SB16_THIS dsp
+#define MPU             BX_SB16_THIS mpu401.d
+#define MPU_B           BX_SB16_THIS mpu401.b
+#define DSP             BX_SB16_THIS dsp.d
+#define DSP_B           BX_SB16_THIS dsp.b
 #define MIXER           BX_SB16_THIS mixer
 #define EMUL            BX_SB16_THIS emuldata
 #define OPL             BX_SB16_THIS opl
@@ -203,13 +208,13 @@ void CDECL libsb16_LTX_plugin_fini(void)
 bx_sb16_c::bx_sb16_c(void)
 {
   put("SB16");
-  memset(&mpu401, 0, sizeof(mpu401));
-  memset(&dsp, 0, sizeof(dsp));
+  memset(&mpu401.d, 0, sizeof(mpu401.d));
+  memset(&dsp.d, 0, sizeof(dsp.d));
   memset(&opl, 0, sizeof(opl));
   currentdma8 = 0;
   currentdma16 = 0;
-  mpu401.timer_handle = BX_NULL_TIMER_HANDLE;
-  dsp.timer_handle = BX_NULL_TIMER_HANDLE;
+  mpu401.d.timer_handle = BX_NULL_TIMER_HANDLE;
+  dsp.d.timer_handle = BX_NULL_TIMER_HANDLE;
   opl.timer_handle = BX_NULL_TIMER_HANDLE;
   waveout[0] = NULL;
   waveout[1] = NULL;
@@ -314,14 +319,14 @@ void bx_sb16_c::init(void)
 
   // allocate the FIFO buffers - except for the MPUMIDICMD buffer
   // these sizes are generous, 16 or 8 would probably be sufficient
-  MPU.datain.init((int) 64);               // the input
-  MPU.dataout.init((int) 64);               // and output
-  MPU.cmd.init((int) 64);              // and command buffers
-  MPU.midicmd.init((int) 256);         // and the midi command buffer (note- large SYSEX'es have to fit!)
-  DSP.datain.init((int) 64);           // the DSP input
-  DSP.dataout.init((int) 64);          // and output buffers
-  EMUL.datain.init((int) 64);          // the emulator ports
-  EMUL.dataout.init((int) 64);         // for changing emulator settings
+  MPU_B.datain.init((int) 64);           // the MPU input
+  MPU_B.dataout.init((int) 64);          // and output
+  MPU_B.cmd.init((int) 64);              // and command buffers
+  MPU_B.midicmd.init((int) 256);         // and the midi command buffer (note- large SYSEX'es have to fit!)
+  DSP_B.datain.init((int) 64);           // the DSP input
+  DSP_B.dataout.init((int) 64);          // and output buffers
+  EMUL.datain.init((int) 64);            // the emulator ports
+  EMUL.dataout.init((int) 64);           // for changing emulator settings
 
   // reset all parts of the hardware by
   // triggering their reset functions
@@ -406,7 +411,7 @@ void bx_sb16_c::init(void)
 
   if (DSP.timer_handle == BX_NULL_TIMER_HANDLE) {
     DSP.timer_handle = DEV_register_timer
-      (BX_SB16_THISP, dsp_dmatimer, 1, 1, 0, "sb16.dsp");
+      (BX_SB16_THISP, dsp_dmatimer_handler, 1, 1, 0, "sb16.dsp");
     // dma timer: inactive, continuous, frequency variable
   }
 
@@ -457,10 +462,10 @@ void bx_sb16_c::register_state(void)
 
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "sb16", "SB16 State");
   bx_list_c *mpu = new bx_list_c(list, "mpu");
-  new bx_shadow_bool_c(mpu, "uartmode", &MPU.uartmode);
-  new bx_shadow_bool_c(mpu, "irqpending", &MPU.irqpending);
-  new bx_shadow_bool_c(mpu, "forceuartmode", &MPU.forceuartmode);
-  new bx_shadow_bool_c(mpu, "singlecommand", &MPU.singlecommand);
+  BXRS_PARAM_BOOL(mpu, uartmode, MPU.uartmode);
+  BXRS_PARAM_BOOL(mpu, irqpending, MPU.irqpending);
+  BXRS_PARAM_BOOL(mpu, forceuartmode, MPU.forceuartmode);
+  BXRS_PARAM_BOOL(mpu, singlecommand, MPU.singlecommand);
   new bx_shadow_num_c(mpu, "current_timer", &MPU.current_timer);
   new bx_shadow_num_c(mpu, "last_delta_time", &MPU.last_delta_time);
   bx_list_c *patchtbl = new bx_list_c(mpu, "patchtable");
@@ -475,9 +480,9 @@ void bx_sb16_c::register_state(void)
   new bx_shadow_num_c(dsp, "resetport", &DSP.resetport, BASE_HEX);
   new bx_shadow_num_c(dsp, "speaker", &DSP.speaker, BASE_HEX);
   new bx_shadow_num_c(dsp, "prostereo", &DSP.prostereo, BASE_HEX);
-  new bx_shadow_bool_c(dsp, "irqpending", &DSP.irqpending);
-  new bx_shadow_bool_c(dsp, "midiuartmode", &DSP.midiuartmode);
-  new bx_shadow_bool_c(dsp, "nondma_mode", &DSP.nondma_mode);
+  BXRS_PARAM_BOOL(dsp, irqpending, DSP.irqpending);
+  BXRS_PARAM_BOOL(dsp, midiuartmode, DSP.midiuartmode);
+  BXRS_PARAM_BOOL(dsp, nondma_mode, DSP.nondma_mode);
   new bx_shadow_num_c(dsp, "nondma_count", &DSP.nondma_count);
   new bx_shadow_num_c(dsp, "samplebyte", &DSP.samplebyte, BASE_HEX);
   new bx_shadow_num_c(dsp, "testreg", &DSP.testreg, BASE_HEX);
@@ -485,9 +490,9 @@ void bx_sb16_c::register_state(void)
   new bx_shadow_num_c(dma, "mode", &DSP.dma.mode);
   new bx_shadow_num_c(dma, "bps", &DSP.dma.bps);
   new bx_shadow_num_c(dma, "timer", &DSP.dma.timer);
-  new bx_shadow_bool_c(dma, "fifo", &DSP.dma.fifo);
-  new bx_shadow_bool_c(dma, "output", &DSP.dma.output);
-  new bx_shadow_bool_c(dma, "highspeed", &DSP.dma.highspeed);
+  BXRS_PARAM_BOOL(dma, fifo, DSP.dma.fifo);
+  BXRS_PARAM_BOOL(dma, output, DSP.dma.output);
+  BXRS_PARAM_BOOL(dma, highspeed, DSP.dma.highspeed);
   new bx_shadow_num_c(dma, "count", &DSP.dma.count);
   new bx_shadow_num_c(dma, "chunkindex", &DSP.dma.chunkindex);
   new bx_shadow_num_c(dma, "chunkcount", &DSP.dma.chunkcount);
@@ -583,24 +588,27 @@ void bx_sb16_c::runtime_config(void)
 // the timer functions
 void bx_sb16_c::mpu_timer (void *this_ptr)
 {
-  ((bx_sb16_c *) this_ptr)->mpu401.current_timer++;
+  ((bx_sb16_c *) this_ptr)->mpu401.d.current_timer++;
 }
 
-void bx_sb16_c::dsp_dmatimer(void *this_ptr)
+void bx_sb16_c::dsp_dmatimer_handler(void *this_ptr)
 {
-  bx_sb16_c *This = (bx_sb16_c *) this_ptr;
+  ((bx_sb16_c *) this_ptr)->dsp_dmatimer();
+}
 
+void bx_sb16_c::dsp_dmatimer(void)
+{
   // raise the DRQ line. It is then lowered by the dma read / write functions
   // when the next byte has been sent / received.
   // However, don't do this if the next byte/word will fill up the
   // output buffer and the output functions are not ready yet
   // or if buffer is empty in input mode.
 
-  if (!This->dsp.nondma_mode) {
-    if ((This->dsp.dma.chunkindex + 1 < BX_SOUNDLOW_WAVEPACKETSIZE) &&
-        (This->dsp.dma.count > 0)) {
-      if (((This->dsp.dma.output == 0) && (This->dsp.dma.chunkcount > 0)) ||
-          (This->dsp.dma.output == 1)) {
+  if (!DSP.nondma_mode) {
+    if ((DSP.dma.chunkindex + 1 < BX_SOUNDLOW_WAVEPACKETSIZE) &&
+        (DSP.dma.count > 0)) {
+      if (((DSP.dma.output == 0) && (DSP.dma.chunkcount > 0)) ||
+          (DSP.dma.output == 1)) {
         if ((DSP.dma.param.bits == 8) || (BX_SB16_DMAH == 0)) {
           DEV_dma_set_drq(BX_SB16_DMAL, 1);
         } else {
@@ -610,9 +618,9 @@ void bx_sb16_c::dsp_dmatimer(void *this_ptr)
     }
   } else {
     dsp_getsamplebyte(0);
-    dsp_getsamplebyte(This->dsp.samplebyte);
+    dsp_getsamplebyte(DSP.samplebyte);
     dsp_getsamplebyte(0);
-    dsp_getsamplebyte(This->dsp.samplebyte);
+    dsp_getsamplebyte(DSP.samplebyte);
   }
 }
 
@@ -684,10 +692,10 @@ void bx_sb16_c::dsp_reset(Bit32u value)
       DSP.dma.highspeed = 0;
       DSP.dma.chunkindex = 0;
 
-      DSP.dataout.reset();    // clear the buffers
-      DSP.datain.reset();
+      DSP_B.dataout.reset();    // clear the buffers
+      DSP_B.datain.reset();
 
-      DSP.dataout.put(0xaa);  // acknowledge the reset
+      DSP_B.dataout.put(0xaa);  // acknowledge the reset
   }
   else
     DSP.resetport = value;
@@ -704,8 +712,8 @@ Bit32u bx_sb16_c::dsp_dataread()
   else
   {
     // default behaviour: if none available, return last byte again
-    //  if (DSP.dataout.empty() == 0)
-    DSP.dataout.get(&value);
+    //  if (DSP_B.dataout.empty() == 0)
+    DSP_B.dataout.get(&value);
   }
 
   writelog(WAVELOG(4), "DSP Data port read, result = %x", value);
@@ -736,12 +744,12 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
     return;
   }
 
-  if (DSP.datain.hascommand() == 1) // already a command pending, add to argument list
+  if (DSP_B.datain.hascommand() == 1) // already a command pending, add to argument list
   {
-    if (DSP.datain.put(value) == 0)
+    if (DSP_B.datain.put(value) == 0)
     {
        writelog(WAVELOG(3), "DSP command buffer overflow for command %02x",
-                 DSP.datain.currentcommand());
+                 DSP_B.datain.currentcommand());
     }
   }
   else // no command pending, set one up
@@ -813,15 +821,15 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          bytesneeded = 3;
          break;
     }
-    DSP.datain.newcommand(value, bytesneeded);
+    DSP_B.datain.newcommand(value, bytesneeded);
   }
 
-  if (DSP.datain.commanddone() == 1) // command is complete, process it
+  if (DSP_B.datain.commanddone() == 1) // command is complete, process it
   {
       writelog(WAVELOG(4), "DSP command %x with %d arg bytes",
-              DSP.datain.currentcommand(), DSP.datain.bytes());
+              DSP_B.datain.currentcommand(), DSP_B.datain.bytes());
 
-      switch (DSP.datain.currentcommand())
+      switch (DSP_B.datain.currentcommand())
       {
          // DSP commands - comments are the parameters for
          // this command, and/or the output
@@ -829,23 +837,23 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // ASP commands (Advanced Signal Processor)
          // undocumented (?), just from looking what an SB16 does
        case 0x04:
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&value8);
          break;
 
        case 0x05:
-         DSP.datain.get(&value8);
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&value8);
+         DSP_B.datain.get(&value8);
          break;
 
        case 0x0e:
-         DSP.datain.get(&index);
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&index);
+         DSP_B.datain.get(&value8);
          BX_SB16_THIS csp_reg[index] = value;
          break;
 
        case 0x0f:
-         DSP.datain.get(&index);
-         DSP.dataout.put(BX_SB16_THIS csp_reg[index]);
+         DSP_B.datain.get(&index);
+         DSP_B.dataout.put(BX_SB16_THIS csp_reg[index]);
          break;
 
          // direct mode DAC
@@ -862,28 +870,28 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
            DSP.nondma_mode = 1;
            DSP.nondma_count = 0;
          }
-         DSP.datain.get(&DSP.samplebyte);
+         DSP_B.datain.get(&DSP.samplebyte);
          DSP.nondma_count++;
          break;
 
          // uncomp'd, normal DAC DMA
        case 0x14:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 0);
          break;
 
           // 2-bit comp'd, normal DAC DMA, no ref byte
        case 0x16:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 2);
          break;
 
          // 2-bit comp'd, normal DAC DMA, 1 ref byte
        case 0x17:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 2|8);
          break;
 
@@ -902,13 +910,13 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // direct mode ADC
        case 0x20:
          // o1: 8bit sample
-         DSP.dataout.put(0x80); // put a silence, for now.
+         DSP_B.dataout.put(0x80); // put a silence, for now.
          break;
 
          // uncomp'd, normal ADC DMA
        case 0x24:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc8, 0x00, length, 0);
          break;
 
@@ -943,7 +951,7 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
 
          // MIDI output
        case 0x38:
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&value8);
          // route to mpu401 part
          mpu_datawrite(value8);
          break;
@@ -951,7 +959,7 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // set time constant
        case 0x40:
          // 1: timeconstant
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&value8);
          DSP.dma.timeconstant = value8 <<  8;
          DSP.dma.param.samplerate = (Bit32u) 256000000L / ((Bit32u) 65536L - (Bit32u) DSP.dma.timeconstant);
            break;
@@ -963,41 +971,41 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // set samplerate for output
        case 0x42:
          // 1,2: hi(frq) lo(frq)
-         DSP.datain.getw1(&(DSP.dma.param.samplerate));
+         DSP_B.datain.getw1(&(DSP.dma.param.samplerate));
          DSP.dma.timeconstant = 65536 - (Bit32u) 256000000 / (Bit32u) DSP.dma.param.samplerate;
          break;
 
          // set block length
        case 0x48:
          // 1,2: lo(blk len) hi(blk len)
-         DSP.datain.getw(&(DSP.dma.blocklength));
+         DSP_B.datain.getw(&(DSP.dma.blocklength));
          break;
 
          // 4-bit comp'd, normal DAC DMA, no ref byte
        case 0x74:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 4);
          break;
 
          // 4-bit comp'd, normal DAC DMA, 1 ref byte
        case 0x75:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 4|8);
          break;
 
          // 3-bit comp'd, normal DAC DMA, no ref byte
        case 0x76:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 3);
          break;
 
          // 3-bit comp'd, normal DAC DMA, 1 ref byte
        case 0x77:
          // 1,2: lo(length) hi(length)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          dsp_dma(0xc0, 0x00, length, 3|8);
          break;
 
@@ -1016,7 +1024,7 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // silence period
        case 0x80:
          // 1,2: lo(silence) hi(silence) (len in samples)
-         DSP.datain.getw(&length);
+         DSP_B.datain.getw(&length);
          // TODO
          break;
 
@@ -1093,9 +1101,9 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
         case 0xcd:
         case 0xce:
         case 0xcf:
-         DSP.datain.get(&mode);
-         DSP.datain.getw(&length);
-         dsp_dma(DSP.datain.currentcommand(), mode, length, 0);
+         DSP_B.datain.get(&mode);
+         DSP_B.datain.getw(&length);
+         dsp_dma(DSP_B.datain.currentcommand(), mode, length, 0);
          break;
 
          // pause 8 bit DMA transfer
@@ -1141,7 +1149,7 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
          // read speaker on/off (out ff=on, 00=off)
        case 0xd8:
          // none, o1: speaker; ff/00
-         DSP.dataout.put((DSP.speaker == 1)?0xff:0x00);
+         DSP_B.dataout.put((DSP.speaker == 1)?0xff:0x00);
          break;
 
          // stop 16 bit auto DMA
@@ -1166,48 +1174,48 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
 
          // DSP identification
        case 0xe0:
-         DSP.datain.get(&value8);
-         DSP.dataout.put(~value8);
+         DSP_B.datain.get(&value8);
+         DSP_B.dataout.put(~value8);
          break;
 
          // get version, out 2 bytes (major, minor)
        case 0xe1:
          // none, o1/2: version major.minor
-         DSP.dataout.put(4);
-         if (DSP.dataout.put(5) == 0)
+         DSP_B.dataout.put(4);
+         if (DSP_B.dataout.put(5) == 0)
          {
              writelog(WAVELOG(3), "DSP version couldn't be written - buffer overflow");
          }
          break;
 
        case 0xe2:
-         DSP.datain.get(&value8);
+         DSP_B.datain.get(&value8);
          // TODO
          writelog(WAVELOG(3), "undocumented DSP command %x ignored (value = 0x%02x)",
-                 DSP.datain.currentcommand(), value8);
+                 DSP_B.datain.currentcommand(), value8);
          break;
 
        case 0xe3:
          // none, output: Copyright string
          // the Windows driver needs the exact text, otherwise it
          // won't load. Same for diagnose.exe
-         DSP.dataout.puts("COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.");
-         DSP.dataout.put(0);    // need extra string end
+         DSP_B.dataout.puts("COPYRIGHT (C) CREATIVE TECHNOLOGY LTD, 1992.");
+         DSP_B.dataout.put(0);    // need extra string end
          break;
 
          // write test register
        case 0xe4:
-         DSP.datain.get(&DSP.testreg);
+         DSP_B.datain.get(&DSP.testreg);
          break;
 
          // read test register
        case 0xe8:
-         DSP.dataout.put(DSP.testreg);
+         DSP_B.dataout.put(DSP.testreg);
          break;
 
          // Trigger 8-bit IRQ
        case 0xf2:
-         DSP.dataout.put(0xaa);
+         DSP_B.dataout.put(0xaa);
          DSP.irqpending = 1;
          MIXER.reg[0x82] |= 1; // reg 82 shows the kind of IRQ
          DEV_pic_raise_irq(BX_SB16_IRQ);
@@ -1215,30 +1223,30 @@ void bx_sb16_c::dsp_datawrite(Bit32u value)
 
          // ??? - Win98 needs this
         case 0xf9:
-          DSP.datain.get(&value8);
+          DSP_B.datain.get(&value8);
           switch (value8) {
             case 0x0e:
-              DSP.dataout.put(0xff);
+              DSP_B.dataout.put(0xff);
               break;
             case 0x0f:
-              DSP.dataout.put(0x07);
+              DSP_B.dataout.put(0x07);
               break;
             case 0x37:
-              DSP.dataout.put(0x38);
+              DSP_B.dataout.put(0x38);
               break;
             default:
-              DSP.dataout.put(0x00);
+              DSP_B.dataout.put(0x00);
           }
           break;
 
          // unknown command
        default:
          writelog(WAVELOG(3), "unknown DSP command %x, ignored",
-                 DSP.datain.currentcommand());
+                 DSP_B.datain.currentcommand());
          break;
       }
-      DSP.datain.clearcommand();
-      DSP.datain.flush();
+      DSP_B.datain.clearcommand();
+      DSP_B.datain.flush();
    }
 }
 
@@ -1247,7 +1255,7 @@ void bx_sb16_c::dsp_dma(Bit8u command, Bit8u mode, Bit16u length, Bit8u comp)
 {
   int ret;
   bx_list_c *base;
-  bx_bool issigned;
+  bool issigned;
 
   // command: 8bit, 16bit, in/out, single/auto, fifo
   // mode: mono/stereo, signed/unsigned
@@ -1307,11 +1315,11 @@ void bx_sb16_c::dsp_dma(Bit8u command, Bit8u mode, Bit16u length, Bit8u comp)
            DSP.dma.param.bits, DSP.dma.param.samplerate,
            (DSP.dma.param.channels == 2)?"stereo":"mono",
            (DSP.dma.output == 1)?"output":"input", DSP.dma.mode,
-           (issigned == 1)?"signed":"unsigned",
+           issigned ? "signed":"unsigned",
            (DSP.dma.highspeed == 1)?"highspeed":"normal speed",
            sampledatarate, DSP.dma.timer);
 
-  DSP.dma.param.format = issigned | ((comp & 7) << 1) | ((comp & 8) << 4);
+  DSP.dma.param.format = (int)issigned | ((comp & 7) << 1) | ((comp & 8) << 4);
 
   // write the output to the device/file
   if (DSP.dma.output == 1) {
@@ -1411,7 +1419,7 @@ Bit32u bx_sb16_c::dsp_bufferstatus()
   Bit32u result = 0x7f;
 
   // MSB set -> not ready for commands
-  if (DSP.datain.full() == 1) result |= 0x80;
+  if (DSP_B.datain.full() == 1) result |= 0x80;
 
   writelog(WAVELOG(4), "DSP Buffer status read, result %x", result);
 
@@ -1435,7 +1443,7 @@ Bit32u bx_sb16_c::dsp_status()
   }
 
   // if buffer is not empty, there is data to be read
-  if (DSP.dataout.empty() == 0) result |= 0x80;
+  if (DSP_B.dataout.empty() == 0) result |= 0x80;
 
   writelog(WAVELOG(4), "DSP output status read, result %x", result);
 
@@ -1641,7 +1649,7 @@ Bit16u bx_sb16_c::dma_write16(Bit16u *buffer, Bit16u maxlen)
   return len;
 }
 
-Bit16u bx_sb16_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bx_bool shift)
+Bit16u bx_sb16_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bool shift)
 {
   Bit8u vol1, vol2;
   float fvol1, fvol2;
@@ -1649,8 +1657,8 @@ Bit16u bx_sb16_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bx_bool shift)
 
   vol1 = (MIXER.reg[reg1] >> 3);
   vol2 = (MIXER.reg[reg2] >> 3);
-  fvol1 = pow(10.0f, (float)(31-vol1)*-0.065f);
-  fvol2 = pow(10.0f, (float)(31-vol2)*-0.065f);
+  fvol1 = (float)pow(10.0f, (float)(31-vol1)*-0.065f);
+  fvol2 = (float)pow(10.0f, (float)(31-vol2)*-0.065f);
   result = (Bit8u)(255 * fvol1 * fvol2);
   if (shift) result <<= 8;
   return result;
@@ -1838,7 +1846,7 @@ void bx_sb16_c::mixer_writeregister(Bit32u value)
 
 void bx_sb16_c::set_irq_dma()
 {
-  static bx_bool isInitialized=0;
+  static bool isInitialized=0;
   int newirq;
   int oldDMA8, oldDMA16;
 
@@ -1953,11 +1961,11 @@ Bit32u bx_sb16_c::mpu_status()
 {
   Bit32u result = 0;
 
-  if ((MPU.datain.full() == 1) ||
+  if ((MPU_B.datain.full() == 1) ||
        ((BX_SB16_THIS midimode & 1) &&
         (BX_SB16_MIDIOUT1->midiready() == BX_SOUNDLOW_ERR)))
     result |= 0x40;       // output not ready
-  if (MPU.dataout.empty() == 1)
+  if (MPU_B.dataout.empty() == 1)
     result |= 0x80;       // no input available
 
   writelog(MIDILOG(4), "MPU status port, result %02x", result);
@@ -1972,30 +1980,30 @@ void bx_sb16_c::mpu_command(Bit32u value)
   int i;
   int bytesneeded;
 
-  if (MPU.cmd.hascommand() == 1) // already a command pending, abort that one
+  if (MPU_B.cmd.hascommand() == 1) // already a command pending, abort that one
   {
-      if ((MPU.cmd.currentcommand() != value) ||
-          (MPU.cmd.commanddone() == 0))
+      if ((MPU_B.cmd.currentcommand() != value) ||
+          (MPU_B.cmd.commanddone() == 0))
             // it's a different command, or the old one isn't done yet, abort it
        {
-         MPU.cmd.clearcommand();
-         MPU.cmd.flush();
+         MPU_B.cmd.clearcommand();
+         MPU_B.cmd.flush();
        }
 
        // if it's the same one, and we just completed the argument list,
        // we leave it as it is and process it here
   }
 
-  if (MPU.cmd.hascommand() == 0)  // no command pending, set one up
+  if (MPU_B.cmd.hascommand() == 0)  // no command pending, set one up
   {
       bytesneeded = 0;
       if ((value >> 4) == 14) bytesneeded = 1;
-      MPU.cmd.newcommand(value, bytesneeded);
+      MPU_B.cmd.newcommand(value, bytesneeded);
   }
 
-  if (MPU.cmd.commanddone() == 1) // command is complete, process it
+  if (MPU_B.cmd.commanddone() == 1) // command is complete, process it
   {
-     switch (MPU.cmd.currentcommand())
+     switch (MPU_B.cmd.currentcommand())
      {
         case 0x3f:
           writelog(MIDILOG(5), "MPU cmd: UART mode on");
@@ -2018,29 +2026,29 @@ void bx_sb16_c::mpu_command(Bit32u value)
              MPU.bankmsb[i] = 0;
              MPU.program[i] = 0;
           }
-          MPU.cmd.reset();
-          MPU.dataout.reset();
-          MPU.datain.reset();
-          MPU.midicmd.reset();
+          MPU_B.cmd.reset();
+          MPU_B.dataout.reset();
+          MPU_B.datain.reset();
+          MPU_B.midicmd.reset();
           break;
        case 0xd0:  // d0 and df: prefix for midi command
        case 0xdf:  // like uart mode, but only a single command
           MPU.singlecommand = 1;
           writelog(MIDILOG(4), "MPU: prefix %02x received",
-                  MPU.cmd.currentcommand());
+                  MPU_B.cmd.currentcommand());
           break;
        default:
           writelog(MIDILOG(3), "MPU cmd: unknown command %02x ignored",
-                  MPU.cmd.currentcommand());
+                  MPU_B.cmd.currentcommand());
           break;
      }
 
      // Need to put an MPU_ACK into the data port if command successful
      // we'll fake it even if we didn't process the command, so as to
      // allow detection of the MPU 401.
-     if (MPU.dataout.put(0xfe) == 0)
+     if (MPU_B.dataout.put(0xfe) == 0)
         writelog(MIDILOG(3), "MPU_ACK error - output buffer full");
-     MPU.cmd.clearcommand(); // clear the command from the buffer
+     MPU_B.cmd.clearcommand(); // clear the command from the buffer
   }
 }
 
@@ -2063,7 +2071,7 @@ Bit32u bx_sb16_c::mpu_dataread()
      writelog(MIDILOG(4), "MPU IRQ acknowledged");
   }
 
-  if (MPU.dataout.get(&res8bit) == 0) {
+  if (MPU_B.dataout.get(&res8bit) == 0) {
      writelog(MIDILOG(3), "MPU data port not ready - no data in buffer");
      result = 0xff;
   }
@@ -2083,12 +2091,12 @@ void bx_sb16_c::mpu_datawrite(Bit32u value)
 {
   writelog(MIDILOG(4), "write to MPU data port, value %02x", value);
 
-  if (MPU.cmd.hascommand() == 1)
+  if (MPU_B.cmd.hascommand() == 1)
   { // there is a command pending, add arguments to it
-      if (MPU.cmd.put(value) == 0)
+      if (MPU_B.cmd.put(value) == 0)
        writelog(MIDILOG(3), "MPU Command arguments too long - buffer full");
-      if (MPU.cmd.commanddone() == 1)
-       BX_SB16_THIS mpu_command(MPU.cmd.currentcommand());
+      if (MPU_B.cmd.commanddone() == 1)
+       BX_SB16_THIS mpu_command(MPU_B.cmd.currentcommand());
   }
   else if ((MPU.uartmode == 0) && (MPU.singlecommand == 0))
   {
@@ -2106,17 +2114,17 @@ void bx_sb16_c::mpu_datawrite(Bit32u value)
 void bx_sb16_c::mpu_mididata(Bit32u value)
 {
   // first, find out if it is a midi command or midi data
-  bx_bool ismidicommand = 0;
+  bool ismidicommand = 0;
   if (value >= 0x80)
   {  // bit 8 usually denotes a midi command...
       ismidicommand = 1;
-      if ((value == 0xf7) && (MPU.midicmd.currentcommand() == 0xf0))
+      if ((value == 0xf7) && (MPU_B.midicmd.currentcommand() == 0xf0))
       // ...except if it is a continuing SYSEX message, then it just
       // denotes the end of a SYSEX chunk, not the start of a message
       {
          ismidicommand = 0;     // first, it's not a command
-         MPU.midicmd.newcommand(MPU.midicmd.currentcommand(),
-                             MPU.midicmd.bytes());
+         MPU_B.midicmd.newcommand(MPU_B.midicmd.currentcommand(),
+                             MPU_B.midicmd.bytes());
          // Then, set needed bytes to current buffer
          // because we didn't know the length before
       }
@@ -2124,43 +2132,43 @@ void bx_sb16_c::mpu_mididata(Bit32u value)
 
   if (ismidicommand == 1)
   {  // this is a command, check if an old one is pending
-      if (MPU.midicmd.hascommand() == 1)
+      if (MPU_B.midicmd.hascommand() == 1)
       {
          writelog(MIDILOG(3), "Midi command %02x incomplete, has %d of %d bytes.",
-                 MPU.midicmd.currentcommand(), MPU.midicmd.bytes(),
-                 MPU.midicmd.commandbytes());
+                 MPU_B.midicmd.currentcommand(), MPU_B.midicmd.bytes(),
+                 MPU_B.midicmd.commandbytes());
          // write as much as we can. Should we do this?
          processmidicommand(0);
          // clear the pending command
-         MPU.midicmd.clearcommand();
-         MPU.midicmd.flush();
+         MPU_B.midicmd.clearcommand();
+         MPU_B.midicmd.flush();
       }
 
       // find the number of arguments to the command
       static const signed eventlength[] = { 2, 2, 2, 2, 1, 1, 2, 255};
       // note - length 255 commands have unknown length
-      MPU.midicmd.newcommand(value, eventlength[(value & 0x70) >> 4]);
+      MPU_B.midicmd.newcommand(value, eventlength[(value & 0x70) >> 4]);
   }
   else  // no command, just arguments to the old command
   {
-      if (MPU.midicmd.hascommand() == 0)
+      if (MPU_B.midicmd.hascommand() == 0)
       {  // no command pending, ignore the data
          writelog(MIDILOG(3), "Midi data %02x received, but no command pending?", value);
          return;
       }
 
       // just some data to the command
-      if (MPU.midicmd.put(value) == 0)
+      if (MPU_B.midicmd.put(value) == 0)
        writelog(MIDILOG(3), "Midi buffer overflow!");
-      if (MPU.midicmd.commanddone() == 1)
+      if (MPU_B.midicmd.commanddone() == 1)
       {
          // the command is complete, process it
          writelog(MIDILOG(5), "Midi command %02x complete, has %d bytes.",
-                 MPU.midicmd.currentcommand(), MPU.midicmd.bytes());
+                 MPU_B.midicmd.currentcommand(), MPU_B.midicmd.bytes());
          processmidicommand(0);
          // and remove the command from the buffer
-         MPU.midicmd.clearcommand();
-         MPU.midicmd.flush();
+         MPU_B.midicmd.clearcommand();
+         MPU_B.midicmd.flush();
       }
   }
 }
@@ -2423,7 +2431,7 @@ void bx_sb16_c::opl_settimermask(int value, int chipid)
 
 Bit32u bx_sb16_c::fmopl_generator(Bit16u rate, Bit8u *buffer, Bit32u len)
 {
-  bx_bool ret = adlib_getsample(rate, (Bit16s*)buffer, len / 4, BX_SB16_THIS fm_volume);
+  bool ret = adlib_getsample(rate, (Bit16s*)buffer, len / 4, BX_SB16_THIS fm_volume);
   return ret ? len : 0;
 }
 
@@ -2494,39 +2502,39 @@ int bx_sb16_c::currentdeltatime()
   return deltatime;
 }
 
-// process the midi command stored in MPU.midicmd.to the midi driver
+// process the midi command stored in MPU_B.midicmd.to the midi driver
 
-void bx_sb16_c::processmidicommand(bx_bool force)
+void bx_sb16_c::processmidicommand(bool force)
 {
   int i, channel;
   Bit8u value;
-  bx_bool needremap = 0;
+  bool needremap = 0;
 
-  channel = MPU.midicmd.currentcommand() & 0xf;
+  channel = MPU_B.midicmd.currentcommand() & 0xf;
 
   // we need to log bank changes and program changes
-  if ((MPU.midicmd.currentcommand() >> 4) == 0xc)
+  if ((MPU_B.midicmd.currentcommand() >> 4) == 0xc)
   {   // a program change
-      value = MPU.midicmd.peek(0);
+      value = MPU_B.midicmd.peek(0);
       writelog(MIDILOG(1), "* ProgramChange channel %d to %d",
               channel, value);
       MPU.program[channel] = value;
       needremap = 1;
   }
-  else if ((MPU.midicmd.currentcommand() >> 4) == 0xb)
+  else if ((MPU_B.midicmd.currentcommand() >> 4) == 0xb)
   {   // a control change, could be a bank change
-      if (MPU.midicmd.peek(0) == 0)
+      if (MPU_B.midicmd.peek(0) == 0)
       {  // bank select MSB
-         value = MPU.midicmd.peek(1);
+         value = MPU_B.midicmd.peek(1);
          writelog(MIDILOG(1), "* BankSelectMSB (%x %x %x) channel %d to %d",
-                 MPU.midicmd.peek(0), MPU.midicmd.peek(1), MPU.midicmd.peek(2),
+                 MPU_B.midicmd.peek(0), MPU_B.midicmd.peek(1), MPU_B.midicmd.peek(2),
                  channel, value);
          MPU.bankmsb[channel] = value;
          needremap = 1;
       }
-      else if (MPU.midicmd.peek(0) == 32)
+      else if (MPU_B.midicmd.peek(0) == 32)
       {  // bank select LSB
-         value = MPU.midicmd.peek(1);
+         value = MPU_B.midicmd.peek(1);
          writelog(MIDILOG(1), "* BankSelectLSB channel %d to %d",
                  channel, value);
          MPU.banklsb[channel] = value;
@@ -2536,10 +2544,10 @@ void bx_sb16_c::processmidicommand(bx_bool force)
 
   Bit8u temparray[256];
   i = 0;
-  while (MPU.midicmd.empty() == 0)
-    MPU.midicmd.get(&(temparray[i++]));
+  while (MPU_B.midicmd.empty() == 0)
+    MPU_B.midicmd.get(&(temparray[i++]));
 
-  writemidicommand(MPU.midicmd.currentcommand(), i, temparray);
+  writemidicommand(MPU_B.midicmd.currentcommand(), i, temparray);
 
   // if single command, revert to command mode
   if (MPU.singlecommand != 0)
@@ -2960,7 +2968,7 @@ int bx_sb16_buffer::bytes(void)
 }
 
 // This puts one byte into the buffer
-bx_bool bx_sb16_buffer::put(Bit8u data)
+bool bx_sb16_buffer::put(Bit8u data)
 {
   if (full() != 0)
     return 0;       // buffer full
@@ -2972,7 +2980,7 @@ bx_bool bx_sb16_buffer::put(Bit8u data)
 }
 
 // This writes a formatted string to the buffer
-bx_bool bx_sb16_buffer::puts(const char *data, ...)
+bool bx_sb16_buffer::puts(const char *data, ...)
 {
   if (data == NULL)
     return 0;  // invalid string
@@ -3005,7 +3013,7 @@ bx_bool bx_sb16_buffer::puts(const char *data, ...)
 }
 
 // This returns if the buffer is full, i.e. if a put will fail
-bx_bool bx_sb16_buffer::full(void)
+bool bx_sb16_buffer::full(void)
 {
   if (length == 0)
     return 1;   // not initialized
@@ -3017,7 +3025,7 @@ bx_bool bx_sb16_buffer::full(void)
 }
 
 // This reads the next available byte from the buffer
-bx_bool bx_sb16_buffer::get(Bit8u *data)
+bool bx_sb16_buffer::get(Bit8u *data)
 {
   if (empty() != 0)
   {
@@ -3035,7 +3043,7 @@ bx_bool bx_sb16_buffer::get(Bit8u *data)
 }
 
 // Read a word in lo/hi order
-bx_bool bx_sb16_buffer::getw(Bit16u *data)
+bool bx_sb16_buffer::getw(Bit16u *data)
 {
   Bit8u dummy;
   if (bytes() < 2)
@@ -3057,7 +3065,7 @@ bx_bool bx_sb16_buffer::getw(Bit16u *data)
 }
 
 // Read a word in hi/lo order
-bx_bool bx_sb16_buffer::getw1(Bit16u *data)
+bool bx_sb16_buffer::getw1(Bit16u *data)
 {
   Bit8u dummy;
   if (bytes() < 2)
@@ -3079,7 +3087,7 @@ bx_bool bx_sb16_buffer::getw1(Bit16u *data)
 }
 
 // This returns if the buffer is empty, i.e. if a get will fail
-bx_bool bx_sb16_buffer::empty(void)
+bool bx_sb16_buffer::empty(void)
 {
   if (length == 0)
     return 1;   // not inialized
@@ -3127,7 +3135,7 @@ void bx_sb16_buffer::clearcommand(void)
 }
 
 // return if the command has received all necessary bytes
-bx_bool bx_sb16_buffer::commanddone(void)
+bool bx_sb16_buffer::commanddone(void)
 {
   if (hascommand() == 0)
     return 0;  // no command pending - not done then
@@ -3139,7 +3147,7 @@ bx_bool bx_sb16_buffer::commanddone(void)
 }
 
 // return if there is a command pending
-bx_bool bx_sb16_buffer::hascommand(void)
+bool bx_sb16_buffer::hascommand(void)
 {
   return havecommand;
 }
@@ -3150,7 +3158,7 @@ int bx_sb16_buffer::commandbytes(void)
 }
 
 // runtime parameter handlers
-Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     const char *pname = param->get_name();
@@ -3173,7 +3181,7 @@ Bit64s bx_sb16_c::sb16_param_handler(bx_param_c *param, int set, Bit64s val)
   return val;
 }
 
-const char* bx_sb16_c::sb16_param_string_handler(bx_param_string_c *param, int set,
+const char* bx_sb16_c::sb16_param_string_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val,
                                                  int maxlen)
 {

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: keyboard.h 13206 2017-04-22 15:32:07Z vruppert $
+// $Id: keyboard.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,6 @@
 #ifndef _PCKEY_H
 #define _PCKEY_H
 
-#define BX_KBD_ELEMENTS 16
-
 // these keywords should only be used in keyboard.cc
 #if BX_USE_KEY_SMF
 #  define BX_KEY_SMF  static
@@ -37,27 +35,24 @@
 #define MOUSE_MODE_REMOTE 12
 #define MOUSE_MODE_WRAP   13
 
-class bx_keyb_c : public bx_keyb_stub_c {
+class bx_keyb_c : public bx_devmodel_c {
 public:
   bx_keyb_c();
   virtual ~bx_keyb_c();
   // implement bx_devmodel_c interface
   virtual void init(void);
   virtual void reset(unsigned type);
-  // override stubs from bx_keyb_stub_c
-  virtual void gen_scancode(Bit32u key);
-  virtual void paste_bytes(Bit8u *data, Bit32s length);
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  // runtime options
-  static     Bit64s   kbd_param_handler(bx_param_c *param, int set, Bit64s val);
-  BX_KEY_SMF void     paste_delay_changed(Bit32u value);
-
 private:
+  static bool         gen_scancode_static(void *dev, Bit32u key);
+  BX_KEY_SMF void     gen_scancode(Bit32u key);
+  static Bit8u        get_elements_static(void *dev);
+  BX_KEY_SMF Bit8u    get_elements(void);
+
   BX_KEY_SMF Bit8u    get_kbd_enable(void);
-  BX_KEY_SMF void     service_paste_buf ();
-  BX_KEY_SMF void     create_mouse_packet(bx_bool force_enq);
+  BX_KEY_SMF void     create_mouse_packet(bool force_enq);
   BX_KEY_SMF unsigned periodic(Bit32u usec_delta);
 
 
@@ -71,22 +66,22 @@ private:
   struct {
     struct {
       /* status bits matching the status port*/
-      bx_bool pare; // Bit7, 1= parity error from keyboard/mouse - ignored.
-      bx_bool tim;  // Bit6, 1= timeout from keyboard - ignored.
-      bx_bool auxb; // Bit5, 1= mouse data waiting for CPU to read.
-      bx_bool keyl; // Bit4, 1= keyswitch in lock position - ignored.
-      bx_bool c_d; /*  Bit3, 1=command to port 64h, 0=data to port 60h */
-      bx_bool sysf; // Bit2,
-      bx_bool inpb; // Bit1,
-      bx_bool outb; // Bit0, 1= keyboard data or mouse data ready for CPU
-                    //       check aux to see which. Or just keyboard
-                    //       data before AT style machines
+      bool pare; // Bit7, 1= parity error from keyboard/mouse - ignored.
+      bool tim;  // Bit6, 1= timeout from keyboard - ignored.
+      bool auxb; // Bit5, 1= mouse data waiting for CPU to read.
+      bool keyl; // Bit4, 1= keyswitch in lock position - ignored.
+      bool c_d;  //  Bit3, 1=command to port 64h, 0=data to port 60h
+      bool sysf; // Bit2,
+      bool inpb; // Bit1,
+      bool outb; // Bit0, 1= keyboard data or mouse data ready for CPU
+                 //       check aux to see which. Or just keyboard
+                 //       data before AT style machines
 
       /* internal to our version of the keyboard controller */
-      bx_bool kbd_clock_enabled;
-      bx_bool aux_clock_enabled;
-      bx_bool allow_irq1;
-      bx_bool allow_irq12;
+      bool    kbd_clock_enabled;
+      bool    aux_clock_enabled;
+      bool    allow_irq1;
+      bool    allow_irq12;
       Bit8u   kbd_output_buffer;
       Bit8u   aux_output_buffer;
       Bit8u   last_comm;
@@ -94,12 +89,13 @@ private:
       Bit8u   expecting_mouse_parameter;
       Bit8u   last_mouse_command;
       Bit32u   timer_pending;
-      bx_bool irq1_requested;
-      bx_bool irq12_requested;
-      bx_bool scancodes_translate;
-      bx_bool expecting_scancodes_set;
+      bool    irq1_requested;
+      bool    irq12_requested;
+      bool    scancodes_translate;
+      bool    expecting_scancodes_set;
       Bit8u   current_scancodes_set;
-      bx_bool bat_in_progress;
+      bool    bat_in_progress;
+      Bit8u   kbd_type;
     } kbd_controller;
 
     struct mouseStruct {
@@ -109,7 +105,7 @@ private:
       Bit8u   scaling;
       Bit8u   mode;
       Bit8u   saved_mode;  // the mode prior to entering wrap mode
-      bx_bool enable;
+      bool    enable;
 
       Bit8u get_status_byte ()
 	{
@@ -149,24 +145,24 @@ private:
 	  return ret;
 	}
 
-      Bit8u button_status;
+      Bit8u  button_status;
       Bit16s delayed_dx;
       Bit16s delayed_dy;
       Bit16s delayed_dz;
-      Bit8u im_request;
-      bx_bool im_mode;
+      Bit8u  im_request;
+      bool   im_mode;
     } mouse;
 
     struct {
       int     num_elements;
       Bit8u   buffer[BX_KBD_ELEMENTS];
       int     head;
-      bx_bool expecting_typematic;
-      bx_bool expecting_led_write;
+      bool    expecting_typematic;
+      bool    expecting_led_write;
       Bit8u   delay;
       Bit8u   repeat_rate;
       Bit8u   led_status;
-      bx_bool scanning_enabled;
+      bool scanning_enabled;
     } kbd_internal_buffer;
 
     struct {
@@ -180,35 +176,7 @@ private:
     unsigned controller_Qsource; // 0=keyboard, 1=mouse
   } s; // State information for saving/loading
 
-  // The paste buffer does NOT exist in the hardware.  It is a bochs
-  // construction that allows the user to "paste" arbitrary length sequences of
-  // keystrokes into the emulated machine.  Since the hardware buffer is only
-  // 16 bytes, a very small amount of data can be added to the hardware buffer
-  // at a time.  The paste buffer keeps track of the bytes that have not yet
-  // been pasted.
-  //
-  // Lifetime of a paste buffer: The paste data comes from the system
-  // clipboard, which must be accessed using platform independent code in the
-  // gui.  Because every gui has its own way of managing the clipboard memory
-  // (in X windows, you're supposed to call Xfree for example), in the platform
-  // specific code we make a copy of the clipboard buffer with
-  // "new Bit8u[length]".  Then the pointer is passed into
-  // bx_keyb_c::paste_bytes, along with the length.  The gui code never touches
-  // the pastebuf again, and does not free it.  The keyboard code is
-  // responsible for deallocating the paste buffer using delete [] buf.  The
-  // paste buffer is binary data, and it is probably NOT null terminated.
-  //
-  // Summary: A paste buffer is allocated (new) in the platform-specific gui
-  // code, passed to the keyboard model, and is freed (delete[]) when it is no
-  // longer needed.
-  Bit8u *pastebuf;   // ptr to bytes to be pasted, or NULL if none in progress
-  Bit32u pastebuf_len; // length of pastebuf
-  Bit32u pastebuf_ptr; // ptr to next byte to be added to hw buffer
-  Bit32u pastedelay;   // count before paste
-  bx_bool paste_service;  // set to 1 when gen_scancode() is called from paste service
-  bx_bool stop_paste;  // stop the current paste operation on keypress or hardware reset
-
-  BX_KEY_SMF void     resetinternals(bx_bool powerup);
+  BX_KEY_SMF void     resetinternals(bool powerup);
   BX_KEY_SMF void     set_kbd_clock_enable(Bit8u value) BX_CPP_AttrRegparmN(1);
   BX_KEY_SMF void     set_aux_clock_enable(Bit8u value);
   BX_KEY_SMF void     kbd_ctrl_to_kbd(Bit8u value);
@@ -217,17 +185,16 @@ private:
   BX_KEY_SMF void     kbd_enQ_imm(Bit8u val);
   BX_KEY_SMF void     activate_timer(void);
   BX_KEY_SMF void     controller_enQ(Bit8u data, unsigned source);
-  BX_KEY_SMF bx_bool  mouse_enQ_packet(Bit8u b1, Bit8u b2, Bit8u b3, Bit8u b4);
+  BX_KEY_SMF bool     mouse_enQ_packet(Bit8u b1, Bit8u b2, Bit8u b3, Bit8u b4);
   BX_KEY_SMF void     mouse_enQ(Bit8u mouse_data);
 
-  static void mouse_enabled_changed_static(void *dev, bx_bool enabled);
-  void mouse_enabled_changed(bx_bool enabled);
-  static void mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
-  void mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
+  static void mouse_enabled_changed_static(void *dev, bool enabled);
+  void mouse_enabled_changed(bool enabled);
+  static void mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy);
+  void mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy);
 
   static void   timer_handler(void *);
   int    timer_handle;
-  int    statusbar_id[3];
 };
 
 #endif  // #ifndef _PCKEY_H

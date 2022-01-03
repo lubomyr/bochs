@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parallel.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: parallel.cc 14174 2021-03-07 11:54:50Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,9 @@ void parport_init_options(void)
 {
   char name[4], label[80], descr[80];
 
-  bx_list_c *parallel = (bx_list_c*)SIM->get_param("ports.parallel");
+  bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+  bx_list_c *parallel = new bx_list_c(ports, "parallel", "Parallel Port Options");
+  parallel->set_options(parallel->SHOW_PARENT);
   for (int i=0; i<BX_N_PARALLEL_PORTS; i++) {
     sprintf(name, "%d", i+1);
     sprintf(label, "Parallel Port %d", i+1);
@@ -100,32 +102,28 @@ Bit32s parport_options_save(FILE *fp)
   return 0;
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libparallel_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(parallel)
 {
-  theParallelDevice = new bx_parallel_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theParallelDevice, BX_PLUGIN_PARALLEL);
-  // add new configuration parameters for the config interface
-  parport_init_options();
-  // register add-on options for bochsrc and command line
-  SIM->register_addon_option("parport1", parport_options_parser, parport_options_save);
-  SIM->register_addon_option("parport2", parport_options_parser, NULL);
-  return 0; // Success
-}
-
-void CDECL libparallel_LTX_plugin_fini(void)
-{
-  char port[10];
-
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("ports.parallel");
-  for (int i=0; i<BX_N_PARALLEL_PORTS; i++) {
-    sprintf(port, "parport%d", i+1);
-    SIM->unregister_addon_option(port);
-    sprintf(port, "%d", i+1);
-    menu->remove(port);
+  if (mode == PLUGIN_INIT) {
+    theParallelDevice = new bx_parallel_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theParallelDevice, BX_PLUGIN_PARALLEL);
+    // add new configuration parameters for the config interface
+    parport_init_options();
+    // register add-on options for bochsrc and command line
+    SIM->register_addon_option("parport1", parport_options_parser, parport_options_save);
+    SIM->register_addon_option("parport2", parport_options_parser, NULL);
+  } else if (mode == PLUGIN_FINI) {
+    delete theParallelDevice;
+    SIM->unregister_addon_option("parport1");
+    SIM->unregister_addon_option("parport2");
+    bx_list_c *ports = (bx_list_c*)SIM->get_param("ports");
+    ports->remove("parallel");
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
   }
-  delete theParallelDevice;
+  return 0; // Success
 }
 
 // the device object
@@ -158,7 +156,7 @@ void bx_parallel_c::init(void)
   bx_list_c *base, *misc_rt = NULL, *menu = NULL;
   int count = 0;
 
-  BX_DEBUG(("Init $Id: parallel.cc 13051 2017-01-28 09:52:09Z vruppert $"));
+  BX_DEBUG(("Init $Id: parallel.cc 14174 2021-03-07 11:54:50Z vruppert $"));
 
   for (unsigned i=0; i<BX_N_PARALLEL_PORTS; i++) {
     sprintf(pname, "ports.parallel.%d", i+1);
@@ -229,16 +227,16 @@ void bx_parallel_c::register_state(void)
       sprintf(name, "%u", i);
       port = new bx_list_c(list, name);
       new bx_shadow_num_c(port, "data", &BX_PAR_THIS s[i].data, BASE_HEX);
-      new bx_shadow_bool_c(port, "slct", &BX_PAR_THIS s[i].STATUS.slct);
-      new bx_shadow_bool_c(port, "ack", &BX_PAR_THIS s[i].STATUS.ack);
-      new bx_shadow_bool_c(port, "busy", &BX_PAR_THIS s[i].STATUS.busy);
-      new bx_shadow_bool_c(port, "strobe", &BX_PAR_THIS s[i].CONTROL.strobe);
-      new bx_shadow_bool_c(port, "autofeed", &BX_PAR_THIS s[i].CONTROL.autofeed);
-      new bx_shadow_bool_c(port, "init", &BX_PAR_THIS s[i].CONTROL.init);
-      new bx_shadow_bool_c(port, "slct_in", &BX_PAR_THIS s[i].CONTROL.slct_in);
-      new bx_shadow_bool_c(port, "irq", &BX_PAR_THIS s[i].CONTROL.irq);
-      new bx_shadow_bool_c(port, "input", &BX_PAR_THIS s[i].CONTROL.input);
-      new bx_shadow_bool_c(port, "initmode", &BX_PAR_THIS s[i].initmode);
+      BXRS_PARAM_BOOL(port, slct, BX_PAR_THIS s[i].STATUS.slct);
+      BXRS_PARAM_BOOL(port, ack, BX_PAR_THIS s[i].STATUS.ack);
+      BXRS_PARAM_BOOL(port, busy, BX_PAR_THIS s[i].STATUS.busy);
+      BXRS_PARAM_BOOL(port, strobe, BX_PAR_THIS s[i].CONTROL.strobe);
+      BXRS_PARAM_BOOL(port, autofeed, BX_PAR_THIS s[i].CONTROL.autofeed);
+      BXRS_PARAM_BOOL(port, init, BX_PAR_THIS s[i].CONTROL.init);
+      BXRS_PARAM_BOOL(port, slct_in, BX_PAR_THIS s[i].CONTROL.slct_in);
+      BXRS_PARAM_BOOL(port, irq, BX_PAR_THIS s[i].CONTROL.irq);
+      BXRS_PARAM_BOOL(port, input, BX_PAR_THIS s[i].CONTROL.input);
+      BXRS_PARAM_BOOL(port, initmode, BX_PAR_THIS s[i].initmode);
     }
   }
 }
@@ -336,7 +334,7 @@ Bit32u bx_parallel_c::read(Bit32u address, unsigned io_len)
                   (BX_PAR_THIS s[port].CONTROL.slct_in  << 3) |
                   (BX_PAR_THIS s[port].CONTROL.init     << 2) |
                   (BX_PAR_THIS s[port].CONTROL.autofeed << 1) |
-                  (BX_PAR_THIS s[port].CONTROL.strobe));
+                  (Bit8u)BX_PAR_THIS s[port].CONTROL.strobe);
         BX_DEBUG(("read: parport%d control register returns 0x%02x", port+1, retval));
         return retval;
       }
@@ -448,7 +446,7 @@ void bx_parallel_c::write(Bit32u address, Bit32u value, unsigned io_len)
   }
 }
 
-const char* bx_parallel_c::parport_file_param_handler(bx_param_string_c *param, int set,
+const char* bx_parallel_c::parport_file_param_handler(bx_param_string_c *param, bool set,
                                                       const char *oldval, const char *val,
                                                       int maxlen)
 {

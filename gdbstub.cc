@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: gdbstub.cc 13102 2017-03-06 21:30:05Z vruppert $
+// $Id: gdbstub.cc 14283 2021-06-14 05:45:41Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project Team
+//  Copyright (C) 2002-2021  The Bochs Project Team
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -41,6 +41,8 @@
 #include "bochs.h"
 #include "param_names.h"
 #include "cpu/cpu.h"
+#include "gui/siminterface.h"
+#include "memory/memory-bochs.h"
 
 #define LOG_THIS gdbstublog->
 #define IFDBG(x) x
@@ -399,7 +401,7 @@ static int access_linear(Bit64u laddress,
                         Bit8u* data)
 {
   bx_phy_address phys;
-  bx_bool valid;
+  bool valid;
 
   if (((laddress & 0xfff) + len) > 4096)
   {
@@ -420,7 +422,7 @@ static int access_linear(Bit64u laddress,
   if (!valid) return(0);
 
   if (rw & 1) {
-    valid = BX_MEM(0)->dbg_set_mem(phys, len, data);
+    valid = BX_MEM(0)->dbg_set_mem(BX_CPU(0), phys, len, data);
   } else {
     valid = BX_MEM(0)->dbg_fetch_mem(BX_CPU(0), phys, len, data);
   }

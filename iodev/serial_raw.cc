@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: serial_raw.cc 12575 2014-12-23 17:13:29Z vruppert $
+// $Id: serial_raw.cc 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2014  The Bochs Project
+//  Copyright (C) 2004-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -265,13 +265,13 @@ void serial_raw::transmit(Bit8u byte)
   }
 }
 
-bx_bool serial_raw::ready_transmit()
+bool serial_raw::ready_transmit()
 {
   BX_DEBUG(("ready_transmit returning %d", present));
   return present;
 }
 
-bx_bool serial_raw::ready_receive()
+bool serial_raw::ready_receive()
 {
 #ifdef WIN32_RECEIVE_RAW
   if ((rxdata_count == 0) && (thread_rxdata_count > 0)) {

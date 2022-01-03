@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: zambezi.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: zambezi.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2012-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "zambezi.h"
 
@@ -95,7 +96,7 @@ void zambezi_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_functi
 {
   static const char* brand_string = "AMD FX(tm)-4100 Quad-Core Processor            ";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 1 && function < 0x80000000) function = 1;
 
@@ -188,18 +189,11 @@ Bit32u zambezi_t::get_svm_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void zambezi_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "AuthenticAMD";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xD;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x1;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xD, "AuthenticAMD", leaf, 0x1);
 }
 
 // leaf 0x00000001 //
@@ -329,8 +323,11 @@ void zambezi_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_MMX |
               BX_CPUID_STD_FXSAVE_FXRSTOR |
               BX_CPUID_STD_SSE |
-              BX_CPUID_STD_SSE2 |
-              BX_CPUID_STD_HT;
+              BX_CPUID_STD_SSE2
+#if BX_SUPPORT_SMP
+              | BX_CPUID_STD_HT
+#endif
+              ;
 #if BX_SUPPORT_APIC
   // if MSR_APICBASE APIC Global Enable bit has been cleared,
   // the CPUID feature flag for the APIC is set to 0.

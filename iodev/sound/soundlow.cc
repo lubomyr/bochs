@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: soundlow.cc 13539 2019-01-02 17:13:36Z sshwarts $
+// $Id: soundlow.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2011-2017  The Bochs Project
+//  Copyright (C) 2011-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,9 @@
 
 // Common sound module code and base classes for sound lowlevel functions
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 
 #if BX_SUPPORT_SOUNDLOW
 
@@ -95,8 +97,8 @@ static void convert_to_float(Bit8u *src, unsigned srcsize, audio_buffer_t *audio
 {
   unsigned i, j;
   bx_pcm_param_t *param = &audiobuf->param;
-  bx_bool issigned = (param->format & 1);
-  bx_bool setvol = (param->volume != BX_MAX_BIT16U);
+  bool issigned = (param->format & 1);
+  bool setvol = (param->volume != BX_MAX_BIT16U);
   Bit16s val16s;
   Bit16u val16u;
   float volume[2];
@@ -355,7 +357,7 @@ void bx_soundlow_waveout_c::unregister_wave_callback(int callback_id)
   BX_UNLOCK(mixer_mutex);
 }
 
-bx_bool bx_soundlow_waveout_c::mixer_common(Bit8u *buffer, int len)
+bool bx_soundlow_waveout_c::mixer_common(Bit8u *buffer, int len)
 {
   Bit32u count, len2 = 0, len3 = 0;
   Bit16s src1, src2, dst_val;
@@ -601,14 +603,22 @@ bx_sound_lowlevel_c *bx_sound_lowlevel_c::all;
 
 bx_sound_lowlevel_c::bx_sound_lowlevel_c(const char *type)
 {
+  bx_sound_lowlevel_c *ptr;
+
   put("soundlow", "SNDLOW");
   waveout = NULL;
   wavein = NULL;
   midiout = NULL;
   // self-registering static objects ported from the network code
-  next = all;
-  all  = this;
   this->type = type;
+  this->next = NULL;
+  if (all == NULL) {
+    all = this;
+  } else {
+    ptr = all;
+    while (ptr->next) ptr = ptr->next;
+    ptr->next = this;
+  }
 }
 
 bx_sound_lowlevel_c::~bx_sound_lowlevel_c()
@@ -642,7 +652,7 @@ bx_sound_lowlevel_c::~bx_sound_lowlevel_c()
   }
 }
 
-bx_bool bx_sound_lowlevel_c::module_present(const char *type)
+bool bx_sound_lowlevel_c::module_present(const char *type)
 {
   bx_sound_lowlevel_c *ptr = 0;
 
@@ -668,7 +678,7 @@ void bx_sound_lowlevel_c::cleanup()
 {
 #if BX_PLUGINS
   while (all != NULL) {
-    PLUG_unload_snd_plugin(all->type);
+    PLUG_unload_plugin_type(all->type, PLUGTYPE_SND);
   }
 #endif
 }

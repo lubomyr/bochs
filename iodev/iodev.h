@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: iodev.h 13504 2018-05-10 10:50:42Z vruppert $
+// $Id: iodev.h 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  I/O port handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -28,11 +28,26 @@
 #include "bochs.h"
 #include "plugin.h"
 #include "param_names.h"
+#include "pc_system.h"
+#include "bx_debug/debug.h"
+#include "memory/memory-bochs.h"
+#include "gui/siminterface.h"
+#include "gui/gui.h"
 
 /* number of IRQ lines supported.  In an ISA PC there are two
    PIC chips cascaded together.  each has 8 IRQ lines, so there
    should be 16 IRQ's total */
 #define BX_MAX_IRQS 16
+
+/* keyboard indicators */
+#define BX_KBD_LED_NUM  0
+#define BX_KBD_LED_CAPS 1
+#define BX_KBD_LED_SCRL 2
+#define BX_KBD_LED_MASK_NUM 1
+#define BX_KBD_LED_MASK_ALL 7
+
+/* size of internal buffer for keyboard devices */
+#define BX_KBD_ELEMENTS 16
 
 /* size of internal buffer for mouse devices */
 #define BX_MOUSE_BUFF_SIZE 48
@@ -45,9 +60,10 @@
 typedef Bit32u (*bx_read_handler_t)(void *, Bit32u, unsigned);
 typedef void   (*bx_write_handler_t)(void *, Bit32u, Bit32u, unsigned);
 
-typedef bx_bool (*bx_kbd_gen_scancode_t)(void *, Bit32u);
-typedef void (*bx_mouse_enq_t)(void *, int, int, int, unsigned, bx_bool);
-typedef void (*bx_mouse_enabled_changed_t)(void *, bx_bool);
+typedef bool (*bx_kbd_gen_scancode_t)(void *, Bit32u);
+typedef Bit8u (*bx_kbd_get_elements_t)(void *);
+typedef void (*bx_mouse_enq_t)(void *, int, int, int, unsigned, bool);
+typedef void (*bx_mouse_enabled_changed_t)(void *, bool);
 
 #if BX_USE_DEV_SMF
 #  define BX_DEV_SMF  static
@@ -107,6 +123,10 @@ class cdrom_base_c;
 #define BX_PCI_BAR_TYPE_NONE 0
 #define BX_PCI_BAR_TYPE_MEM  1
 #define BX_PCI_BAR_TYPE_IO   2
+
+#define BX_PCI_ADVOPT_NOACPI 0x01
+#define BX_PCI_ADVOPT_NOHPET 0x02
+#define BX_PCI_ADVOPT_NOAGP  0x04
 
 typedef struct {
   Bit8u  type;
@@ -172,46 +192,19 @@ protected:
    pluginlog->panic("%s called in %s stub. you must not have loaded the %s plugin", #dev, #method, #dev)
 //////////////////////////////////////////////////////////////////////
 
-class BOCHSAPI bx_keyb_stub_c : public bx_devmodel_c {
-public:
-  // stubs for bx_keyb_c methods
-  virtual void gen_scancode(Bit32u key) {
-    STUBFUNC(keyboard, gen_scancode);
-  }
-  virtual void paste_bytes(Bit8u *data, Bit32s length) {
-    STUBFUNC(keyboard, paste_bytes);
-  }
-};
-
 class BOCHSAPI bx_hard_drive_stub_c : public bx_devmodel_c {
 public:
-  virtual Bit32u get_first_cd_handle(void) {
-    return BX_MAX_ATA_CHANNEL*2;
-  }
-
-  virtual bx_bool  get_cd_media_status(Bit32u handle) { return 0; }
-  virtual bx_bool  set_cd_media_status(Bit32u handle, bx_bool status) {
-    STUBFUNC(HD, set_cd_media_status); return 0;
-  }
-
   virtual Bit32u virt_read_handler(Bit32u address, unsigned io_len) { return 0; }
   virtual void virt_write_handler(Bit32u address, Bit32u value, unsigned io_len) {}
 
-  virtual bx_bool bmdma_read_sector(Bit8u channel, Bit8u *buffer, Bit32u *sector_size) {
+  virtual bool bmdma_read_sector(Bit8u channel, Bit8u *buffer, Bit32u *sector_size) {
     STUBFUNC(HD, bmdma_read_sector); return 0;
   }
-  virtual bx_bool bmdma_write_sector(Bit8u channel, Bit8u *buffer) {
+  virtual bool bmdma_write_sector(Bit8u channel, Bit8u *buffer) {
     STUBFUNC(HD, bmdma_write_sector); return 0;
   }
   virtual void bmdma_complete(Bit8u channel) {
     STUBFUNC(HD, bmdma_complete);
-  }
-};
-
-class BOCHSAPI bx_floppy_stub_c : public bx_devmodel_c {
-public:
-  virtual unsigned set_media_status(unsigned drive, unsigned status) {
-    STUBFUNC(floppy, set_media_status); return 0;
   }
 };
 
@@ -226,14 +219,14 @@ public:
   virtual void checksum_cmos(void) {
     STUBFUNC(cmos, checksum);
   }
-  virtual void enable_irq(bx_bool enabled) {
+  virtual void enable_irq(bool enabled) {
     STUBFUNC(cmos, enable_irq);
   }
 };
 
 class BOCHSAPI bx_pit_stub_c : public bx_devmodel_c {
 public:
-  virtual void enable_irq(bx_bool enabled) {
+  virtual void enable_irq(bool enabled) {
     STUBFUNC(pit, enable_irq);
   }
 };
@@ -262,7 +255,7 @@ public:
   virtual unsigned get_TC(void) {
     STUBFUNC(dma, get_TC); return 0;
   }
-  virtual void set_DRQ(unsigned channel, bx_bool val) {
+  virtual void set_DRQ(unsigned channel, bool val) {
     STUBFUNC(dma, set_DRQ);
   }
   virtual void raise_HLDA(void) {
@@ -278,7 +271,7 @@ public:
   virtual void lower_irq(unsigned irq_no) {
     STUBFUNC(pic, lower_irq);
   }
-  virtual void set_mode(bx_bool ma_sl, Bit8u mode) {
+  virtual void set_mode(bool ma_sl, Bit8u mode) {
     STUBFUNC(pic, set_mode);
   }
   virtual Bit8u IAC(void) {
@@ -308,10 +301,10 @@ public:
                                  unsigned *txHeight, unsigned *txWidth) {
     STUBFUNC(vga, get_text_snapshot);
   }
-  virtual void set_override(bx_bool enabled, void *dev) {
+  virtual void set_override(bool enabled, void *dev) {
     STUBFUNC(vga, set_override);
   }
-  virtual void refresh_display(void *this_ptr, bx_bool redraw) {
+  virtual void refresh_display(void *this_ptr, bool redraw) {
     STUBFUNC(vga, refresh_display);
   }
 };
@@ -324,20 +317,20 @@ public:
   virtual void beep_off() {
     bx_gui->beep_off();
   }
-  virtual void set_line(bx_bool level) {}
+  virtual void set_line(bool level) {}
 };
 
 #if BX_SUPPORT_PCI
 class BOCHSAPI bx_pci2isa_stub_c : public bx_pci_device_c {
 public:
-  virtual void pci_set_irq (Bit8u devfunc, unsigned line, bx_bool level) {
+  virtual void pci_set_irq (Bit8u devfunc, unsigned line, bool level) {
     STUBFUNC(pci2isa, pci_set_irq);
   }
 };
 
 class BOCHSAPI bx_pci_ide_stub_c : public bx_pci_device_c {
 public:
-  virtual bx_bool bmdma_present(void) {
+  virtual bool bmdma_present(void) {
     return 0;
   }
   virtual void bmdma_start_transfer(Bit8u channel) {}
@@ -361,30 +354,20 @@ public:
 #if BX_SUPPORT_APIC
 class BOCHSAPI bx_ioapic_stub_c : public bx_devmodel_c {
 public:
-  virtual void set_enabled(bx_bool enabled, Bit16u base_offset) {}
+  virtual void set_enabled(bool enabled, Bit16u base_offset) {}
   virtual void receive_eoi(Bit8u vector) {}
-  virtual void set_irq_level(Bit8u int_in, bx_bool level) {}
+  virtual void set_irq_level(Bit8u int_in, bool level) {}
 };
 #endif
 
 #if BX_SUPPORT_GAMEPORT
 class BOCHSAPI bx_game_stub_c : public bx_devmodel_c {
 public:
-  virtual void set_enabled(bx_bool val) {
+  virtual void set_enabled(bool val) {
     STUBFUNC(gameport, set_enabled);
   }
 };
 #endif
-
-class BOCHSAPI bx_hdimage_ctl_stub_c : public bx_devmodel_c {
-public:
-  virtual device_image_t* init_image(Bit8u image_mode, Bit64u disk_size, const char *journal) {
-    STUBFUNC(hdimage_ctl, init_image); return NULL;
-  }
-  virtual cdrom_base_c* init_cdrom(const char *dev) {
-    STUBFUNC(hdimage_ctl, init_cdrom); return NULL;
-  }
-};
 
 class BOCHSAPI bx_devices_c : public logfunctions {
 public:
@@ -406,61 +389,69 @@ public:
   void register_state(void);
   void after_restore_state(void);
   BX_MEM_C *mem;  // address space associated with these devices
-  bx_bool register_io_read_handler(void *this_ptr, bx_read_handler_t f,
-                                   Bit32u addr, const char *name, Bit8u mask);
-  bx_bool unregister_io_read_handler(void *this_ptr, bx_read_handler_t f,
-                                     Bit32u addr, Bit8u mask);
-  bx_bool register_io_write_handler(void *this_ptr, bx_write_handler_t f,
+  bool register_io_read_handler(void *this_ptr, bx_read_handler_t f,
+                                Bit32u addr, const char *name, Bit8u mask);
+  bool unregister_io_read_handler(void *this_ptr, bx_read_handler_t f,
+                                  Bit32u addr, Bit8u mask);
+  bool register_io_write_handler(void *this_ptr, bx_write_handler_t f,
                                     Bit32u addr, const char *name, Bit8u mask);
-  bx_bool unregister_io_write_handler(void *this_ptr, bx_write_handler_t f,
-                                      Bit32u addr, Bit8u mask);
-  bx_bool register_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
-                                         Bit32u begin_addr, Bit32u end_addr,
-                                         const char *name, Bit8u mask);
-  bx_bool register_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
-                                          Bit32u begin_addr, Bit32u end_addr,
-                                          const char *name, Bit8u mask);
-  bx_bool unregister_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
-                                           Bit32u begin, Bit32u end, Bit8u mask);
-  bx_bool unregister_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
-                                            Bit32u begin, Bit32u end, Bit8u mask);
-  bx_bool register_default_io_read_handler(void *this_ptr, bx_read_handler_t f, const char *name, Bit8u mask);
-  bx_bool register_default_io_write_handler(void *this_ptr, bx_write_handler_t f, const char *name, Bit8u mask);
-  bx_bool register_irq(unsigned irq, const char *name);
-  bx_bool unregister_irq(unsigned irq, const char *name);
+  bool unregister_io_write_handler(void *this_ptr, bx_write_handler_t f,
+                                   Bit32u addr, Bit8u mask);
+  bool register_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
+                                      Bit32u begin_addr, Bit32u end_addr,
+                                      const char *name, Bit8u mask);
+  bool register_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
+                                       Bit32u begin_addr, Bit32u end_addr,
+                                       const char *name, Bit8u mask);
+  bool unregister_io_read_handler_range(void *this_ptr, bx_read_handler_t f,
+                                        Bit32u begin, Bit32u end, Bit8u mask);
+  bool unregister_io_write_handler_range(void *this_ptr, bx_write_handler_t f,
+                                         Bit32u begin, Bit32u end, Bit8u mask);
+  bool register_default_io_read_handler(void *this_ptr, bx_read_handler_t f, const char *name, Bit8u mask);
+  bool register_default_io_write_handler(void *this_ptr, bx_write_handler_t f, const char *name, Bit8u mask);
+  bool register_irq(unsigned irq, const char *name);
+  bool unregister_irq(unsigned irq, const char *name);
   Bit32u inp(Bit16u addr, unsigned io_len) BX_CPP_AttrRegparmN(2);
   void   outp(Bit16u addr, Bit32u value, unsigned io_len) BX_CPP_AttrRegparmN(3);
 
-  void register_removable_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode);
+  void register_default_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode,
+                                 bx_kbd_get_elements_t kbd_get_elements);
+  void register_removable_keyboard(void *dev, bx_kbd_gen_scancode_t kbd_gen_scancode,
+                                   bx_kbd_get_elements_t kbd_get_elements,
+                                   Bit8u led_mask);
   void unregister_removable_keyboard(void *dev);
   void register_default_mouse(void *dev, bx_mouse_enq_t mouse_enq, bx_mouse_enabled_changed_t mouse_enabled_changed);
   void register_removable_mouse(void *dev, bx_mouse_enq_t mouse_enq, bx_mouse_enabled_changed_t mouse_enabled_changed);
   void unregister_removable_mouse(void *dev);
   void gen_scancode(Bit32u key);
+  Bit8u kbd_get_elements(void);
   void release_keys(void);
-  void mouse_enabled_changed(bx_bool enabled);
-  void mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
+  void paste_bytes(Bit8u *data, Bit32s length);
+  void kbd_set_indicator(Bit8u devid, Bit8u ledid, bool state);
+  void mouse_enabled_changed(bool enabled);
+  void mouse_motion(int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy);
+  void add_sound_device(void);
+  void remove_sound_device(void);
 
 #if BX_SUPPORT_PCI
   Bit32u pci_get_confAddr(void) {return pci.confAddr;}
-  bx_bool register_pci_handlers(bx_pci_device_c *device, Bit8u *devfunc,
-                                const char *name, const char *descr, Bit8u bus = 0);
-  bx_bool pci_set_base_mem(void *this_ptr, memory_handler_t f1, memory_handler_t f2,
-                           Bit32u *addr, Bit8u *pci_conf, unsigned size);
-  bx_bool pci_set_base_io(void *this_ptr, bx_read_handler_t f1, bx_write_handler_t f2,
-                          Bit32u *addr, Bit8u *pci_conf, unsigned size,
-                          const Bit8u *iomask, const char *name);
+  Bit32u pci_get_slot_mapping(void) {return pci.map_slot_to_dev;}
+  bool register_pci_handlers(bx_pci_device_c *device, Bit8u *devfunc,
+                             const char *name, const char *descr, Bit8u bus = 0);
+  bool pci_set_base_mem(void *this_ptr, memory_handler_t f1, memory_handler_t f2,
+                        Bit32u *addr, Bit8u *pci_conf, unsigned size);
+  bool pci_set_base_io(void *this_ptr, bx_read_handler_t f1, bx_write_handler_t f2,
+                       Bit32u *addr, Bit8u *pci_conf, unsigned size,
+                       const Bit8u *iomask, const char *name);
 #endif
+  bool is_agp_present();
 
   static void timer_handler(void *);
   void timer(void);
 
   bx_cmos_stub_c    *pluginCmosDevice;
   bx_dma_stub_c     *pluginDmaDevice;
-  bx_floppy_stub_c  *pluginFloppyDevice;
   bx_hard_drive_stub_c *pluginHardDrive;
-  bx_hdimage_ctl_stub_c *pluginHDImageCtl;
-  bx_keyb_stub_c    *pluginKeyboard;
   bx_pic_stub_c     *pluginPicDevice;
   bx_pit_stub_c     *pluginPitDevice;
   bx_speaker_stub_c *pluginSpeaker;
@@ -484,10 +475,7 @@ public:
   // loaded
   bx_cmos_stub_c stubCmos;
   bx_dma_stub_c  stubDma;
-  bx_floppy_stub_c  stubFloppy;
   bx_hard_drive_stub_c stubHardDrive;
-  bx_hdimage_ctl_stub_c stubHDImage;
-  bx_keyb_stub_c stubKeyboard;
   bx_pic_stub_c  stubPic;
   bx_pit_stub_c  stubPit;
   bx_speaker_stub_c stubSpeaker;
@@ -546,44 +534,81 @@ private:
   static Bit32u default_read_handler(void *this_ptr, Bit32u address, unsigned io_len);
   static void   default_write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);
 
-  bx_bool mouse_captured; // host mouse capture enabled
+  // runtime options / paste feature
+  static Bit64s param_handler(bx_param_c *param, bool set, Bit64s val);
+  void paste_delay_changed(Bit32u value);
+  void service_paste_buf();
+
+  bool mouse_captured; // host mouse capture enabled
   Bit8u mouse_type;
   struct {
     void *dev;
     bx_mouse_enq_t enq_event;
     bx_mouse_enabled_changed_t enabled_changed;
   } bx_mouse[2];
+
   struct {
     void *dev;
     bx_kbd_gen_scancode_t gen_scancode;
-    bx_bool bxkey_state[BX_KEY_NBKEYS];
-  } bx_keyboard;
+    bx_kbd_get_elements_t get_elements;
+    Bit8u led_mask;
+    bool bxkey_state[BX_KEY_NBKEYS];
+  } bx_keyboard[2];
+
+  // The paste buffer does NOT exist in the hardware.  It is a bochs
+  // construction that allows the user to "paste" arbitrary length sequences of
+  // keystrokes into the emulated machine.  Since the hardware buffer is only
+  // 16 bytes, a very small amount of data can be added to the hardware buffer
+  // at a time.  The paste buffer keeps track of the bytes that have not yet
+  // been pasted.
+  //
+  // Lifetime of a paste buffer: The paste data comes from the system
+  // clipboard, which must be accessed using platform independent code in the
+  // gui.  Because every gui has its own way of managing the clipboard memory
+  // (in X windows, you're supposed to call Xfree for example), in the platform
+  // specific code we make a copy of the clipboard buffer with
+  // "new Bit8u[length]".  Then the pointer is passed into
+  // bx_device_c::paste_bytes, along with the length.  The gui code never touches
+  // the pastebuf again, and does not free it.  The devices code is
+  // responsible for deallocating the paste buffer using delete [] buf.  The
+  // paste buffer is binary data, and it is probably NOT null terminated.
+  //
+  // Summary: A paste buffer is allocated (new) in the platform-specific gui
+  // code, passed to the devices code, and is freed (delete[]) when it is no
+  // longer needed.
+  struct {
+    Bit8u *buf;     // ptr to bytes to be pasted, or NULL if none in progress
+    Bit32u buf_len; // length of pastebuf
+    Bit32u buf_ptr; // ptr to next byte to be added to hw buffer
+    Bit32u delay;   // number of timer events before paste
+    Bit32u counter; // count before paste
+    bool service;   // set to 1 when gen_scancode() is called from paste service
+    bool stop;      // stop the current paste operation on keypress or hardware reset
+  } paste;
 
   struct {
-    bx_bool enabled;
+    bool enabled;
 #if BX_SUPPORT_PCI
+    Bit32u advopts;
     Bit8u handler_id[0x101];  // 256 PCI devices/functions + 1 AGP device
     struct {
       bx_pci_device_c *handler;
     } pci_handler[BX_MAX_PCI_DEVICES];
     unsigned num_pci_handlers;
 
-    bx_bool slot_used[BX_N_PCI_SLOTS];
+    Bit8u map_slot_to_dev;
+    bool slot_used[BX_N_PCI_SLOTS];
 
     Bit32u confAddr;
 #endif
   } pci;
 
   int timer_handle;
+  int statusbar_id[3];
 
-  bx_bool network_enabled;
-  bx_bool sound_enabled;
-  bx_bool usb_enabled;
+  Bit8u sound_device_count;
 
-  bx_bool is_harddrv_enabled();
-  bx_bool is_network_enabled();
-  bx_bool is_sound_enabled();
-  bx_bool is_usb_enabled();
+  bool is_harddrv_enabled();
 };
 
 // memory stub has an assumption that there are no memory accesses splitting 4K page

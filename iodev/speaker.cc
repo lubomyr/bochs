@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: speaker.cc 13511 2018-05-19 08:07:20Z vruppert $
+// $Id: speaker.cc 14184 2021-03-14 09:52:15Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003       David N. Welton <davidw@dedasys.com>.
-//  Copyright (C) 2003-2018  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -81,6 +81,8 @@ Bit32u beep_callback(void *dev, Bit16u rate, Bit8u *buffer, Bit32u len);
 
 void speaker_init_options(void)
 {
+  bx_list_c *deplist;
+
   bx_list_c *sound = (bx_list_c*)SIM->get_param("sound");
   bx_list_c *menu = new bx_list_c(sound, "speaker", "PC speaker output configuration");
   menu->set_options(menu->SERIES_ASK);
@@ -89,10 +91,20 @@ void speaker_init_options(void)
   bx_param_enum_c *mode = new bx_param_enum_c(menu, "mode", "Speaker output mode",
       "The mode can be one these: 'none', 'sound', 'system' or 'gui'",
       speaker_mode_list, 1, BX_SPK_MODE_NONE);
-  mode->set_ask_format("Select speker output mode [%s] ");
-  bx_list_c *deplist = new bx_list_c(NULL);
+  mode->set_ask_format("Select speaker output mode [%s] ");
+#if BX_SUPPORT_SOUNDLOW
+  bx_param_num_c *volume = new bx_param_num_c(menu, "volume", "Speaker volume",
+      "Set the PC speaker volume", 0, 15, 15);
+#endif
+  deplist = new bx_list_c(NULL);
   deplist->add(mode);
   enabled->set_dependent_list(deplist);
+#if BX_SUPPORT_SOUNDLOW
+  deplist = new bx_list_c(NULL);
+  deplist->add(volume);
+  mode->set_dependent_list(deplist, 0);
+  mode->set_dependent_bitmap(BX_SPK_MODE_SOUND, 1);
+#endif
 }
 
 Bit32s speaker_options_parser(const char *context, int num_params, char *params[])
@@ -115,26 +127,29 @@ Bit32s speaker_options_save(FILE *fp)
   return SIM->write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_SOUND_SPEAKER), NULL, 0);
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libspeaker_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(speaker)
 {
-  theSpeaker = new bx_speaker_c();
-  bx_devices.pluginSpeaker = theSpeaker;
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theSpeaker, BX_PLUGIN_SPEAKER);
-  // add new configuration parameters for the config interface
-  speaker_init_options();
-  // register add-on options for bochsrc and command line
-  SIM->register_addon_option("speaker", speaker_options_parser, speaker_options_save);
+  if (mode == PLUGIN_INIT) {
+    theSpeaker = new bx_speaker_c();
+    bx_devices.pluginSpeaker = theSpeaker;
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theSpeaker, BX_PLUGIN_SPEAKER);
+    // add new configuration parameters for the config interface
+    speaker_init_options();
+    // register add-on options for bochsrc and command line
+    SIM->register_addon_option("speaker", speaker_options_parser, speaker_options_save);
+    bx_devices.add_sound_device();
+  } else if (mode == PLUGIN_FINI) {
+    bx_devices.pluginSpeaker = &bx_devices.stubSpeaker;
+    delete theSpeaker;
+    SIM->unregister_addon_option("speaker");
+    ((bx_list_c*)SIM->get_param("sound"))->remove("speaker");
+    bx_devices.remove_sound_device();
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libspeaker_LTX_plugin_fini(void)
-{
-  bx_devices.pluginSpeaker = &bx_devices.stubSpeaker;
-  delete theSpeaker;
-  SIM->unregister_addon_option("speaker");
-  ((bx_list_c*)SIM->get_param("sound"))->remove("speaker");
 }
 
 // the device object
@@ -195,6 +210,7 @@ void bx_speaker_c::init(void)
       waveout = DEV_sound_get_waveout(0);
       if (waveout != NULL) {
         beep_active = 0;
+        beep_volume = SIM->get_param_num("volume", base)->get();
 #if BX_HAVE_REALTIME_USEC
         dsp_active = 0;
         dsp_start_usec = bx_get_realtime64_usec();
@@ -242,7 +258,6 @@ Bit32u bx_speaker_c::beep_generator(Bit16u rate, Bit8u *buffer, Bit32u len)
 {
   Bit32u j = 0, ret = 0;
   Bit16u beep_samples;
-  static Bit8u beep_level = 0x40;
   static Bit16u beep_pos = 0;
 
   BX_LOCK(beep_mutex);
@@ -261,12 +276,12 @@ Bit32u bx_speaker_c::beep_generator(Bit16u rate, Bit8u *buffer, Bit32u len)
     return ret;
   }
   do {
-    buffer[j++] = 0;
-    buffer[j++] = beep_level;
-    buffer[j++] = 0;
-    buffer[j++] = beep_level;
+    buffer[j++] = (Bit8u)beep_level;
+    buffer[j++] = (Bit8u)(beep_level >> 8);
+    buffer[j++] = (Bit8u)beep_level;
+    buffer[j++] = (Bit8u)(beep_level >> 8);
     if ((++beep_pos % beep_samples) == 0) {
-      beep_level ^= 0x80;
+      beep_level *= -1;
       beep_pos = 0;
       beep_samples = (Bit32u)((float)rate / beep_frequency / 2);
       if (beep_samples == 0) break;
@@ -281,7 +296,6 @@ Bit32u bx_speaker_c::dsp_generator(Bit16u rate, Bit8u *buffer, Bit32u len)
 {
   Bit32u i = 0, j = 0;
   double tmp_dsp_usec, step_usec;
-  static Bit8u dsp_level = 0x40;
 
   Bit64u new_dsp_cb_usec = bx_get_realtime64_usec() - dsp_start_usec;
   if (dsp_cb_usec == 0) {
@@ -291,13 +305,13 @@ Bit32u bx_speaker_c::dsp_generator(Bit16u rate, Bit8u *buffer, Bit32u len)
   step_usec = 1000000.0 / (double)rate;
   do {
     if ((i < dsp_count) && (dsp_event_buffer[i] < (Bit64u)tmp_dsp_usec)) {
-      dsp_level ^= 0x80;
+      beep_level *= -1;
       i++;
     }
-    buffer[j++] = 0;
-    buffer[j++] = dsp_level;
-    buffer[j++] = 0;
-    buffer[j++] = dsp_level;
+    buffer[j++] = (Bit8u)beep_level;
+    buffer[j++] = (Bit8u)(beep_level >> 8);
+    buffer[j++] = (Bit8u)beep_level;
+    buffer[j++] = (Bit8u)(beep_level >> 8);
     tmp_dsp_usec += step_usec;
   } while (j < len);
   dsp_active = 0;
@@ -327,6 +341,9 @@ void bx_speaker_c::beep_on(float frequency)
       if ((waveout != NULL) && (frequency != beep_frequency)) {
         BX_LOCK(beep_mutex);
         beep_frequency = frequency;
+        if (!beep_active) {
+          beep_level = (Bit16s)(0x4000 * (beep_volume / 15.0f));
+        }
         beep_active = 1;
         BX_UNLOCK(beep_mutex);
       }
@@ -410,7 +427,7 @@ void bx_speaker_c::beep_off()
   beep_frequency = 0.0;
 }
 
-void bx_speaker_c::set_line(bx_bool level)
+void bx_speaker_c::set_line(bool level)
 {
 #if BX_SUPPORT_SOUNDLOW && BX_HAVE_REALTIME_USEC
   if (output_mode == BX_SPK_MODE_SOUND) {

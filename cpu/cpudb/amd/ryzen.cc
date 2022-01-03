@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ryzen.cc 13537 2018-12-01 12:15:57Z sshwarts $
+// $Id: ryzen.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2012-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "ryzen.h"
 
@@ -112,7 +113,7 @@ void ryzen_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function
 {
   static const char* brand_string = "AMD Ryzen 7 1700 Eight-Core Processor          ";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 1 && function < 0x80000000) function = 1;
 
@@ -211,18 +212,11 @@ Bit32u ryzen_t::get_svm_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void ryzen_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "AuthenticAMD";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xD;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x1;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xD, "AuthenticAMD", leaf, 0x1);
 }
 
 // leaf 0x00000001 //
@@ -356,8 +350,11 @@ void ryzen_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_MMX |
               BX_CPUID_STD_FXSAVE_FXRSTOR |
               BX_CPUID_STD_SSE |
-              BX_CPUID_STD_SSE2 |
-              BX_CPUID_STD_HT;
+              BX_CPUID_STD_SSE2
+#if BX_SUPPORT_SMP
+              | BX_CPUID_STD_HT
+#endif
+              ;
 #if BX_SUPPORT_APIC
   // if MSR_APICBASE APIC Global Enable bit has been cleared,
   // the CPUID feature flag for the APIC is set to 0.
@@ -443,16 +440,8 @@ void ryzen_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t *leaf) c
     // * [29:29] SHA instructions support
     //   [30:30] reserved
     //   [31:31] reserved
-    leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-                BX_CPUID_EXT3_BMI1 | 
-                BX_CPUID_EXT3_AVX2 |
-                BX_CPUID_EXT3_SMEP | 
-                BX_CPUID_EXT3_BMI2 | 
-                BX_CPUID_EXT3_RDSEED |
-                BX_CPUID_EXT3_ADX |
-                BX_CPUID_EXT3_SMAP |
-                BX_CPUID_EXT3_CLFLUSHOPT |
-                BX_CPUID_EXT3_SHA;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx();
+
     leaf->ecx = 0;
     leaf->edx = 0;
     break;

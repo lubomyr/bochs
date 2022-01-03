@@ -5,10 +5,10 @@ android {
 
     defaultConfig {
         applicationId "net.sourceforge.bochs"
-        minSdkVersion 17
+        minSdkVersion 21
         targetSdkVersion 28
-        versionCode 261102
-        versionName "2.6.11"
+        versionCode 270000
+        versionName "2.7.0"
     }
     buildTypes {
         release {

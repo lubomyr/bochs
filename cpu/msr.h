@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: msr.h 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: msr.h 13869 2020-05-29 12:35:30Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2019  The Bochs Project
@@ -134,6 +134,8 @@ enum MSR_Register {
   BX_MSR_IA32_PL3_SSP = 0x6A7,
 
   BX_MSR_IA32_INTERRUPT_SSP_TABLE_ADDR = 0x6A8,
+
+  BX_MSR_IA32_PKRS = 0x6E1,
 
   BX_MSR_XSS = 0xda0,
 

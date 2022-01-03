@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: event.cc 11804 2013-09-05 18:40:14Z sshwarts $
+// $Id: event.cc 14233 2021-04-27 08:22:04Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2013 Stanislav Shwartsman
@@ -27,7 +27,7 @@
 
 #include "iodev/iodev.h"
 
-bx_bool BX_CPU_C::handleWaitForEvent(void)
+bool BX_CPU_C::handleWaitForEvent(void)
 {
   if (BX_CPU_THIS_PTR activity_state == BX_ACTIVITY_STATE_WAIT_FOR_SIPI) {
     // HALT condition remains, return so other CPUs have a chance
@@ -169,7 +169,7 @@ void BX_CPU_C::VirtualInterruptAcknowledge(void)
 }
 #endif
 
-bx_bool BX_CPU_C::handleAsyncEvent(void)
+bool BX_CPU_C::handleAsyncEvent(void)
 {
   //
   // This area is where we process special conditions and events.
@@ -221,6 +221,11 @@ bx_bool BX_CPU_C::handleAsyncEvent(void)
   //   INIT
   if (is_unmasked_event_pending(BX_EVENT_SMI) && SVM_GIF)
   {
+#if BX_SUPPORT_SVM
+    if (BX_CPU_THIS_PTR in_svm_guest) {
+      if (SVM_INTERCEPT(SVM_INTERCEPT0_SMI)) Svm_Vmexit(SVM_VMEXIT_SMI);
+    }
+#endif
     clear_event(BX_EVENT_SMI); // clear SMI pending flag
     enter_system_management_mode(); // would disable NMI when SMM was accepted
   }
@@ -386,7 +391,7 @@ void BX_CPU_C::inhibit_interrupts(unsigned mask)
   }
 }
 
-bx_bool BX_CPU_C::interrupts_inhibited(unsigned mask)
+bool BX_CPU_C::interrupts_inhibited(unsigned mask)
 {
   return (get_icount() <= BX_CPU_THIS_PTR inhibit_icount) && (BX_CPU_THIS_PTR inhibit_mask & mask) == mask;
 }

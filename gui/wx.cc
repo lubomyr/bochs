@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////
-// $Id: wx.cc 13593 2019-11-11 19:40:09Z vruppert $
+// $Id: wx.cc 14204 2021-03-27 17:23:31Z vruppert $
 /////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2019  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -69,18 +69,39 @@
 //////////////////////////////////////////////////////////////
 // plugin support
 //////////////////////////////////////////////////////////////
+PLUGIN_ENTRY_FOR_GUI_MODULE(wx)
+{
+  if (mode == PLUGIN_INIT) {
+    wxLogDebug(wxT("plugin_entry() for wxmain.cc"));
+    wxLogDebug(wxT("installing wxWidgets as the configuration interface"));
+    SIM->register_configuration_interface("wx", wx_ci_callback, NULL);
+    wxLogDebug(wxT("installing %s as the Bochs GUI"), wxT("wxWidgets"));
+    SIM->get_param_enum(BXPN_SEL_DISPLAY_LIBRARY)->set_enabled(0);
+    MyPanel::OnPluginInit();
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)(PLUGTYPE_CI | PLUGTYPE_GUI);
+  }
+  return 0; // success
+}
+
 class bx_wx_gui_c : public bx_gui_c {
 public:
   bx_wx_gui_c(void) {}
   DECLARE_GUI_VIRTUAL_METHODS()
   DECLARE_GUI_NEW_VIRTUAL_METHODS()
-  virtual void statusbar_setitem_specific(int element, bx_bool active, bx_bool w);
+  virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                         Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                         bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs);
+  virtual void statusbar_setitem_specific(int element, bool active, bool w);
   virtual void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
-  virtual void set_mouse_mode_absxy(bx_bool mode);
+  virtual void set_mouse_mode_absxy(bool mode);
 #if BX_SHOW_IPS
   void show_ips(Bit32u ips_count);
 #endif
 };
+
+// this variable uses the bx_wx_gui_c object to access MyPanel
+static MyPanel *thePanel = NULL;
 
 // declare one instance of the gui object and call macro to insert the
 // plugin code
@@ -105,17 +126,10 @@ static char *wxScreen = NULL;
 wxCriticalSection wxScreen_lock;
 static long wxScreenX = 0;
 static long wxScreenY = 0;
-static bx_bool wxScreenCheckSize = 0;
+static bool wxScreenCheckSize = 0;
 static unsigned wxTileX = 0;
 static unsigned wxTileY = 0;
-static unsigned long wxCursorX = 0;
-static unsigned long wxCursorY = 0;
-static bx_bool wxMouseModeAbsXY = 0;
-static unsigned long wxFontX = 0;
-static unsigned long wxFontY = 0;
-static unsigned int text_rows=25, text_cols=80;
-static Bit8u h_panning = 0, v_panning = 0;
-static Bit16u line_compare = 1023;
+static bool wxMouseModeAbsXY = 0;
 static unsigned disp_bpp = 8;
 static struct {
   unsigned char red;
@@ -125,8 +139,8 @@ static struct {
 wxCriticalSection event_thread_lock;
 BxEvent event_queue[MAX_EVENTS];
 unsigned long num_events;
-static bx_bool mouse_captured = 0;
-static bx_bool wx_hide_ips = 0;
+static bool mouse_captured = 0;
+static bool wx_hide_ips = 0;
 #if defined (wxHAS_RAW_KEY_CODES) && defined(__WXGTK__)
 static Bit32u convertStringToGDKKey (const char *string);
 #endif
@@ -599,7 +613,7 @@ Bit32u wxMSW_to_bx_key[0x59] = {
 #endif
 
 // MS Windows specific key mapping, which uses wxKeyEvent::m_rawCode & 2.
-bx_bool MyPanel::fillBxKeyEvent_MSW (wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool release)
+bool MyPanel::fillBxKeyEvent_MSW(wxKeyEvent& wxev, BxKeyEvent& bxev, bool release)
 {
 #if defined(wxHAS_RAW_KEY_CODES) && defined(__WXMSW__)
   IFDBG_KEY(wxLogDebug (wxT ("fillBxKeyEvent_MSW. key code %d, raw codes %d %d", wxev.m_keyCode, wxev.m_rawCode, wxev.m_rawFlags)));
@@ -631,7 +645,7 @@ bx_bool MyPanel::fillBxKeyEvent_MSW (wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool
 #endif
 
 // GTK specific key mapping, which uses wxKeyEvent::m_rawCode.
-bx_bool MyPanel::fillBxKeyEvent_GTK (wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool release)
+bool MyPanel::fillBxKeyEvent_GTK(wxKeyEvent& wxev, BxKeyEvent& bxev, bool release)
 {
 #if defined (wxHAS_RAW_KEY_CODES) && defined(__WXGTK__)
   IFDBG_KEY(wxLogDebug (wxT ("fillBxKeyEvent_GTK. key code %ld, raw codes %d %d", wxev.m_keyCode, wxev.m_rawCode, wxev.m_rawFlags)));
@@ -807,10 +821,10 @@ bx_bool MyPanel::fillBxKeyEvent_GTK (wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool
 #endif
 }
 
-bx_bool MyPanel::fillBxKeyEvent(wxKeyEvent& wxev, BxKeyEvent& bxev, bx_bool release)
+bool MyPanel::fillBxKeyEvent(wxKeyEvent& wxev, BxKeyEvent& bxev, bool release)
 {
   Bit32u key = wxev.m_keyCode;
-  bx_bool mouse_toggle = 0;
+  bool mouse_toggle = 0;
 
   if (theFrame->GetSimThread() == NULL)
     return false;
@@ -1046,6 +1060,7 @@ void bx_wx_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   num_events = 0;
 
   new_gfx_api = 1;
+  new_text_api = 1;
   dialog_caps = BX_GUI_DLG_USER | BX_GUI_DLG_SNAPSHOT | BX_GUI_DLG_SAVE_RESTORE;
 }
 
@@ -1064,8 +1079,8 @@ void bx_wx_gui_c::handle_events(void)
             case BX_TOOLBAR_SAVE_RESTORE: tb_button = 2; break;
             case BX_TOOLBAR_COPY: copy_handler(); break;
             case BX_TOOLBAR_PASTE: paste_handler(); break;
-            case BX_TOOLBAR_SNAPSHOT: snapshot_handler(); break;
-            case BX_TOOLBAR_USER: tb_button = 3; break;
+            case BX_TOOLBAR_SNAPSHOT: tb_button = 3; break;
+            case BX_TOOLBAR_USER: tb_button = 4; break;
             default:
               wxLogDebug (wxT ("unknown toolbar id %d"), event_queue[i].u.toolbar.button);
           }
@@ -1074,7 +1089,7 @@ void bx_wx_gui_c::handle_events(void)
           bx_key = event_queue[i].u.key.bx_key;
           if (event_queue[i].u.key.raw_scancode) {
             // event contains raw scancodes: convert to BX_KEY values first
-            bx_bool released = ((bx_key & 0x80) > 0);
+            bool released = ((bx_key & 0x80) > 0);
             if (bx_key & 0xFF00) { // for extended keys
               switch (bx_key & 0x7f) {
                 case 0x1C:
@@ -1170,35 +1185,30 @@ void bx_wx_gui_c::handle_events(void)
     // save_restore_handler() calls a dialog.
     save_restore_handler();
   } else if (tb_button == 3) {
+    // snapshot_handler() also calls a dialog.
+    snapshot_handler();
+  } else if (tb_button == 4) {
     // userbutton_handler() also calls a dialog.
     userbutton_handler();
   }
 }
 
-void bx_wx_gui_c::statusbar_setitem_specific(int element, bx_bool active, bx_bool w)
+void bx_wx_gui_c::statusbar_setitem_specific(int element, bool active, bool w)
 {
-#if defined(__WXMSW__)
-  char status_text[10];
-#endif
-
-  wxMutexGuiEnter();
-  if (active) {
-#if defined(__WXMSW__)
-    status_text[0] = 9;
-    strcpy(status_text+1, statusitem[element].text);
-    theFrame->SetStatusText(status_text, element+1);
-#else
-    theFrame->SetStatusText(wxString(statusitem[element].text, wxConvUTF8),
-                            element+1);
-#endif
-  } else {
-    theFrame->SetStatusText(wxT(""), element+1);
-  }
-  wxMutexGuiLeave();
+  char *sbtext = new char[strlen(statusitem[element].text) + 1];
+  strcpy(sbtext, statusitem[element].text);
+  BxEvent *event = new BxEvent;
+  event->type = BX_ASYNC_EVT_STATUSBAR;
+  event->u.statbar.element = element;
+  event->u.statbar.text = sbtext;
+  event->u.statbar.active = active;
+  event->u.statbar.w = w;
+  SIM->sim_to_ci_event(event);
 }
 
 void bx_wx_gui_c::flush(void)
 {
+  thePanel->MyRefresh();
 }
 
 void bx_wx_gui_c::clear_screen(void)
@@ -1207,7 +1217,7 @@ void bx_wx_gui_c::clear_screen(void)
   wxCriticalSectionLocker lock(wxScreen_lock);
   IFDBG_VGA(wxLogDebug (wxT ("MyPanel::clear_screen got lock. wxScreen=%p", wxScreen)));
   memset(wxScreen, 0, wxScreenX * wxScreenY * 3);
-  thePanel->MyRefresh ();
+  thePanel->MyRefresh();
 }
 
 static void UpdateScreen(unsigned char *newBits, int x, int y, int width, int height)
@@ -1240,12 +1250,12 @@ static void UpdateScreen(unsigned char *newBits, int x, int y, int width, int he
   }
 }
 
-static void DrawBochsBitmap(int x, int y, int width, int height, char *bmap, char fgcolor, char bgcolor, int fontx, int fonty, bx_bool gfxchar)
+static void DrawBochsBitmap(int x, int y, int width, int height, char *bmap, char fgcolor, char bgcolor, int fontx, int fonty, bool gfxchar)
 {
   static unsigned char newBits[18 * 32];
   unsigned char mask;
   int bytes = width * height;
-  bx_bool dwidth = (width > 9);
+  bool dwidth = (width > 9);
 
   if (y > wxScreenY) return;
 
@@ -1268,193 +1278,33 @@ static void DrawBochsBitmap(int x, int y, int width, int height, char *bmap, cha
   UpdateScreen(newBits, x, y, width, height);
 }
 
+void bx_wx_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                            Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                            bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs)
+{
+  DrawBochsBitmap(xc, yc, fw, fh, (char *)&vga_charmap[ch << 5],
+                  fc, bc, fx, fy, gfxcharw9);
+  if (curs && (ce >= fy) && (cs < (fh + fy))) {
+    if (cs > fy) {
+      yc += (cs - fy);
+      fh -= (cs - fy);
+    }
+    if ((ce - cs + 1) < fh) {
+      fh = ce - cs + 1;
+    }
+    DrawBochsBitmap(xc, yc, fw, fh, (char *)&vga_charmap[ch << 5],
+                    bc, fc, fx, cs, gfxcharw9);
+  }
+}
 
 void bx_wx_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
                               unsigned long cursor_x, unsigned long cursor_y,
                               bx_vga_tminfo_t *tm_info)
 {
-  IFDBG_VGA(wxLogDebug (wxT ("text_update")));
-
-  Bit8u *old_line, *new_line, *text_base;
-  Bit8u cAttr, cChar;
-  unsigned int curs, hchars, offset, rows, x, y, xc, yc, yc2, cs_y, i;
-  Bit8u cfwidth, cfheight, cfheight2, font_col, font_row, font_row2;
-  Bit8u split_textrow, split_fontrows;
-  bx_bool forceUpdate = 0, gfxchar, split_screen, blink_state, blink_mode;
-  Bit8u text_pal_idx[16];
-  char bgcolor, fgcolor;
-
-  // first check if the screen needs to be redrawn completely
-  blink_mode = (tm_info->blink_flags & BX_TEXT_BLINK_MODE) > 0;
-  blink_state = (tm_info->blink_flags & BX_TEXT_BLINK_STATE) > 0;
-  if (blink_mode) {
-    if (tm_info->blink_flags & BX_TEXT_BLINK_TOGGLE)
-      forceUpdate = 1;
-  }
-  if(charmap_updated) {
-    forceUpdate = 1;
-    charmap_updated = 0;
-  }
-  for (i = 0; i < 16; i++) {
-    text_pal_idx[i] = tm_info->actl_palette[i];
-  }
-  if((tm_info->h_panning != h_panning) || (tm_info->v_panning != v_panning)) {
-    forceUpdate = 1;
-    h_panning = tm_info->h_panning;
-    v_panning = tm_info->v_panning;
-  }
-  if(tm_info->line_compare != line_compare) {
-    forceUpdate = 1;
-    line_compare = tm_info->line_compare;
-  }
-
-  // invalidate character at previous and new cursor location
-  if((wxCursorY < text_rows) && (wxCursorX < text_cols)) {
-    curs = wxCursorY * tm_info->line_offset + wxCursorX * 2;
-    old_text[curs] = ~new_text[curs];
-  }
-  if((tm_info->cs_start <= tm_info->cs_end) && (tm_info->cs_start < wxFontY) &&
-     (cursor_y < text_rows) && (cursor_x < text_cols)) {
-    curs = cursor_y * tm_info->line_offset + cursor_x * 2;
-    old_text[curs] = ~new_text[curs];
-  } else {
-    curs = 0xffff;
-  }
-
-  rows = text_rows;
-  if (v_panning) rows++;
-  y = 0;
-  cs_y = 0;
-  text_base = new_text - tm_info->start_address;
-  if (line_compare < wxScreenY) {
-    split_textrow = (line_compare + v_panning) / wxFontY;
-    split_fontrows = ((line_compare + v_panning) % wxFontY) + 1;
-  } else {
-    split_textrow = rows + 1;
-    split_fontrows = 0;
-  }
-  split_screen = 0;
-  do {
-    hchars = text_cols;
-    if (h_panning) hchars++;
-    if (split_screen) {
-      yc = line_compare + cs_y * wxFontY + 1;
-      font_row = 0;
-      if (rows == 1) {
-        cfheight = (wxScreenY - line_compare - 1) % wxFontY;
-        if (cfheight == 0) cfheight = wxFontY;
-      } else {
-        cfheight = wxFontY;
-      }
-    } else if (v_panning) {
-      if (y == 0) {
-        yc = 0;
-        font_row = v_panning;
-        cfheight = wxFontY - v_panning;
-      } else {
-        yc = y * wxFontY - v_panning;
-        font_row = 0;
-        if (rows == 1) {
-          cfheight = v_panning;
-        } else {
-          cfheight = wxFontY;
-        }
-      }
-    } else {
-      yc = y * wxFontY;
-      font_row = 0;
-      cfheight = wxFontY;
-    }
-    if (!split_screen && (y == split_textrow)) {
-      if (split_fontrows < cfheight) cfheight = split_fontrows;
-    }
-    new_line = new_text;
-    old_line = old_text;
-    x = 0;
-    offset = cs_y * tm_info->line_offset;
-    do {
-      if (h_panning) {
-        if (hchars > text_cols) {
-          xc = 0;
-          font_col = h_panning;
-          cfwidth = wxFontX - h_panning;
-        } else {
-          xc = x * wxFontX - h_panning;
-          font_col = 0;
-          if (hchars == 1) {
-            cfwidth = h_panning;
-          } else {
-            cfwidth = wxFontX;
-          }
-        }
-      } else {
-        xc = x * wxFontX;
-        font_col = 0;
-        cfwidth = wxFontX;
-      }
-      if(forceUpdate || (old_text[0] != new_text[0])
-         || (old_text[1] != new_text[1])) {
-        cChar = new_text[0];
-        if (blink_mode) {
-          cAttr = new_text[1] & 0x7F;
-          if (!blink_state && (new_text[1] & 0x80))
-            cAttr = (cAttr & 0x70) | (cAttr >> 4);
-        } else {
-          cAttr = new_text[1];
-        }
-        gfxchar = tm_info->line_graphics && ((cChar & 0xE0) == 0xC0);
-        bgcolor = text_pal_idx[(cAttr >> 4) & 0xF];
-        fgcolor = text_pal_idx[cAttr & 0xF];
-        DrawBochsBitmap(xc, yc, cfwidth, cfheight, (char *)&vga_charmap[cChar<<5],
-                        fgcolor, bgcolor, font_col, font_row, gfxchar);
-        if (offset == curs) {
-          if (font_row == 0) {
-            yc2 = yc + tm_info->cs_start;
-            font_row2 = tm_info->cs_start;
-            cfheight2 = tm_info->cs_end - tm_info->cs_start + 1;
-          } else {
-            if (v_panning > tm_info->cs_start) {
-              yc2 = yc;
-              font_row2 = font_row;
-              cfheight2 = tm_info->cs_end - v_panning + 1;
-            } else {
-              yc2 = yc + tm_info->cs_start - v_panning;
-              font_row2 = tm_info->cs_start;
-              cfheight2 = tm_info->cs_end - tm_info->cs_start + 1;
-            }
-          }
-          DrawBochsBitmap(xc, yc2, cfwidth, cfheight2, (char *)&vga_charmap[cChar<<5],
-                          bgcolor, fgcolor, font_col, font_row2, gfxchar);
-        }
-      }
-      x++;
-      new_text+=2;
-      old_text+=2;
-      offset+=2;
-    } while (--hchars);
-    if (!split_screen && (y == split_textrow)) {
-      new_text = text_base;
-      forceUpdate = 1;
-      cs_y = 0;
-      if (tm_info->split_hpanning) h_panning = 0;
-      rows = ((wxScreenY - line_compare + wxFontY - 2) / wxFontY) + 1;
-      split_screen = 1;
-    } else {
-      y++;
-      cs_y++;
-      new_text = new_line + tm_info->line_offset;
-      old_text = old_line + tm_info->line_offset;
-    }
-  } while (--rows);
-
-  h_panning = tm_info->h_panning;
-  wxCursorX = cursor_x;
-  wxCursorY = cursor_y;
-
-  thePanel->MyRefresh();
+  // present for compatibility
 }
 
-bx_bool bx_wx_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
+bool bx_wx_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green, Bit8u blue)
 {
   IFDBG_VGA(wxLogDebug (wxT ("palette_change")));
   wxBochsPalette[index].red = red;
@@ -1468,7 +1318,6 @@ void bx_wx_gui_c::graphics_tile_update(Bit8u *tile, unsigned x0, unsigned y0)
 {
   IFDBG_VGA (wxLogDebug (wxT ("graphics_tile_update")));
   UpdateScreen(tile, x0, y0, wxTileX, wxTileY);
-  thePanel->MyRefresh();
 }
 
 bx_svga_tileinfo_t *bx_wx_gui_c::graphics_tile_info(bx_svga_tileinfo_t *info)
@@ -1512,9 +1361,9 @@ Bit8u *bx_wx_gui_c::graphics_tile_get(unsigned x0, unsigned y0,
 }
 
 void bx_wx_gui_c::graphics_tile_update_in_place(unsigned x0, unsigned y0,
-                                        unsigned w, unsigned h)
+                                                unsigned w, unsigned h)
 {
-  thePanel->MyRefresh();
+  // Nothing to do here
 }
 
 void bx_wx_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
@@ -1530,14 +1379,10 @@ void bx_wx_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, uns
     BX_PANIC(("%d bpp graphics mode not supported", bpp));
   }
   guest_textmode = (fheight > 0);
+  guest_fwidth = fwidth;
+  guest_fheight = fheight;
   guest_xres = x;
   guest_yres = y;
-  if (guest_textmode) {
-    wxFontX = fwidth;
-    wxFontY = fheight;
-    text_cols = x / wxFontX;
-    text_rows = y / wxFontY;
-  }
   if (((int)x > wx_maxres.GetWidth()) || ((int)y > wx_maxres.GetHeight())) {
     BX_PANIC(("dimension_update(): resolution of out of display bounds"));
     return;
@@ -1610,7 +1455,7 @@ void bx_wx_gui_c::exit(void)
 #endif
 }
 
-void bx_wx_gui_c::mouse_enabled_changed_specific(bx_bool val)
+void bx_wx_gui_c::mouse_enabled_changed_specific(bool val)
 {
   mouse_captured = val;
 }
@@ -1665,7 +1510,7 @@ void bx_wx_gui_c::get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp)
   *bpp = 32;
 }
 
-void bx_wx_gui_c::set_mouse_mode_absxy(bx_bool mode)
+void bx_wx_gui_c::set_mouse_mode_absxy(bool mode)
 {
   wxMouseModeAbsXY = mode;
 }

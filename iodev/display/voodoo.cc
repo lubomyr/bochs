@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: voodoo.cc 13605 2019-11-13 12:00:27Z vruppert $
+// $Id: voodoo.cc 14316 2021-07-18 07:25:08Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2012-2019  The Bochs Project
+//  Copyright (C) 2012-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -135,41 +135,46 @@ Bit32s voodoo_options_save(FILE *fp)
   return SIM->write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_VOODOO), NULL, 0);
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libvoodoo_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(voodoo)
 {
-  if (type == PLUGTYPE_VGA) {
-    theVoodooVga = new bx_voodoo_vga_c();
-    bx_devices.pluginVgaDevice = theVoodooVga;
-    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theVoodooVga, BX_PLUGIN_VOODOO);
-  } else {
-    theVoodooDevice = new bx_voodoo_1_2_c();
-    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theVoodooDevice, BX_PLUGIN_VOODOO);
+  if (mode == PLUGIN_INIT) {
+    if (type == PLUGTYPE_VGA) {
+      theVoodooVga = new bx_voodoo_vga_c();
+      bx_devices.pluginVgaDevice = theVoodooVga;
+      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theVoodooVga, BX_PLUGIN_VOODOO);
+    } else {
+      theVoodooDevice = new bx_voodoo_1_2_c();
+      BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theVoodooDevice, BX_PLUGIN_VOODOO);
+    }
+    // add new configuration parameter for the config interface
+    voodoo_init_options();
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("voodoo", voodoo_options_parser, voodoo_options_save);
+  } else if (mode == PLUGIN_FINI) {
+    SIM->unregister_addon_option("voodoo");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("display");
+    menu->remove("voodoo");
+    if (theVoodooVga != NULL) {
+      delete theVoodooVga;
+      theVoodooVga = NULL;
+    }
+    if (theVoodooDevice != NULL) {
+      delete theVoodooDevice;
+      theVoodooDevice = NULL;
+    }
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)(PLUGTYPE_VGA | PLUGTYPE_OPTIONAL);
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
   }
-  // add new configuration parameter for the config interface
-  voodoo_init_options();
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("voodoo", voodoo_options_parser, voodoo_options_save);
   return 0; // Success
-}
-
-void CDECL libvoodoo_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("voodoo");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("display");
-  menu->remove("voodoo");
-  if (theVoodooVga != NULL) {
-    delete theVoodooVga;
-  }
-  if (theVoodooDevice != NULL) {
-    delete theVoodooDevice;
-  }
 }
 
 // FIFO thread
 
-static bx_bool voodoo_keep_alive = 1;
+static bool voodoo_keep_alive = 0;
 
 BX_THREAD_FUNC(fifo_thread, indata)
 {
@@ -178,7 +183,7 @@ BX_THREAD_FUNC(fifo_thread, indata)
 
   UNUSED(indata);
   while (voodoo_keep_alive) {
-    if (bx_wait_for_event(&fifo_wakeup)) {
+    if (bx_wait_sem(&fifo_wakeup),1) {
       if (!voodoo_keep_alive) break;
       BX_LOCK(fifo_mutex);
       while (1) {
@@ -249,16 +254,21 @@ bx_voodoo_base_c::bx_voodoo_base_c()
 
 bx_voodoo_base_c::~bx_voodoo_base_c()
 {
-  voodoo_keep_alive = 0;
-  bx_set_event(&fifo_wakeup);
-  BX_FINI_MUTEX(fifo_mutex);
-  BX_FINI_MUTEX(render_mutex);
-  if (s.model >= VOODOO_2) {
-    BX_FINI_MUTEX(cmdfifo_mutex);
+  if (voodoo_keep_alive) {
+    voodoo_keep_alive = 0;
+    bx_set_sem(&fifo_wakeup);
+    bx_set_sem(&fifo_not_full);
+    BX_THREAD_JOIN(fifo_thread_var);
+    BX_FINI_MUTEX(fifo_mutex);
+    BX_FINI_MUTEX(render_mutex);
+    if (s.model >= VOODOO_2) {
+      BX_FINI_MUTEX(cmdfifo_mutex);
+    }
+    bx_destroy_sem(&fifo_wakeup);
+    bx_destroy_sem(&fifo_not_full);
+    bx_set_sem(&vertical_sem);
+    bx_destroy_sem(&vertical_sem);
   }
-  bx_destroy_event(&fifo_wakeup);
-  bx_destroy_event(&fifo_not_full);
-
   if (v != NULL) {
     free(v->fbi.ram);
     if (s.model < VOODOO_BANSHEE) {
@@ -284,6 +294,8 @@ void bx_voodoo_base_c::init(void)
   }
   s.model = (Bit8u)SIM->get_param_enum("model", base)->get();
   s.devfunc = 0x00;
+  v = new voodoo_state;
+  memset(v, 0, sizeof(voodoo_state));
   init_model();
   if (s.vertical_timer_id == BX_NULL_TIMER_HANDLE) {
     s.vertical_timer_id = bx_virt_timer.register_timer(this, vertical_timer_handler,
@@ -291,8 +303,6 @@ void bx_voodoo_base_c::init(void)
   }
   s.vdraw.gui_update_pending = 0;
 
-  v = new voodoo_state;
-  memset(v, 0, sizeof(voodoo_state));
   BX_INIT_MUTEX(fifo_mutex);
   BX_INIT_MUTEX(render_mutex);
   if (s.model >= VOODOO_2) {
@@ -312,21 +322,20 @@ void bx_voodoo_base_c::init(void)
   }
   s.num_x_tiles = (s.max_xres + X_TILESIZE - 1) / X_TILESIZE;
   s.num_y_tiles = (s.max_yres + Y_TILESIZE - 1) / Y_TILESIZE;
-  s.vga_tile_updated = new bx_bool[s.num_x_tiles * s.num_y_tiles];
+  s.vga_tile_updated = new bool[s.num_x_tiles * s.num_y_tiles];
   for (unsigned y = 0; y < s.num_y_tiles; y++)
     for (unsigned x = 0; x < s.num_x_tiles; x++)
       SET_TILE_UPDATED(BX_VOODOO_THIS, x, y, 0);
 
-  bx_create_event(&fifo_wakeup);
-  bx_create_event(&fifo_not_full);
-  bx_set_event(&fifo_not_full);
-  BX_THREAD_CREATE(fifo_thread, this, fifo_thread_var);
+  if (!SIM->get_param_bool(BXPN_RESTORE_FLAG)->get()) {
+    start_fifo_thread();
+  }
 
   BX_INFO(("3dfx Voodoo Graphics adapter (model=%s) initialized",
            SIM->get_param_enum("model", base)->get_selected()));
 }
 
-void bx_voodoo_base_c::register_state(bx_list_c *parent)
+void bx_voodoo_base_c::voodoo_register_state(bx_list_c *parent)
 {
   char name[8];
   int i, j, k;
@@ -342,6 +351,7 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
   }
   new bx_shadow_num_c(dac, "read_result", &v->dac.read_result, BASE_HEX);
   new bx_shadow_num_c(dac, "vidclk", &v->vidclk);
+  BXRS_PARAM_BOOL(vstate, vtimer_running, v->vtimer_running);
   bx_list_c *fbi = new bx_list_c(vstate, "fbi", "framebuffer");
   if ((s.model < VOODOO_BANSHEE) || (theVoodooVga == NULL)) {
     new bx_shadow_data_c(fbi, "ram", v->fbi.ram, v->fbi.mask + 1);
@@ -353,16 +363,18 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
   new bx_shadow_num_c(fbi, "frontbuf", &v->fbi.frontbuf);
   new bx_shadow_num_c(fbi, "backbuf", &v->fbi.backbuf);
   new bx_shadow_num_c(fbi, "swaps_pending", &v->fbi.swaps_pending);
+  new bx_shadow_num_c(fbi, "lfb_base", &v->fbi.lfb_base, BASE_HEX);
+  new bx_shadow_num_c(fbi, "lfb_stride", &v->fbi.lfb_stride);
   new bx_shadow_num_c(fbi, "yorigin", &v->fbi.yorigin);
   new bx_shadow_num_c(fbi, "width", &v->fbi.width);
   new bx_shadow_num_c(fbi, "height", &v->fbi.height);
   new bx_shadow_num_c(fbi, "rowpixels", &v->fbi.rowpixels);
   new bx_shadow_num_c(fbi, "vblank", &v->fbi.vblank);
   new bx_shadow_num_c(fbi, "vblank_count", &v->fbi.vblank_count);
-  new bx_shadow_bool_c(fbi, "vblank_swap_pending", &v->fbi.vblank_swap_pending);
+  BXRS_PARAM_BOOL(fbi, vblank_swap_pending, v->fbi.vblank_swap_pending);
   new bx_shadow_num_c(fbi, "vblank_swap", &v->fbi.vblank_swap);
   new bx_shadow_num_c(fbi, "vblank_dont_swap", &v->fbi.vblank_dont_swap);
-  new bx_shadow_bool_c(fbi, "cheating_allowed", &v->fbi.cheating_allowed);
+  BXRS_PARAM_BOOL(fbi, cheating_allowed, v->fbi.cheating_allowed);
   new bx_shadow_num_c(fbi, "sign", &v->fbi.sign);
   new bx_shadow_num_c(fbi, "ax", &v->fbi.ax);
   new bx_shadow_num_c(fbi, "ay", &v->fbi.ay);
@@ -412,8 +424,8 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
   for (i = 0; i < 2; i++) {
     sprintf(name, "%d", i);
     bx_list_c *num = new bx_list_c(cmdfifo, name, "");
-    new bx_shadow_bool_c(num, "enabled", &v->fbi.cmdfifo[i].enabled);
-    new bx_shadow_bool_c(num, "count_holes", &v->fbi.cmdfifo[i].count_holes);
+    BXRS_PARAM_BOOL(num, enabled, v->fbi.cmdfifo[i].enabled);
+    BXRS_PARAM_BOOL(num, count_holes, v->fbi.cmdfifo[i].count_holes);
     new bx_shadow_num_c(num, "base", &v->fbi.cmdfifo[i].base, BASE_HEX);
     new bx_shadow_num_c(num, "end", &v->fbi.cmdfifo[i].end, BASE_HEX);
     new bx_shadow_num_c(num, "rdptr", &v->fbi.cmdfifo[i].rdptr, BASE_HEX);
@@ -422,7 +434,7 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
     new bx_shadow_num_c(num, "depth", &v->fbi.cmdfifo[i].depth);
     new bx_shadow_num_c(num, "depth_needed", &v->fbi.cmdfifo[i].depth_needed);
     new bx_shadow_num_c(num, "holes", &v->fbi.cmdfifo[i].holes);
-    new bx_shadow_bool_c(num, "cmd_ready", &v->fbi.cmdfifo[i].cmd_ready);
+    BXRS_PARAM_BOOL(num, cmd_ready, v->fbi.cmdfifo[i].cmd_ready);
   }
   bx_list_c *fogblend = new bx_list_c(fbi, "fogblend", "");
   for (i = 0; i < 64; i++) {
@@ -435,7 +447,6 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
     new bx_shadow_num_c(fogdelta, name, &v->fbi.fogdelta[i]);
   }
   new bx_shadow_data_c(fbi, "clut", (Bit8u*)v->fbi.clut, sizeof(v->fbi.clut));
-  new bx_shadow_bool_c(fbi, "clut_dirty", &v->fbi.clut_dirty);
   bx_list_c *tmu = new bx_list_c(vstate, "tmu", "textures");
   for (i = 0; i < MAX_TMU; i++) {
     sprintf(name, "%d", i);
@@ -443,7 +454,7 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
     if (s.model < VOODOO_BANSHEE) {
       new bx_shadow_data_c(num, "ram", v->tmu[i].ram, (4 << 20));
     }
-    new bx_shadow_bool_c(num, "regdirty", &v->tmu[i].regdirty);
+    BXRS_PARAM_BOOL(num, regdirty, v->tmu[i].regdirty);
     new bx_shadow_num_c(num, "starts", &v->tmu[i].starts);
     new bx_shadow_num_c(num, "startt", &v->tmu[i].startt);
     new bx_shadow_num_c(num, "startw", &v->tmu[i].startw);
@@ -470,7 +481,7 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
     for (j = 0; j < 2; j++) {
       sprintf(name, "%d", j);
       bx_list_c *ncct = new bx_list_c(ncc, name, "");
-      new bx_shadow_bool_c(ncct, "dirty", &v->tmu[i].ncc[j].dirty);
+      BXRS_PARAM_BOOL(ncct, dirty, v->tmu[i].ncc[j].dirty);
       bx_list_c *ir = new bx_list_c(ncct, "ir", "");
       bx_list_c *ig = new bx_list_c(ncct, "ig", "");
       bx_list_c *ib = new bx_list_c(ncct, "ib", "");
@@ -501,10 +512,20 @@ void bx_voodoo_base_c::register_state(bx_list_c *parent)
   register_pci_state(parent);
 }
 
-void bx_voodoo_base_c::refresh_display(void *this_ptr, bx_bool redraw)
+void bx_voodoo_base_c::start_fifo_thread(void)
+{
+  voodoo_keep_alive = 1;
+  bx_create_sem(&fifo_wakeup);
+  bx_create_sem(&fifo_not_full);
+  bx_set_sem(&fifo_not_full);
+  BX_THREAD_CREATE(fifo_thread, this, fifo_thread_var);
+  bx_create_sem(&vertical_sem);
+}
+
+void bx_voodoo_base_c::refresh_display(void *this_ptr, bool redraw)
 {
   if (redraw) {
-    redraw_area(0, 0, v->fbi.width, v->fbi.height);
+    v->fbi.video_changed = 1;
   }
   vertical_timer_handler(this_ptr);
   update();
@@ -537,6 +558,7 @@ void bx_voodoo_base_c::update(void)
   Bit8u *vid_ptr, *vid_ptr2;
   Bit8u *tile_ptr, *tile_ptr2;
   Bit8u bpp;
+  Bit16u index;
   bx_svga_tileinfo_t info;
 
   BX_LOCK(render_mutex);
@@ -554,7 +576,13 @@ void bx_voodoo_base_c::update(void)
       return;
     }
     bpp = 16;
-    start = v->fbi.rgboffs[v->fbi.frontbuf];
+    BX_LOCK(fifo_mutex);
+    if (s.model >= VOODOO_BANSHEE) {
+      start = v->fbi.rgboffs[0];
+    } else {
+      start = v->fbi.rgboffs[v->fbi.frontbuf];
+    }
+    BX_UNLOCK(fifo_mutex);
     pitch = v->fbi.rowpixels * 2;
   }
   iWidth = s.vdraw.width;
@@ -658,12 +686,12 @@ void bx_voodoo_base_c::update(void)
                   vid_ptr2  = vid_ptr;
                   tile_ptr2 = tile_ptr;
                   for (c=0; c<w; c++) {
-                    colour = *(vid_ptr2++);
-                    colour |= *(vid_ptr2++) << 8;
+                    index = *(vid_ptr2++);
+                    index |= *(vid_ptr2++) << 8;
                     colour = MAKE_COLOUR(
-                      colour & 0x001f, 5, info.blue_shift, info.blue_mask,
-                      colour & 0x07e0, 11, info.green_shift, info.green_mask,
-                      colour & 0xf800, 16, info.red_shift, info.red_mask);
+                      v->fbi.pen[index] & 0x0000ff, 8, info.blue_shift, info.blue_mask,
+                      v->fbi.pen[index] & 0x00ff00, 16, info.green_shift, info.green_mask,
+                      v->fbi.pen[index] & 0xff0000, 24, info.red_shift, info.red_mask);
                     if (info.is_little_endian) {
                       for (i=0; i<info.bpp; i+=8) {
                         *(tile_ptr2++) = (Bit8u)(colour >> i);
@@ -797,10 +825,8 @@ void bx_voodoo_base_c::reg_write(Bit32u reg, Bit32u value)
 
 void bx_voodoo_base_c::vertical_timer_handler(void *this_ptr)
 {
-  // this doesn't work yet
-  //bx_voodoo_base_c *class_ptr = (bx_voodoo_base_c*)this_ptr;
-  //class_ptr->vertical_timer();
-  theVoodooDevice->vertical_timer();
+  bx_voodoo_base_c *class_ptr = (bx_voodoo_base_c*)this_ptr;
+  class_ptr->vertical_timer();
 }
 
 void bx_voodoo_base_c::vertical_timer(void)
@@ -809,27 +835,30 @@ void bx_voodoo_base_c::vertical_timer(void)
 
   BX_LOCK(fifo_mutex);
   if (!fifo_empty(&v->pci.fifo) || !fifo_empty(&v->fbi.fifo)) {
-    bx_set_event(&fifo_wakeup);
+    bx_set_sem(&fifo_wakeup);
   }
   BX_UNLOCK(fifo_mutex);
   if (v->fbi.cmdfifo[0].cmd_ready || v->fbi.cmdfifo[1].cmd_ready) {
-    bx_set_event(&fifo_wakeup);
+    bx_set_sem(&fifo_wakeup);
   }
 
   if (v->fbi.vblank_swap_pending) {
     swap_buffers(v);
+    bx_set_sem(&vertical_sem);
   }
 
   if (v->fbi.video_changed || v->fbi.clut_dirty) {
     // TODO: use tile-based update mechanism
     redraw_area(0, 0, s.vdraw.width, s.vdraw.height);
-    v->fbi.clut_dirty = 0;
+    if (v->fbi.clut_dirty) {
+      update_pens();
+    }
     v->fbi.video_changed = 0;
     s.vdraw.gui_update_pending = 1;
   }
 }
 
-void bx_voodoo_base_c::set_irq_level(bx_bool level)
+void bx_voodoo_base_c::set_irq_level(bool level)
 {
   DEV_pci_set_irq(s.devfunc, pci_conf[0x3d], level);
 }
@@ -839,6 +868,11 @@ void bx_voodoo_base_c::set_irq_level(bx_bool level)
 bx_voodoo_1_2_c::bx_voodoo_1_2_c() : bx_voodoo_base_c()
 {
   s.mode_change_timer_id = BX_NULL_TIMER_HANDLE;
+}
+
+bx_voodoo_1_2_c::~bx_voodoo_1_2_c()
+{
+  SIM->get_bochs_root()->remove("voodoo");
 }
 
 void bx_voodoo_1_2_c::init_model(void)
@@ -872,9 +906,6 @@ void bx_voodoo_1_2_c::reset(unsigned type)
   } reset_vals[] = {
     { 0x04, 0x00 }, { 0x05, 0x00 }, // command io / memory
     { 0x06, 0x00 }, { 0x07, 0x00 }, // status
-    // address space 0x10 - 0x13
-    { 0x11, 0x00 },
-    { 0x12, 0x00 }, { 0x13, 0x00 },
     { 0x3c, 0x00 },                 // IRQ
     // initEnable
     { 0x40, 0x00 }, { 0x41, 0x00 },
@@ -897,8 +928,9 @@ void bx_voodoo_1_2_c::reset(unsigned type)
     v->pci.init_enable = 0x0000;
   }
 
-  if ((!s.vdraw.clock_enabled || !s.vdraw.output_on) && s.vdraw.override_on) {
-    mode_change_timer_handler(NULL);
+  s.vdraw.output_on = 0;
+  if (s.vdraw.override_on) {
+    mode_change_timer_handler(this);
   }
 
   // Deassert IRQ
@@ -908,11 +940,11 @@ void bx_voodoo_1_2_c::reset(unsigned type)
 void bx_voodoo_1_2_c::register_state(void)
 {
   bx_list_c *list = new bx_list_c(SIM->get_bochs_root(), "voodoo", "Voodoo 1/2 State");
-  bx_voodoo_base_c::register_state(list);
+  voodoo_register_state(list);
   bx_list_c *vdraw = new bx_list_c(list, "vdraw", "Voodoo Draw State");
-  new bx_shadow_bool_c(vdraw, "clock_enabled", &s.vdraw.clock_enabled);
-  new bx_shadow_bool_c(vdraw, "output_on", &s.vdraw.output_on);
-  new bx_shadow_bool_c(vdraw, "override_on", &s.vdraw.override_on);
+  BXRS_PARAM_BOOL(vdraw, clock_enabled, s.vdraw.clock_enabled);
+  BXRS_PARAM_BOOL(vdraw, output_on, s.vdraw.output_on);
+  BXRS_PARAM_BOOL(vdraw, override_on, s.vdraw.override_on);
 }
 
 void bx_voodoo_1_2_c::after_restore_state(void)
@@ -921,14 +953,16 @@ void bx_voodoo_1_2_c::after_restore_state(void)
   if (s.vdraw.override_on) {
     // force update
     v->fbi.video_changed = 1;
+    v->fbi.clut_dirty = 1;
     s.vdraw.frame_start = bx_virt_timer.time_usec(0);
     update_timing();
     DEV_vga_set_override(1, BX_VOODOO_THIS_PTR);
   }
+  start_fifo_thread();
 }
 
-bx_bool bx_voodoo_1_2_c::mem_read_handler(bx_phy_address addr, unsigned len,
-                                          void *data, void *param)
+bool bx_voodoo_1_2_c::mem_read_handler(bx_phy_address addr, unsigned len,
+                                       void *data, void *param)
 {
   Bit32u *data_ptr = (Bit32u*)data;
 
@@ -936,8 +970,8 @@ bx_bool bx_voodoo_1_2_c::mem_read_handler(bx_phy_address addr, unsigned len,
   return 1;
 }
 
-bx_bool bx_voodoo_1_2_c::mem_write_handler(bx_phy_address addr, unsigned len,
-                                           void *data, void *param)
+bool bx_voodoo_1_2_c::mem_write_handler(bx_phy_address addr, unsigned len,
+                                        void *data, void *param)
 {
   Bit32u val = *(Bit32u*)data;
 
@@ -967,10 +1001,18 @@ void bx_voodoo_1_2_c::mode_change_timer()
     // switching off
     bx_virt_timer.deactivate_timer(s.vertical_timer_id);
     v->vtimer_running = 0;
+    if (v->fbi.vblank_swap_pending) {
+      bx_set_sem(&vertical_sem);
+    }
     DEV_vga_set_override(0, NULL);
     s.vdraw.override_on = 0;
     s.vdraw.width = 0;
     s.vdraw.height = 0;
+    v->fbi.vblank_swap_pending = 0;
+    v->fbi.frontbuf = 0;
+    v->fbi.backbuf = 1;
+    v->fbi.video_changed = 0;
+    s.vdraw.gui_update_pending = 0;
     BX_INFO(("Voodoo output disabled"));
   }
 
@@ -983,7 +1025,7 @@ void bx_voodoo_1_2_c::mode_change_timer()
   }
 }
 
-bx_bool bx_voodoo_1_2_c::update_timing(void)
+bool bx_voodoo_1_2_c::update_timing(void)
 {
   int htotal, vtotal, hsync, vsync;
   float hfreq;
@@ -1018,15 +1060,16 @@ bx_bool bx_voodoo_1_2_c::update_timing(void)
     s.vdraw.width = v->fbi.width;
     s.vdraw.height = v->fbi.height;
     bx_gui->dimension_update(v->fbi.width, v->fbi.height, 0, 0, 16);
-    vertical_timer_handler(NULL);
+    vertical_timer_handler(this);
   }
   BX_INFO(("Voodoo output %dx%d@%uHz", v->fbi.width, v->fbi.height, (unsigned)v->vertfreq));
+  v->fbi.swaps_pending = 0;
   v->vtimer_running = 1;
   bx_virt_timer.activate_timer(s.vertical_timer_id, (Bit32u)s.vdraw.vtotal_usec, 1);
   return 1;
 }
 
-Bit32u bx_voodoo_1_2_c::get_retrace(bx_bool hv)
+Bit32u bx_voodoo_1_2_c::get_retrace(bool hv)
 {
   Bit64u time_in_frame = bx_virt_timer.time_usec(0) - s.vdraw.frame_start;
   if (time_in_frame >= s.vdraw.vsync_usec) {
@@ -1044,7 +1087,7 @@ Bit32u bx_voodoo_1_2_c::get_retrace(bx_bool hv)
   }
 }
 
-void bx_voodoo_1_2_c::output_enable(bx_bool enabled)
+void bx_voodoo_1_2_c::output_enable(bool enabled)
 {
   if (s.vdraw.output_on != enabled) {
     s.vdraw.output_on = enabled;
@@ -1083,7 +1126,7 @@ void bx_voodoo_1_2_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io
         if (((address+i) == 0x40) && ((value8 ^ oldval) & 0x02)) {
           v->pci.fifo.enabled = ((value8 & 0x02) > 0);
           if (!v->pci.fifo.enabled && !fifo_empty(&v->pci.fifo)) {
-            bx_set_event(&fifo_wakeup);
+            bx_set_sem(&fifo_wakeup);
           }
           BX_DEBUG(("PCI FIFO now %sabled", v->pci.fifo.enabled ? "en":"dis"));
         }

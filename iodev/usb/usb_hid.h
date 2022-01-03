@@ -1,13 +1,14 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hid.h 13167 2017-03-31 21:32:58Z vruppert $
+// $Id: usb_hid.h 14150 2021-02-17 16:22:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB HID emulation support (mouse and tablet) ported from QEMU
 // USB keypad emulation based on code by Benjamin D Lunt (fys [at] fysnet [dot] net)
+// USB keyboard emulation is an extension to the keypad based on the specs
 //
 // Copyright (c) 2005       Fabrice Bellard
 // Copyright (c) 2007       OpenMoko, Inc.  (andrew@openedhand.com)
-// Copyright (C) 2009-2017  The Bochs Project
+// Copyright (C) 2009-2021  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,9 +35,11 @@
 
 class usb_hid_device_c : public usb_device_c {
 public:
-  usb_hid_device_c(usbdev_type type);
+  usb_hid_device_c(const char *devname);
   virtual ~usb_hid_device_c(void);
 
+  virtual bool init();
+  virtual const char* get_info();
   virtual void handle_reset();
   virtual int handle_control(int request, int value, int index, int length, Bit8u *data);
   virtual int handle_data(USBPacket *p);
@@ -44,26 +47,39 @@ public:
 
 private:
   struct {
+    bool has_events;
+    Bit8u idle;
     int mouse_delayed_dx;
     int mouse_delayed_dy;
-    int mouse_delayed_dz;
     Bit16s mouse_x;
     Bit16s mouse_y;
     Bit8s mouse_z;
     Bit8u b_state;
-    Bit32u saved_key;
-    Bit8u key_pad_packet[8];
-    Bit8u idle;
-    bx_bool has_events;
+    Bit8u mouse_event_count;
+    Bit8u mouse_event_buf[BX_KBD_ELEMENTS][6];
+    Bit8u kbd_packet[8];
+    Bit8u indicators;
+    Bit8u kbd_event_count;
+    Bit32u kbd_event_buf[BX_KBD_ELEMENTS];
   } s;
 
-  static bx_bool gen_scancode_static(void *dev, Bit32u key);
-  bx_bool gen_scancode(Bit32u key);
-  static void mouse_enabled_changed(void *dev, bx_bool enabled);
-  static void mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
-  void mouse_enq(int delta_x, int delta_y, int delta_z, unsigned button_state, bx_bool absxy);
-  int mouse_poll(Bit8u *buf, int len, bx_bool force);
-  int keypad_poll(Bit8u *buf, int len, bx_bool force);
+  int timer_index;
+
+  static bool gen_scancode_static(void *dev, Bit32u key);
+  bool gen_scancode(Bit32u key);
+  static Bit8u kbd_get_elements_static(void *dev);
+  Bit8u kbd_get_elements(void);
+  static void mouse_enabled_changed(void *dev, bool enabled);
+  static void mouse_enq_static(void *dev, int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy);
+  void mouse_enq(int delta_x, int delta_y, int delta_z, unsigned button_state, bool absxy);
+  int mouse_poll(Bit8u *buf, int len, bool force);
+  int create_mouse_packet(Bit8u *buf, int len);
+  int get_mouse_packet(Bit8u *buf, int len);
+  int keyboard_poll(Bit8u *buf, int len, bool force);
+
+  static void hid_timer_handler(void *);
+  void start_idle_timer(void);
+  void hid_idle_timer(void);
 };
 
 #endif

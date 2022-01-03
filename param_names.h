@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: param_names.h 13506 2018-05-11 07:44:49Z vruppert $
+// $Id: param_names.h 14017 2020-12-04 17:04:40Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2018  The Bochs Project
+//  Copyright (C) 2009-2020  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -97,6 +97,7 @@
 #define BXPN_CMOSIMAGE_RTC_INIT          "clock_cmos.cmosimage.rtc_init"
 #define BXPN_PCI_ENABLED                 "pci.enabled"
 #define BXPN_PCI_CHIPSET                 "pci.chipset"
+#define BXPN_PCI_ADV_OPTS                "pci.advopts"
 #define BXPN_PCIDEV_VENDOR               "pci.pcidev.vendor"
 #define BXPN_PCIDEV_DEVICE               "pci.pcidev.device"
 #define BXPN_SEL_DISPLAY_LIBRARY         "display.display_library"
@@ -107,6 +108,8 @@
 #define BXPN_VGA_EXTENSION               "display.vga_extension"
 #define BXPN_VGA_UPDATE_FREQUENCY        "display.vga_update_frequency"
 #define BXPN_VGA_REALTIME                "display.vga_realtime"
+#define BXPN_DDC_MODE                    "display.ddc_mode"
+#define BXPN_DDC_FILE                    "display.ddc_file"
 #define BXPN_VOODOO                      "display.voodoo"
 #define BXPN_KEYBOARD                    "keyboard_mouse.keyboard"
 #define BXPN_KBD_TYPE                    "keyboard_mouse.keyboard.type"
@@ -123,12 +126,6 @@
 #define BXPN_BOOTDRIVE2                  "boot_params.boot_drive2"
 #define BXPN_BOOTDRIVE3                  "boot_params.boot_drive3"
 #define BXPN_FLOPPYSIGCHECK              "boot_params.floppy_sig_check"
-#if BX_LOAD32BITOSHACK
-#define BXPN_LOAD32BITOS_WHICH           "boot_params.load32bitos.which"
-#define BXPN_LOAD32BITOS_PATH            "boot_params.load32bitos.path"
-#define BXPN_LOAD32BITOS_IOLOG           "boot_params.load32bitos.iolog"
-#define BXPN_LOAD32BITOS_INITRD          "boot_params.load32bitos.initrd"
-#endif
 #define BXPN_FLOPPYA                     "floppy.0"
 #define BXPN_FLOPPYA_DEVTYPE             "floppy.0.devtype"
 #define BXPN_FLOPPYA_PATH                "floppy.0.path"
@@ -162,11 +159,8 @@
 #define BXPN_USB_XHCI                    "ports.usb.xhci"
 #define BXPN_XHCI_ENABLED                "ports.usb.xhci.enabled"
 #define BXPN_NE2K                        "network.ne2k"
-#define BXPN_NE2K_ENABLED                "network.ne2k.enabled"
 #define BXPN_PNIC                        "network.pcipnic"
-#define BXPN_PNIC_ENABLED                "network.pcipnic.enabled"
 #define BXPN_E1000                       "network.e1000"
-#define BXPN_E1000_ENABLED               "network.e1000.enabled"
 #define BXPN_SOUNDLOW                    "sound.lowlevel"
 #define BXPN_SOUND_WAVEOUT_DRV           "sound.lowlevel.waveoutdrv"
 #define BXPN_SOUND_WAVEOUT               "sound.lowlevel.waveout"

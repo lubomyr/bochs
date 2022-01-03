@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32dialog.h 12381 2014-06-20 09:31:56Z vruppert $
+// $Id: win32dialog.h 14203 2021-03-26 19:12:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2009-2014  The Bochs Project
+//  Copyright (C) 2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -40,16 +40,5 @@ extern "C" {
 #include <shlobj.h>
 #include <ctype.h>
 }
-
-#if BX_USE_WIN32CONFIG
-
-#if BX_DEBUGGER && BX_DEBUGGER_GUI
-void InitDebugDialog();
-void ParseIDText(const char *p);
-void HitBreak();
-#endif
-int init_win32_config_interface();
-
-#endif
 
 #endif // BX_WIN32_DIALOGS_H

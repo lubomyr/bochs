@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: instr.h 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: instr.h 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2016-2017 Stanislav Shwartsman
@@ -27,6 +27,8 @@
 extern bx_address bx_asize_mask[];
 
 const char *get_bx_opcode_name(Bit16u ia_opcode);
+const char *get_intel_disasm_opcode_name(Bit16u ia_opcode);
+const char *get_gas_disasm_opcode_name(Bit16u ia_opcode);
 
 class BX_CPU_C;
 class bxInstruction_c;
@@ -153,10 +155,10 @@ public:
   }
 
 #if BX_SUPPORT_CET
-  BX_CPP_INLINE unsigned segOverride(void) const {
+  BX_CPP_INLINE unsigned segOverrideCet(void) const {
     return metaData[BX_INSTR_METADATA_CET_SEGOVERRIDE];
   }
-  BX_CPP_INLINE void setSegOverride(unsigned val) {
+  BX_CPP_INLINE void setCetSegOverride(unsigned val) {
     metaData[BX_INSTR_METADATA_CET_SEGOVERRIDE] = val;
   }
 #endif
@@ -205,7 +207,7 @@ public:
   // Info in the metaInfo field.
   // Note: the 'L' at the end of certain flags, means the value returned
   // is for Logical comparisons, eg if (i->os32L() && i->as32L()).  If you
-  // want a bx_bool value, use os32B() etc.  This makes for smaller
+  // want a bool value, use os32B() etc.  This makes for smaller
   // code, when a strict 0 or 1 is not necessary.
   BX_CPP_INLINE void init(unsigned os32, unsigned as32, unsigned os64, unsigned as64)
   {
@@ -303,7 +305,7 @@ public:
   BX_CPP_INLINE void setLock(void) {
     setLockRepUsed(BX_LOCK_PREFIX_USED);
   }
-  BX_CPP_INLINE bx_bool getLock(void) const {
+  BX_CPP_INLINE bool getLock(void) const {
     return lockRepUsedValue() == BX_LOCK_PREFIX_USED;
   }
 
@@ -407,5 +409,12 @@ public:
 
 };
 // <TAG-CLASS-INSTRUCTION-END>
+
+enum BxDisasmStyle {
+  BX_DISASM_INTEL,
+  BX_DISASM_GAS
+};
+
+extern char* disasm(const Bit8u *opcode, bool is_32, bool is_64, char *disbufptr, bxInstruction_c *i, bx_address cs_base, bx_address rip, BxDisasmStyle style = BX_DISASM_INTEL);
 
 #endif

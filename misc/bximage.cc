@@ -1,9 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bximage.cc 13481 2018-03-30 21:04:04Z vruppert $
+// $Id: bximage.cc 14091 2021-01-30 17:37:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2013  The Bochs Project
-//  Copyright (C) 2013-2018  Volker Ruppert
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -18,37 +17,6 @@
 //  You should have received a copy of the GNU Lesser General Public
 //  License along with this library; if not, write to the Free Software
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
-/////////////////////////////////////////////////////////////////////////
-//
-// Portions of this file contain code released under the following license.
-//
-// Connectix / Microsoft Virtual PC image creation code
-//
-// Copyright (c) 2005 Alex Beregszaszi
-// Copyright (c) 2009 Kevin Wolf <kwolf@suse.de>
-//
-// VMDK version 4 image creation code
-//
-// Copyright (c) 2004 Fabrice Bellard
-// Copyright (c) 2005 Filip Navara
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 /////////////////////////////////////////////////////////////////////////
 
 // Create empty hard disk or floppy disk images for bochs.
@@ -75,36 +43,21 @@
 #include "iodev/hdimage/hdimage.h"
 #include "iodev/hdimage/vmware3.h"
 #include "iodev/hdimage/vmware4.h"
-#include "iodev/hdimage/vpc-img.h"
+#include "iodev/hdimage/vpc.h"
+#include "iodev/hdimage/vbox.h"
 
-#define BXIMAGE_MODE_NULL            0
-#define BXIMAGE_MODE_CREATE_IMAGE    1
-#define BXIMAGE_MODE_CONVERT_IMAGE   2
-#define BXIMAGE_MODE_RESIZE_IMAGE    3
-#define BXIMAGE_MODE_COMMIT_UNDOABLE 4
-#define BXIMAGE_MODE_IMAGE_INFO      5
+#define BXIMAGE_FUNC_NULL            0
+#define BXIMAGE_FUNC_CREATE_IMAGE    1
+#define BXIMAGE_FUNC_CONVERT_IMAGE   2
+#define BXIMAGE_FUNC_RESIZE_IMAGE    3
+#define BXIMAGE_FUNC_COMMIT_UNDOABLE 4
+#define BXIMAGE_FUNC_IMAGE_INFO      5
 
 #define BX_MAX_CYL_BITS 24 // 8 TB
 
 const int bx_max_hd_megs = (int)(((1 << BX_MAX_CYL_BITS) - 1) * 16.0 * 63.0 / 2048.0);
 
-const char *hdimage_mode_names[] = {
-  "flat",
-  "concat",
-  "external",
-  "dll",
-  "sparse",
-  "vmware3",
-  "vmware4",
-  "undoable",
-  "growing",
-  "volatile",
-  "vvfat",
-  "vpc",
-  NULL
-};
-
-int  bximage_mode;
+int  bximage_func;
 int  bx_hdimage;
 int  bx_fdsize_idx;
 int  bx_min_hd_megs = 10;
@@ -113,12 +66,12 @@ int  bx_imagemode;
 int  bx_backup;
 int  bx_interactive;
 int  bx_sectsize_idx;
-unsigned bx_sectsize_val;
+Bit16u bx_sectsize_val;
 char bx_filename_1[512];
-char bx_filename_2[512];
+char bx_filename_2[522];
 
 const char *EOF_ERR = "ERROR: End of input";
-const char *svnid = "$Id: bximage.cc 13481 2018-03-30 21:04:04Z vruppert $";
+const char *svnid = "$Id: bximage.cc 14091 2021-01-30 17:37:42Z sshwarts $";
 const char *divider = "========================================================================";
 const char *main_menu_prompt =
 "\n"
@@ -146,9 +99,6 @@ int fdsize_n_choices = 10;
 // menu data for choosing disk mode
 const char *hdmode_menu = "\nWhat kind of image should I create?\nPlease type flat, sparse, growing, vpc or vmware4. ";
 const char *hdmode_choices[] = {"flat", "sparse", "growing", "vpc", "vmware4" };
-const int hdmode_choice_id[] = {BX_HDIMAGE_MODE_FLAT, BX_HDIMAGE_MODE_SPARSE,
-                                BX_HDIMAGE_MODE_GROWING, BX_HDIMAGE_MODE_VPC,
-                                BX_HDIMAGE_MODE_VMWARE4};
 int hdmode_n_choices = 5;
 
 // menu data for choosing hard disk sector size
@@ -356,73 +306,44 @@ int ask_string(const char *prompt, char *the_default, char *out)
   return 0;
 }
 
-device_image_t* init_image(Bit8u image_mode)
+device_image_t* init_image(const char *imgmode)
 {
   device_image_t *hdimage = NULL;
 
   // instantiate the right class
-  switch (image_mode) {
-
-    case BX_HDIMAGE_MODE_FLAT:
-      hdimage = new flat_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_CONCAT:
-      hdimage = new concat_image_t();
-      break;
-
+  if (!strcmp(imgmode, "flat")) {
+    hdimage = new flat_image_t();
+  } else if (!strcmp(imgmode, "concat")) {
+    hdimage = new concat_image_t();
 #ifdef WIN32
-    case BX_HDIMAGE_MODE_DLL_HD:
-      hdimage = new dll_image_t();
-      break;
+  } else if (!strcmp(imgmode, "dll")) {
+    hdimage = new dll_image_t();
 #endif
-
-    case BX_HDIMAGE_MODE_SPARSE:
-      hdimage = new sparse_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VMWARE3:
-      hdimage = new vmware3_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VMWARE4:
-      hdimage = new vmware4_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_GROWING:
-      hdimage = new growing_image_t();
-      break;
-
-    case BX_HDIMAGE_MODE_VPC:
-      hdimage = new vpc_image_t();
-      break;
-
-    default:
-      fatal("unsupported disk image mode");
-      break;
+  } else if (!strcmp(imgmode, "sparse")) {
+    hdimage = new sparse_image_t();
+  } else if (!strcmp(imgmode, "vmware3")) {
+    hdimage = new vmware3_image_t();
+  } else if (!strcmp(imgmode, "vmware4")) {
+    hdimage = new vmware4_image_t();
+  } else if (!strcmp(imgmode, "growing")) {
+    hdimage = new growing_image_t();
+  } else if (!strcmp(imgmode, "vpc")) {
+    hdimage = new vpc_image_t();
+  } else if (!strcmp(imgmode, "vbox")) {
+    hdimage = new vbox_image_t();
+  } else {
+    fatal("unsupported disk image mode");
   }
   return hdimage;
-}
-
-int create_image_file(const char *filename)
-{
-  int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC
-#ifdef O_BINARY
-                | O_BINARY
-#endif
-                , S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP
-                );
-  if (fd < 0) {
-    fatal("ERROR: flat file is not writable");
-  }
-  return fd;
 }
 
 void create_flat_image(const char *filename, Bit64u size)
 {
   char buffer[512];
 
-  int fd = create_image_file(filename);
+  int fd = bx_create_image_file(filename);
+  if (fd < 0)
+    fatal("ERROR: failed to create flat image file");
   memset(buffer, 0, 512);
   if (bx_write_image(fd, size - 512, buffer, 512) != 512)
     fatal("ERROR: while writing block in flat file !");
@@ -475,308 +396,46 @@ void create_flat_image_win32(const char *filename, Bit64u size)
 }
 #endif
 
-void create_sparse_image(const char *filename, Bit64u size)
+device_image_t* create_hard_disk_image(const char *filename, const char *imgmode, Bit64u size)
 {
-  Bit64u numpages;
-  sparse_header_t header;
-  size_t sizesofar;
-  int padtopagesize;
-
-  memset(&header, 0, sizeof(header));
-  header.magic = htod32(SPARSE_HEADER_MAGIC);
-  header.version = htod32(SPARSE_HEADER_VERSION);
-
-  header.pagesize = htod32((1 << 10) * 32); // Use 32 KB Pages - could be configurable
-  numpages = (size / dtoh32(header.pagesize)) + 1;
-
-  header.numpages = htod32((Bit32u)numpages);
-  header.disk = htod64(size);
-
-  if (numpages != dtoh32(header.numpages)) {
-    fatal("ERROR: The disk image is too large for a sparse image!");
-    // Could increase page size here.
-    // But note this only happens at 128 Terabytes!
-  }
-
-  int fd = create_image_file(filename);
-  if (bx_write_image(fd, 0, &header, sizeof(header)) != sizeof(header)) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write header!");
-  }
-
-  Bit32u *pagetable = new Bit32u[dtoh32(header.numpages)];
-  if (pagetable == NULL)
-    fatal("ERROR: The disk image is not complete - could not create pagetable!");
-  for (Bit32u i=0; i<dtoh32(header.numpages); i++)
-    pagetable[i] = htod32(SPARSE_PAGE_NOT_ALLOCATED);
-
-  if (bx_write_image(fd, sizeof(header), pagetable, 4 * dtoh32(header.numpages)) != (int)(4 * dtoh32(header.numpages))) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write pagetable!");
-  }
-  delete [] pagetable;
-
-  sizesofar = SPARSE_HEADER_SIZE + (4 * dtoh32(header.numpages));
-  padtopagesize = dtoh32(header.pagesize) - (sizesofar & (dtoh32(header.pagesize) - 1));
-
-  Bit8u *padding = new Bit8u[padtopagesize];
-  memset(padding, 0, padtopagesize);
-
-  if (bx_write_image(fd, sizesofar, padding, padtopagesize) != padtopagesize) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write padding!");
-  }
-  delete [] padding;
-  close(fd);
-}
-
-void create_growing_image(const char *filename, Bit64u size)
-{
-  redolog_t *redolog = new redolog_t;
-  if (redolog->create(filename, REDOLOG_SUBTYPE_GROWING, size) < 0)
-    fatal("Can't create growing mode image");
-  redolog->close();
-  delete redolog;
-}
-
-void create_vpc_image(const char *filename, Bit64u size)
-{
-  Bit8u buf[1024];
-  Bit16u cyls = 0;
-  Bit8u heads = 16, secs_per_cyl = 63;
-  Bit64u total_sectors;
-  Bit64s offset;
-  size_t block_size, num_bat_entries;
-  int fd, i;
-
-  total_sectors = size >> 9;
-  cyls = (Bit16u)(size/heads/secs_per_cyl/512.0);
-
-  vhd_footer_t *footer = (vhd_footer_t*)buf;
-  memset(footer, 0, HEADER_SIZE);
-  memcpy(footer->creator, "conectix", 8);
-  // TODO Check if "bxic" creator_app is ok for VPC
-  memcpy(footer->creator_app, "bxic", 4);
-  memcpy(footer->creator_os, "Wi2k", 4);
-
-  footer->features = be32_to_cpu(0x02);
-  footer->version = be32_to_cpu(0x00010000);
-  footer->data_offset = be64_to_cpu(HEADER_SIZE);
-  footer->timestamp = be32_to_cpu((Bit32u)time(NULL) - VHD_TIMESTAMP_BASE);
-
-  // Version of Virtual PC 2007
-  footer->major = be16_to_cpu(0x0005);
-  footer->minor = be16_to_cpu(0x0003);
-  footer->orig_size = be64_to_cpu(total_sectors * 512);
-  footer->size = be64_to_cpu(total_sectors * 512);
-  footer->cyls = be16_to_cpu(cyls);
-  footer->heads = heads;
-  footer->secs_per_cyl = secs_per_cyl;
-  footer->type = be32_to_cpu(VHD_DYNAMIC);
-  footer->checksum = be32_to_cpu(vpc_checksum(buf, HEADER_SIZE));
-
-  fd = create_image_file(filename);
-  // Write the footer (twice: at the beginning and at the end)
-  block_size = 0x200000;
-  num_bat_entries = (size_t)(total_sectors + block_size / 512) / (block_size / 512);
-  if (bx_write_image(fd, 0, footer, HEADER_SIZE) != HEADER_SIZE) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write footer!");
-  }
-  offset = 1536 + ((num_bat_entries * 4 + 511) & ~511);
-  if (bx_write_image(fd, offset, footer, HEADER_SIZE) != HEADER_SIZE) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write footer!");
-  }
-
-  // Write the initial BAT
-  memset(buf, 0xFF, 512);
-  offset = 3 * 512;
-  for (i = 0; i < (int)(num_bat_entries * 4 + 511) / 512; i++) {
-    if (bx_write_image(fd, offset, buf, 512) != 512) {
-      close(fd);
-      fatal("ERROR: The disk image is not complete - could not write BAT!");
-    }
-    offset += 512;
-  }
-
-  vhd_dyndisk_header_t *header = (vhd_dyndisk_header_t*)buf;
-  memset(header, 0, 1024);
-  memcpy(header->magic, "cxsparse", 8);
-  /*
-   * Note: The spec is actually wrong here for data_offset, it says
-   * 0xFFFFFFFF, but MS tools expect all 64 bits to be set.
-   */
-  header->data_offset = be64_to_cpu(0xFFFFFFFFFFFFFFFFULL);
-  header->table_offset = be64_to_cpu(3 * 512);
-  header->version = be32_to_cpu(0x00010000);
-  header->block_size = be32_to_cpu(block_size);
-  header->max_table_entries = be32_to_cpu(num_bat_entries);
-  header->checksum = be32_to_cpu(vpc_checksum(buf, 1024));
-  if (bx_write_image(fd, 512, header, 1024) != 1024) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write header!");
-  }
-
-  close(fd);
-}
-
-void create_vmware4_image(const char *filename, Bit64u size)
-{
-  const int SECTOR_SIZE = 512;
-  const char desc_template[] =
-    "# Disk DescriptorFile\n"
-    "version=1\n"
-    "CID=%x\n"
-    "parentCID=ffffffff\n"
-    "createType=\"monolithicSparse\"\n"
-    "\n"
-    "# Extent description\n"
-    "%s"
-    "\n"
-    "# The Disk Data Base\n"
-    "#DDB\n"
-    "\n"
-    "ddb.virtualHWVersion = \"4\"\n"
-    "ddb.geometry.cylinders = \"" FMT_LL "d\"\n"
-    "ddb.geometry.heads = \"16\"\n"
-    "ddb.geometry.sectors = \"63\"\n"
-    "ddb.adapterType = \"ide\"\n";
-  int fd, i;
-  Bit64s offset, cyl;
-  Bit32u tmp, grains, gt_size, gt_count, gd_size;
-  Bit8u buffer[SECTOR_SIZE];
-  char desc_line[256];
-  _VM4_Header header;
-
-  header.id[0] = 'K';
-  header.id[1] = 'D';
-  header.id[2] = 'M';
-  header.id[3] = 'V';
-  header.version = htod32(1);
-  header.flags = htod32(3);
-  header.total_sectors = htod64(size / SECTOR_SIZE);
-  header.tlb_size_sectors = 128;
-  header.description_offset_sectors = 1;
-  header.description_size_sectors = 20;
-  header.slb_count = 512;
-  header.flb_offset_sectors = header.description_offset_sectors +
-                              header.description_size_sectors;
-
-  grains = (Bit32u)((size / 512 + header.tlb_size_sectors - 1) / header.tlb_size_sectors);
-  gt_size = ((header.slb_count * sizeof(Bit32u)) + 511) >> 9;
-  gt_count = (grains + header.slb_count - 1) / header.slb_count;
-  gd_size = (gt_count * sizeof(Bit32u) + 511) >> 9;
-
-  header.flb_copy_offset_sectors = header.flb_offset_sectors + gd_size + (gt_size * gt_count);
-  header.tlb_offset_sectors =
-    ((header.flb_copy_offset_sectors + gd_size + (gt_size * gt_count) +
-    header.tlb_size_sectors - 1) / header.tlb_size_sectors) *
-    header.tlb_size_sectors;
-
-  header.tlb_size_sectors = htod64(header.tlb_size_sectors);
-  header.description_offset_sectors = htod64(header.description_offset_sectors);
-  header.description_size_sectors = htod64(header.description_size_sectors);
-  header.slb_count = htod32(header.slb_count);
-  header.flb_offset_sectors = htod64(header.flb_offset_sectors);
-  header.flb_copy_offset_sectors = htod64(header.flb_copy_offset_sectors);
-  header.tlb_offset_sectors = htod64(header.tlb_offset_sectors);
-  header.check_bytes[0] = 0x0a;
-  header.check_bytes[1] = 0x20;
-  header.check_bytes[2] = 0x0d;
-  header.check_bytes[3] = 0x0a;
-
-  memset(buffer, 0, SECTOR_SIZE);
-  memcpy(buffer, &header, sizeof(_VM4_Header));
-
-  fd = create_image_file(filename);
-  if (bx_write_image(fd, 0, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write header!");
-  }
-  memset(buffer, 0, SECTOR_SIZE);
-  offset = dtoh64(header.tlb_offset_sectors * SECTOR_SIZE) - SECTOR_SIZE;
-  if (bx_write_image(fd, offset, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write empty table!");
-  }
-  offset = dtoh64(header.flb_offset_sectors) * SECTOR_SIZE;
-  for (i = 0, tmp = (Bit32u)dtoh64(header.flb_offset_sectors) + gd_size; i < (int)gt_count; i++, tmp += gt_size) {
-    if (bx_write_image(fd, offset, &tmp, sizeof(tmp)) != sizeof(tmp)) {
-      close(fd);
-      fatal("ERROR: The disk image is not complete - could not write table!");
-    }
-    offset += sizeof(tmp);
-  }
-  offset = dtoh64(header.flb_copy_offset_sectors) * SECTOR_SIZE;
-  for (i = 0, tmp = (Bit32u)dtoh64(header.flb_copy_offset_sectors) + gd_size; i < (int)gt_count; i++, tmp += gt_size) {
-    if (bx_write_image(fd, offset, &tmp, sizeof(tmp)) != sizeof(tmp)) {
-      close(fd);
-      fatal("ERROR: The disk image is not complete - could not write backup table!");
-    }
-    offset += sizeof(tmp);
-  }
-  memset(buffer, 0, SECTOR_SIZE);
-  cyl = (Bit64u)(size / 16 / 63 / 512.0);
-  snprintf(desc_line, 256, "RW " FMT_LL "d SPARSE \"%s\"", size / SECTOR_SIZE, filename);
-  sprintf((char*)buffer, desc_template, (Bit32u)time(NULL), desc_line, cyl);
-  offset = dtoh64(header.description_offset_sectors) * SECTOR_SIZE;
-  if (bx_write_image(fd, offset, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
-    close(fd);
-    fatal("ERROR: The disk image is not complete - could not write description!");
-  }
-  close(fd);
-}
-
-void create_hard_disk_image(const char *filename, int imgmode, Bit64u size)
-{
-  switch (imgmode) {
-    case BX_HDIMAGE_MODE_FLAT:
+  device_image_t *hdimage = init_image(imgmode);
+  if(!strcmp(imgmode, "flat")) {
 #ifndef WIN32
-      create_flat_image(filename, size);
+    create_flat_image(filename, size);
 #else
-      create_flat_image_win32(filename, size);
+    create_flat_image_win32(filename, size);
 #endif
-      break;
-
-    case BX_HDIMAGE_MODE_GROWING:
-      create_growing_image(filename, size);
-      break;
-
-    case BX_HDIMAGE_MODE_SPARSE:
-      create_sparse_image(filename, size);
-      break;
-
-    case BX_HDIMAGE_MODE_VPC:
-      create_vpc_image(filename, size);
-      break;
-
-    case BX_HDIMAGE_MODE_VMWARE4:
-      create_vmware4_image(filename, size);
-      break;
-
-    default:
-      fatal("image mode not implemented yet");
+  } else if(!strcmp(imgmode, "growing")) {
+    hdimage->create_image(filename, size);
+  } else if(!strcmp(imgmode, "sparse")) {
+    hdimage->create_image(filename, size);
+  } else if(!strcmp(imgmode, "vpc")) {
+    hdimage->create_image(filename, size);
+  } else if(!strcmp(imgmode, "vmware4")) {
+    hdimage->create_image(filename, size);
+  } else {
+    fatal("image mode not implemented yet");
   }
+  return hdimage;
 }
 
-void convert_image(int newimgmode, Bit64u newsize)
+void convert_image(const char *newimgmode, Bit64u newsize)
 {
   device_image_t *source_image, *dest_image;
-  int mode = -1;
   Bit64u i, sc, s;
   char buffer[512], null_sector[512];
-  bx_bool error = 0;
+  const char *imgmode = NULL;
+  bool error = false;
 
   printf("\n");
   memset(null_sector, 0, 512);
   if (newsize == 0) {
     if (!strncmp(bx_filename_1, "concat:", 7)) {
-      mode = BX_HDIMAGE_MODE_CONCAT;
+      imgmode = "concat";
       strcpy(bx_filename_1, &bx_filename_1[7]);
 #ifdef WIN32
     } else if (!strncmp(bx_filename_1, "dll:", 4)) {
-      mode = BX_HDIMAGE_MODE_DLL_HD;
+      imgmode = "dll";
       strcpy(bx_filename_1, &bx_filename_1[4]);
 #endif
     }
@@ -784,25 +443,24 @@ void convert_image(int newimgmode, Bit64u newsize)
   if (access(bx_filename_1, F_OK) < 0) {
     fatal("source disk image doesn't exist");
   }
-  if (mode == -1) {
-    mode = hdimage_detect_image_mode(bx_filename_1);
+  if (imgmode == NULL) {
+    hdimage_detect_image_mode(bx_filename_1, &imgmode);
   }
-  if (mode == BX_HDIMAGE_MODE_UNKNOWN) {
+  if (imgmode == NULL) {
     fatal("source disk image mode not detected");
   } else {
-    printf("source image mode = '%s'\n", hdimage_mode_names[mode]);
+    printf("source image mode = '%s'\n", imgmode);
   }
 
-  source_image = init_image(mode);
+  source_image = init_image(imgmode);
   if (source_image->open(bx_filename_1, O_RDONLY) < 0)
     fatal("cannot open source disk image");
 
   if (newsize > 0) {
-    create_hard_disk_image(bx_filename_2, newimgmode, newsize);
+    dest_image = create_hard_disk_image(bx_filename_2, newimgmode, newsize);
   } else {
-    create_hard_disk_image(bx_filename_2, newimgmode, source_image->hd_size);
+    dest_image = create_hard_disk_image(bx_filename_2, newimgmode, source_image->hd_size);
   }
-  dest_image = init_image(newimgmode);
   if (dest_image->open(bx_filename_2) < 0)
     fatal("cannot open destination disk image");
 
@@ -814,17 +472,17 @@ void convert_image(int newimgmode, Bit64u newsize)
     printf("\x8\x8\x8\x8\x8%3d%%]", (int)((s+1)*100/sc));
     fflush(stdout);
     if (source_image->lseek(i, SEEK_SET) < 0) {
-      error = 1;
+      error = true;
       break;
     }
     if ((source_image->read(buffer, 512) == 512) &&
         (memcmp(buffer, null_sector, 512) != 0)) {
       if (dest_image->lseek(i, SEEK_SET) < 0) {
-        error = 1;
+        error = true;
         break;
       }
       if (dest_image->write(buffer, 512) < 0) {
-        error = 1;
+        error = true;
         break;
       }
     }
@@ -848,16 +506,16 @@ void commit_redolog()
   device_image_t *base_image;
   redolog_t *redolog;
   int ret;
+  const char *imgmode = NULL;
 
   printf("\n");
   if (access(bx_filename_1, F_OK) < 0) {
     fatal("base disk image doesn't exist");
   }
-  int mode = hdimage_detect_image_mode(bx_filename_1);
-  if (mode == BX_HDIMAGE_MODE_UNKNOWN)
+  if (!hdimage_detect_image_mode(bx_filename_1, &imgmode))
     fatal("base disk image mode not detected");
 
-  base_image = init_image(mode);
+  base_image = init_image(imgmode);
   if (base_image->open(bx_filename_1) < 0)
     fatal("cannot open base disk image");
 
@@ -886,7 +544,7 @@ void print_usage()
   fprintf(stderr,
     "Usage: bximage [options] [filename1] [filename2]\n\n"
     "Supported options:\n"
-    "  -mode=...     operation mode (create, convert, resize, commit, info)\n"
+    "  -func=...     operation to perform (create, convert, resize, commit, info)\n"
     "  -fd=...       create: floppy image with size code\n"
     "  -hd=...       create/resize: hard disk image with size in megabytes (M)\n"
     "                or gigabytes (G)\n"
@@ -906,7 +564,7 @@ void print_usage()
 
 void set_default_values()
 {
-  if (bximage_mode == BXIMAGE_MODE_CREATE_IMAGE) {
+  if (bximage_func == BXIMAGE_FUNC_CREATE_IMAGE) {
     if (bx_hdimage == -1) {
       bx_hdimage = 1;
       bx_fdsize_idx = 6;
@@ -927,12 +585,12 @@ void set_default_values()
         bx_interactive = 1;
       }
     }
-  } else if (bximage_mode == BXIMAGE_MODE_CONVERT_IMAGE) {
+  } else if (bximage_func == BXIMAGE_FUNC_CONVERT_IMAGE) {
     if (bx_imagemode == -1) {
       bx_imagemode = 0;
       bx_interactive = 1;
     }
-  } else if (bximage_mode == BXIMAGE_MODE_RESIZE_IMAGE) {
+  } else if (bximage_func == BXIMAGE_FUNC_RESIZE_IMAGE) {
     if (bx_hdsize == 0) {
       bx_interactive = 1;
     }
@@ -946,7 +604,7 @@ int parse_cmdline(int argc, char *argv[])
   int fnargs = 0;
   char *suffix;
 
-  bximage_mode = BXIMAGE_MODE_NULL;
+  bximage_func = BXIMAGE_FUNC_NULL;
   bx_hdimage = -1;
   bx_fdsize_idx = -1;
   bx_hdsize = 0;
@@ -963,20 +621,20 @@ int parse_cmdline(int argc, char *argv[])
       print_usage();
       ret = 0;
     }
-    else if (!strncmp("-mode=", argv[arg], 6)) {
-      if (bximage_mode != BXIMAGE_MODE_NULL) {
+    else if (!strncmp("-func=", argv[arg], 6)) {
+      if (bximage_func != BXIMAGE_FUNC_NULL) {
         printf("bximage mode already defined\n\n");
         ret = 0;
       } else if (!strcmp(&argv[arg][6], "create")) {
-        bximage_mode = BXIMAGE_MODE_CREATE_IMAGE;
+        bximage_func = BXIMAGE_FUNC_CREATE_IMAGE;
       } else if (!strcmp(&argv[arg][6], "convert")) {
-        bximage_mode = BXIMAGE_MODE_CONVERT_IMAGE;
+        bximage_func = BXIMAGE_FUNC_CONVERT_IMAGE;
       } else if (!strcmp(&argv[arg][6], "resize")) {
-        bximage_mode = BXIMAGE_MODE_RESIZE_IMAGE;
+        bximage_func = BXIMAGE_FUNC_RESIZE_IMAGE;
       } else if (!strcmp(&argv[arg][6], "commit")) {
-        bximage_mode = BXIMAGE_MODE_COMMIT_UNDOABLE;
+        bximage_func = BXIMAGE_FUNC_COMMIT_UNDOABLE;
       } else if (!strcmp(&argv[arg][6], "info")) {
-        bximage_mode = BXIMAGE_MODE_IMAGE_INFO;
+        bximage_func = BXIMAGE_FUNC_IMAGE_INFO;
       } else {
         printf("Unknown bximage mode '%s'\n\n", &argv[arg][6]);
         ret = 0;
@@ -1045,15 +703,15 @@ int parse_cmdline(int argc, char *argv[])
     }
     arg++;
   }
-  if (bximage_mode == BXIMAGE_MODE_NULL) {
+  if (bximage_func == BXIMAGE_FUNC_NULL) {
     bx_interactive = 1;
   } else {
     set_default_values();
     if (fnargs < 1) {
       bx_interactive = 1;
     }
-    if ((bximage_mode == BXIMAGE_MODE_COMMIT_UNDOABLE) && (fnargs == 1)) {
-      snprintf(bx_filename_2, 256, "%s%s", bx_filename_1, UNDOABLE_REDOLOG_EXTENSION);
+    if ((bximage_func == BXIMAGE_FUNC_COMMIT_UNDOABLE) && (fnargs == 1)) {
+      snprintf(bx_filename_2, 520, "%s%s", bx_filename_1, UNDOABLE_REDOLOG_EXTENSION);
     }
   }
   return ret;
@@ -1077,13 +735,13 @@ void image_overwrite_check(const char *filename)
 
 void check_image_names()
 {
-  char backup_fname[512];
+  char backup_fname[520];
 
   if (!strlen(bx_filename_2)) {
     strcpy(bx_filename_2, bx_filename_1);
   }
   if ((!strcmp(bx_filename_1, bx_filename_2)) && bx_backup) {
-    snprintf(backup_fname, 256, "%s%s", bx_filename_1, ".orig");
+    snprintf(backup_fname, 517, "%s%s", bx_filename_1, ".orig");
     if (hdimage_copy_file(bx_filename_1, backup_fname) != 1)
       fatal("backup of source image file failed");
   } else if (strcmp(bx_filename_1, bx_filename_2)) {
@@ -1091,29 +749,29 @@ void check_image_names()
   }
 }
 
-int get_image_mode_and_hdsize(const char *filename, int *hdsize_megs)
+int get_image_mode_and_hdsize(const char *filename, const char **image_mode)
 {
   device_image_t *source_image;
+  int hdsize_megs = 0;
 
-  int imgmode = hdimage_detect_image_mode(filename);
-  if (imgmode == BX_HDIMAGE_MODE_UNKNOWN)
+  if (!hdimage_detect_image_mode(bx_filename_1, image_mode))
     fatal("source disk image mode not detected");
-  source_image = init_image(imgmode);
+  source_image = init_image(*image_mode);
   if (source_image->open(bx_filename_1, O_RDONLY) < 0) {
     fatal("cannot open source disk image");
   } else {
-    *hdsize_megs = (int)(source_image->hd_size >> 20);
+    hdsize_megs = (int)(source_image->hd_size >> 20);
     source_image->close();
   }
-  return imgmode;
+  return hdsize_megs;
 }
 
 int CDECL main(int argc, char *argv[])
 {
-  char bochsrc_line[256], prompt[80], tmpfname[512];
-  int imgmode = 0;
+  char bochsrc_line[1024], prompt[80], tmpfname[528];
   Bit64u hdsize = 0;
   device_image_t *hdimage;
+  const char *image_mode = NULL;
 
   if (!parse_cmdline(argc, argv))
     myexit(1);
@@ -1121,16 +779,16 @@ int CDECL main(int argc, char *argv[])
   print_banner();
 
   if (bx_interactive) {
-    if (ask_int(main_menu_prompt, 0, 5, bximage_mode, &bximage_mode) < 0)
+    if (ask_int(main_menu_prompt, 0, 5, bximage_func, &bximage_func) < 0)
       fatal(EOF_ERR);
 
     set_default_values();
-    switch (bximage_mode) {
-      case BXIMAGE_MODE_NULL:
+    switch (bximage_func) {
+      case BXIMAGE_FUNC_NULL:
         myexit(0);
         break;
 
-      case BXIMAGE_MODE_CREATE_IMAGE:
+      case BXIMAGE_FUNC_CREATE_IMAGE:
         printf("\nCreate image\n");
         if (ask_menu(fdhd_menu, fdhd_n_choices, fdhd_choices, bx_hdimage, &bx_hdimage) < 0)
           fatal(EOF_ERR);
@@ -1145,10 +803,10 @@ int CDECL main(int argc, char *argv[])
         } else { // hard disk
           if (ask_menu(hdmode_menu, hdmode_n_choices, hdmode_choices, bx_imagemode, &bx_imagemode) < 0)
             fatal(EOF_ERR);
-          imgmode = hdmode_choice_id[bx_imagemode];
-          if ((imgmode == BX_HDIMAGE_MODE_FLAT) ||
-              (imgmode == BX_HDIMAGE_MODE_SPARSE) ||
-              (imgmode == BX_HDIMAGE_MODE_GROWING)) {
+          image_mode = hdmode_choices[bx_imagemode];
+          if (!strcmp(image_mode, "flat") ||
+              !strcmp(image_mode, "sparse") ||
+              !strcmp(image_mode, "growing")) {
             if (ask_menu(sectsize_menu, sectsize_n_choices, sectsize_choices, bx_sectsize_idx, &bx_sectsize_idx) < 0)
               fatal(EOF_ERR);
             bx_sectsize_val = atoi(sectsize_choices[bx_sectsize_idx]);
@@ -1167,7 +825,7 @@ int CDECL main(int argc, char *argv[])
         }
         break;
 
-      case BXIMAGE_MODE_CONVERT_IMAGE:
+      case BXIMAGE_FUNC_CONVERT_IMAGE:
         printf("\nConvert image\n");
         if (!strlen(bx_filename_1)) {
           strcpy(bx_filename_1, "c.img");
@@ -1189,7 +847,7 @@ int CDECL main(int argc, char *argv[])
         }
         break;
 
-      case BXIMAGE_MODE_RESIZE_IMAGE:
+      case BXIMAGE_FUNC_RESIZE_IMAGE:
         printf("\nResize image\n");
         if (!strlen(bx_filename_1)) {
           strcpy(bx_filename_1, "c.img");
@@ -1203,7 +861,7 @@ int CDECL main(int argc, char *argv[])
         }
         if (ask_string("\nWhat should be the name of the new image?\n", tmpfname, bx_filename_2) < 0)
           fatal(EOF_ERR);
-        imgmode = get_image_mode_and_hdsize(bx_filename_1, &bx_min_hd_megs);
+        bx_min_hd_megs = get_image_mode_and_hdsize(bx_filename_1, &image_mode);
         sprintf(prompt, "\nEnter the new hard disk size in megabytes, between %d and %d\n",
                 bx_min_hd_megs, bx_max_hd_megs);
         if (bx_hdsize < bx_min_hd_megs) bx_hdsize = bx_min_hd_megs;
@@ -1215,7 +873,7 @@ int CDECL main(int argc, char *argv[])
         }
         break;
 
-      case BXIMAGE_MODE_COMMIT_UNDOABLE:
+      case BXIMAGE_FUNC_COMMIT_UNDOABLE:
         printf("\nCommit redolog\n");
         if (!strlen(bx_filename_1)) {
           strcpy(bx_filename_1, "c.img");
@@ -1223,7 +881,7 @@ int CDECL main(int argc, char *argv[])
         if (ask_string("\nWhat is the name of the base image?\n", bx_filename_1, bx_filename_1) < 0)
           fatal(EOF_ERR);
         if (!strlen(bx_filename_2)) {
-          snprintf(tmpfname, 256, "%s%s", bx_filename_1, UNDOABLE_REDOLOG_EXTENSION);
+          snprintf(tmpfname, 520, "%s%s", bx_filename_1, UNDOABLE_REDOLOG_EXTENSION);
         } else {
           strcpy(tmpfname, bx_filename_2);
         }
@@ -1233,7 +891,7 @@ int CDECL main(int argc, char *argv[])
           fatal(EOF_ERR);
         break;
 
-      case BXIMAGE_MODE_IMAGE_INFO:
+      case BXIMAGE_FUNC_IMAGE_INFO:
         printf("\nDisk image info\n");
         if (!strlen(bx_filename_1)) {
           strcpy(bx_filename_1, "c.img");
@@ -1246,8 +904,8 @@ int CDECL main(int argc, char *argv[])
         fatal("\nbximage: unknown mode");
     }
   }
-  switch (bximage_mode) {
-      case BXIMAGE_MODE_CREATE_IMAGE:
+  switch (bximage_func) {
+      case BXIMAGE_FUNC_CREATE_IMAGE:
         image_overwrite_check(bx_filename_1);
         if (bx_hdimage == 0) {
           sprintf(bochsrc_line, "floppya: image=\"%s\", status=inserted", bx_filename_1);
@@ -1263,7 +921,7 @@ int CDECL main(int argc, char *argv[])
             sprintf(bochsrc_line, "ata0-master: type=disk, path=\"%s\", mode=%s, sect_size=%d",
                     bx_filename_1, hdmode_choices[bx_imagemode], bx_sectsize_val);
           }
-          imgmode = hdmode_choice_id[bx_imagemode];
+          image_mode = hdmode_choices[bx_imagemode];
           hdsize = ((Bit64u)bx_hdsize) << 20;
           Bit64u cyl = (Bit64u)(hdsize/16.0/63.0/bx_sectsize_val);
           if (cyl >= (1 << BX_MAX_CYL_BITS))
@@ -1271,7 +929,8 @@ int CDECL main(int argc, char *argv[])
           printf("\nCreating hard disk image '%s' with CHS=" FMT_LL "d/%d/%d (sector size = %d)\n",
                  bx_filename_1, cyl, heads, spt, bx_sectsize_val);
           hdsize = cyl * heads * spt * bx_sectsize_val;
-          create_hard_disk_image(bx_filename_1, imgmode, hdsize);
+          hdimage = create_hard_disk_image(bx_filename_1, image_mode, hdsize);
+          delete hdimage;
         }
         printf("\nThe following line should appear in your bochsrc:\n");
         printf("  %s\n", bochsrc_line);
@@ -1289,30 +948,30 @@ int CDECL main(int argc, char *argv[])
 #endif
         break;
 
-      case BXIMAGE_MODE_CONVERT_IMAGE:
+      case BXIMAGE_FUNC_CONVERT_IMAGE:
         check_image_names();
-        imgmode = hdmode_choice_id[bx_imagemode];
-        convert_image(imgmode, 0);
+        image_mode = hdmode_choices[bx_imagemode];
+        convert_image(image_mode, 0);
         break;
 
-      case BXIMAGE_MODE_RESIZE_IMAGE:
-        imgmode = get_image_mode_and_hdsize(bx_filename_1, &bx_min_hd_megs);
+      case BXIMAGE_FUNC_RESIZE_IMAGE:
+        bx_min_hd_megs = get_image_mode_and_hdsize(bx_filename_1, &image_mode);
         if (bx_hdsize < bx_min_hd_megs)
           fatal("invalid image size");
         hdsize = ((Bit64u)bx_hdsize) << 20;
         check_image_names();
-        convert_image(imgmode, hdsize);
+        convert_image(image_mode, hdsize);
         break;
 
-      case BXIMAGE_MODE_COMMIT_UNDOABLE:
+      case BXIMAGE_FUNC_COMMIT_UNDOABLE:
         if (bx_backup) {
-          snprintf(tmpfname, 256, "%s%s", bx_filename_1, ".orig");
+          snprintf(tmpfname, 517, "%s%s", bx_filename_1, ".orig");
           if (hdimage_copy_file(bx_filename_1, tmpfname) != 1)
             fatal("backup of base image file failed");
         }
         commit_redolog();
         if (bx_backup) {
-          snprintf(tmpfname, 256, "%s%s", bx_filename_2, ".orig");
+          snprintf(tmpfname, 527, "%s%s", bx_filename_2, ".orig");
           if (rename(bx_filename_2, tmpfname) != 0)
             fatal("rename of redolog file failed");
         } else {
@@ -1321,14 +980,13 @@ int CDECL main(int argc, char *argv[])
         }
         break;
 
-      case BXIMAGE_MODE_IMAGE_INFO:
-        imgmode = hdimage_detect_image_mode(bx_filename_1);
-        if (imgmode == BX_HDIMAGE_MODE_UNKNOWN) {
+      case BXIMAGE_FUNC_IMAGE_INFO:
+        if (!hdimage_detect_image_mode(bx_filename_1, &image_mode)) {
           fatal("disk image mode not detected");
         } else {
-          printf("\ndisk image mode = '%s'\n", hdimage_mode_names[imgmode]);
+          printf("\ndisk image mode = '%s'\n", image_mode);
         }
-        hdimage = init_image(imgmode);
+        hdimage = init_image(image_mode);
         if (hdimage->open(bx_filename_1, O_RDONLY) < 0) {
           fatal("cannot open source disk image");
         } else {

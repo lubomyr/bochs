@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_tuntap.cc 13257 2017-06-16 08:27:55Z vruppert $
+// $Id: eth_tuntap.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -27,22 +27,21 @@
 // is used to know when we are exporting symbols and when we are importing.
 #define BX_PLUGGABLE
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_TUNTAP
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libtuntap_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(tuntap)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libtuntap_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -90,7 +89,7 @@ class bx_tuntap_pktmover_c : public eth_pktmover_c {
 public:
   bx_tuntap_pktmover_c(const char *netif, const char *macaddr,
                        eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                       bx_devmodel_c *dev, const char *script);
+                       logfunctions *netdev, const char *script);
   virtual ~bx_tuntap_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
 private:
@@ -115,8 +114,8 @@ public:
 protected:
   eth_pktmover_c *allocate(const char *netif, const char *macaddr,
                            eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_tuntap_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_tuntap_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_tuntap_match;
 
@@ -130,12 +129,12 @@ bx_tuntap_pktmover_c::bx_tuntap_pktmover_c(const char *netif,
                                            const char *macaddr,
                                            eth_rx_handler_t rxh,
                                            eth_rx_status_t rxstat,
-                                           bx_devmodel_c *dev,
+                                           logfunctions *netdev,
                                            const char *script)
 {
   int flags;
 
-  this->netdev = dev;
+  this->netdev = netdev;
 #ifdef NEVERDEF
   if (strncmp (netif, "tun", 3) != 0) {
     BX_PANIC(("eth_tuntap: interface name (%s) must be tun", netif));
@@ -176,7 +175,7 @@ bx_tuntap_pktmover_c::bx_tuntap_pktmover_c(const char *netif,
 
   fd = open (filename, O_RDWR);
 #endif
-  char intname[IFNAMSIZ];
+  char intname[MAXPATHLEN];
   strcpy(intname,netif);
   fd=tun_alloc(intname);
   if (fd < 0) {

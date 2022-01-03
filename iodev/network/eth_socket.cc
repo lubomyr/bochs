@@ -1,9 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_socket.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: eth_socket.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2003  by Mariusz Matuszek [NOmrmmSPAM @ users.sourceforge.net]
-//  Copyright (C) 2017  The Bochs Project
+//  Copyright (C) 2003       by Mariusz Matuszek
+//                              [NOmrmmSPAM @ users.sourceforge.net]
+//  Copyright (C) 2017-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -56,22 +57,21 @@
 #define __USE_W32_SOCKETS
 #endif
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_SOCKET
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libsocket_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(socket)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libsocket_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -95,7 +95,9 @@ extern "C" {
 #include <netinet/in.h>
 #include <net/ethernet.h>
 #include <net/if.h>
+#ifdef __linux__
 #include <linux/types.h>
+#endif
 #include <netdb.h>
 #define closesocket(s) close(s)
 typedef int SOCKET;
@@ -104,6 +106,10 @@ typedef int SOCKET;
 #endif
 #endif
 };
+
+#ifdef __APPLE__
+#define MSG_NOSIGNAL 0
+#endif
 
 #ifdef WIN32
 #define MSG_NOSIGNAL 0
@@ -120,7 +126,7 @@ public:
   bx_socket_pktmover_c(const char *netif, const char *macaddr,
                        eth_rx_handler_t rxh,
                        eth_rx_status_t rxstat,
-                       bx_devmodel_c *dev, const char *script);
+                       logfunctions *netdev, const char *script);
   virtual ~bx_socket_pktmover_c();
 
   void sendpkt(void *buf, unsigned io_len);
@@ -145,8 +151,8 @@ public:
 protected:
   eth_pktmover_c *allocate(const char *netif, const char *macaddr,
                            eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_socket_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_socket_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_socket_match;
 
@@ -161,7 +167,7 @@ bx_socket_pktmover_c::bx_socket_pktmover_c(const char *netif,
                                            const char *macaddr,
                                            eth_rx_handler_t rxh,
                                            eth_rx_status_t rxstat,
-                                           bx_devmodel_c *dev,
+                                           logfunctions *netdev,
                                            const char *script)
 {
   struct hostent *hp;
@@ -170,7 +176,7 @@ bx_socket_pktmover_c::bx_socket_pktmover_c(const char *netif,
   ULONG nbl = 1;
 #endif
 
-  this->netdev = dev;
+  this->netdev = netdev;
   BX_INFO(("socket network driver"));
   memcpy(socket_macaddr, macaddr, 6);
   this->fd = INVALID_SOCKET;

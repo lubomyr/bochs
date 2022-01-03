@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: proc_ctrl.cc 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: proc_ctrl.cc 14095 2021-01-30 18:47:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -25,6 +25,10 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
+#include "pc_system.h"
+#include "gui/gui.h"
+
+#include "wide_int.h"
 #include "decoder/ia_opcodes.h"
 
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::BxError(bxInstruction_c *i)
@@ -34,7 +38,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::BxError(bxInstruction_c *i)
   if (ia_opcode == BX_IA_ERROR) {
     BX_DEBUG(("BxError: Encountered an unknown instruction (signalling #UD)"));
 
-#if BX_DISASM && BX_DEBUGGER == 0 // with debugger it easy to see the #UD
+#if BX_DEBUGGER == 0 // with debugger it easy to see the #UD
     if (LOG_THIS getonoff(LOGLEV_DEBUG))
       debug_disasm_instruction(BX_CPU_THIS_PTR prev_rip);
 #endif
@@ -374,7 +378,7 @@ void BX_CPU_C::handleCpuModeChange(void)
 
   // re-initialize protection keys
 #if BX_SUPPORT_PKEYS
-  set_PKRU(BX_CPU_THIS_PTR pkru);
+  set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs);
 #endif
 
   if (mode != BX_CPU_THIS_PTR cpu_mode) {
@@ -604,26 +608,35 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::RDPMC(bxInstruction_c *i)
 }
 
 #if BX_CPU_LEVEL >= 5
+
 Bit64u BX_CPU_C::get_TSC(void)
 {
-  Bit64u tsc = bx_pc_system.time_ticks() - BX_CPU_THIS_PTR tsc_last_reset;
-#if BX_SUPPORT_VMX || BX_SUPPORT_SVM
-#if BX_SUPPORT_VMX
-  if (BX_CPU_THIS_PTR in_vmx_guest) {
-    if (VMEXIT(VMX_VM_EXEC_CTRL2_TSC_OFFSET) && SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_TSC_SCALING))
-      tsc = (tsc * BX_CPU_THIS_PTR vmcs.tsc_multiplier) >> 48;
-  }
-#endif
-  tsc += BX_CPU_THIS_PTR tsc_offset;
-#endif
+  Bit64u tsc = bx_pc_system.time_ticks() + BX_CPU_THIS_PTR tsc_adjust;
   return tsc;
 }
 
+#if BX_SUPPORT_VMX || BX_SUPPORT_SVM
+Bit64u BX_CPU_C::get_TSC_VMXAdjust(Bit64u tsc)
+{
+#if BX_SUPPORT_VMX
+  if (BX_CPU_THIS_PTR in_vmx_guest) {
+    if (VMEXIT(VMX_VM_EXEC_CTRL2_TSC_OFFSET) && SECONDARY_VMEXEC_CONTROL(VMX_VM_EXEC_CTRL3_TSC_SCALING)) {
+      Bit128u product_128;
+      long_mul(&product_128,tsc,BX_CPU_THIS_PTR vmcs.tsc_multiplier);   
+      tsc = (product_128.lo >> 48) | (product_128.hi << 16);   // tsc = (uint64) (long128(tsc_value * tsc_multiplier) >> 48);
+    }
+  }
+#endif
+  tsc += BX_CPU_THIS_PTR tsc_offset;    // BX_CPU_THIS_PTR tsc_offset = 0 if not in VMX or SVM guest
+  return tsc;
+}
+#endif
+
 void BX_CPU_C::set_TSC(Bit64u newval)
 {
-  // compute the correct setting of tsc_last_reset so that a get_TSC()
+  // compute the correct setting of tsc_adjust so that a get_TSC()
   // will return newval
-  BX_CPU_THIS_PTR tsc_last_reset = bx_pc_system.time_ticks() - newval;
+  BX_CPU_THIS_PTR tsc_adjust = newval - bx_pc_system.time_ticks();
 
   // verify
   BX_ASSERT(get_TSC() == newval);
@@ -653,6 +666,9 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::RDTSC(bxInstruction_c *i)
 
   // return ticks
   Bit64u ticks = BX_CPU_THIS_PTR get_TSC();
+#if BX_SUPPORT_SVM || BX_SUPPORT_VMX
+  ticks = BX_CPU_THIS_PTR get_TSC_VMXAdjust(ticks);
+#endif
 
   RAX = GET32L(ticks);
   RDX = GET32H(ticks);
@@ -697,6 +713,9 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::RDTSCP(bxInstruction_c *i)
 
   // return ticks
   Bit64u ticks = BX_CPU_THIS_PTR get_TSC();
+#if BX_SUPPORT_SVM || BX_SUPPORT_VMX
+  ticks = BX_CPU_THIS_PTR get_TSC_VMXAdjust(ticks);
+#endif
 
   RAX = GET32L(ticks);
   RDX = GET32H(ticks);
@@ -1331,26 +1350,43 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::WRGSBASE_Eq(bxInstruction_c *i)
 
 #if BX_SUPPORT_PKEYS
 
-void BX_CPU_C::set_PKRU(Bit32u pkru_val)
+void BX_CPU_C::set_PKeys(Bit32u pkru_val, Bit32u pkrs_val)
 {
   BX_CPU_THIS_PTR pkru = pkru_val;
+  BX_CPU_THIS_PTR pkrs = pkrs_val;
 
   for (unsigned i=0; i<16; i++) {
     BX_CPU_THIS_PTR rd_pkey[i] = BX_CPU_THIS_PTR wr_pkey[i] =
       TLB_SysReadOK | TLB_UserReadOK | TLB_SysWriteOK | TLB_UserWriteOK;
 
-    if (long_mode() && BX_CPU_THIS_PTR cr4.get_PKE()) {
-      // accessDisable bit set
-      if (pkru_val & (1<<(i*2))) {
-        BX_CPU_THIS_PTR rd_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
-        BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
+    if (long_mode()) {
+      if (BX_CPU_THIS_PTR cr4.get_PKE()) {
+        // accessDisable bit set
+        if (pkru_val & (1<<(i*2))) {
+          BX_CPU_THIS_PTR rd_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
+          BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserReadOK | TLB_UserWriteOK);
+        }
+
+        // writeDisable bit set
+        if (pkru_val & (1<<(i*2+1))) {
+          BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserWriteOK);
+          if (BX_CPU_THIS_PTR cr0.get_WP())
+            BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_SysWriteOK);
+        }
       }
+
+      if (BX_CPU_THIS_PTR cr4.get_PKS()) {
+        // accessDisable bit set
+        if (pkrs_val & (1<<(i*2))) {
+          BX_CPU_THIS_PTR rd_pkey[i] &= ~(TLB_SysReadOK | TLB_SysWriteOK);
+          BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_SysReadOK | TLB_SysWriteOK);
+        }
     
-      // writeDisable bit set
-      if (pkru_val & (1<<(i*2+1))) {
-        BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_UserWriteOK);
-        if (BX_CPU_THIS_PTR cr0.get_WP())
-          BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_SysWriteOK);
+        // writeDisable bit set
+        if (pkrs_val & (1<<(i*2+1))) {
+          if (BX_CPU_THIS_PTR cr0.get_WP())
+            BX_CPU_THIS_PTR wr_pkey[i] &= ~(TLB_SysWriteOK);
+        }
       }
     }
 
@@ -1384,7 +1420,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::WRPKRU(bxInstruction_c *i)
   if ((ECX|EDX) != 0)
     exception(BX_GP_EXCEPTION, 0);
 
-  BX_CPU_THIS_PTR set_PKRU(EAX);
+  BX_CPU_THIS_PTR set_PKeys(EAX, BX_CPU_THIS_PTR pkrs);
 
   BX_NEXT_TRACE(i);
 }

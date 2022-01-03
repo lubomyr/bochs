@@ -1,9 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bxhub.cc 13262 2017-07-04 18:53:33Z vruppert $
+// $Id: bxhub.cc 14091 2021-01-30 17:37:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 /*
- * Copyright (C) 2003  by Mariusz Matuszek [NOmrmmSPAM @ users.sourceforge.net]
- * Copyright (C) 2017  The Bochs Project
+ * Copyright (C) 2003       by Mariusz Matuszek
+ *                             [NOmrmmSPAM @ users.sourceforge.net]
+ * Copyright (C) 2017-2020  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,13 +24,13 @@
 // bxhub.c: a simple, two-port software 'ethernet hub' for use with
 // eth_socket Bochs ethernet pktmover.
 
-// Extensions by Volker Ruppert (2017):
+// Extensions by Volker Ruppert (2017-2020):
 // - Windows support added.
-// - Integrated 'vnet' server features (ARP, ICMP-echo, DHCP and TFTP).
+// - Integrated 'vnet' server features (ARP, ICMP-echo, DHCP, DNS, FTP and TFTP).
+// - Added DNS service support for the server 'vnet' and connected clients.
 // - Command line options added for base UDP port and 'vnet' server features.
 // - Support for connects from up to 6 Bochs sessions.
 // - Support for connecting from other machines.
-// - Added DNS service support for the server 'vnet' and connected clients.
 
 #ifdef __CYGWIN__
 #define __USE_W32_SOCKETS
@@ -55,6 +56,10 @@ typedef int SOCKET;
 #define BXHUB
 #endif
 
+#ifdef __APPLE__
+#define MSG_NOSIGNAL 0
+#endif
+
 #ifdef WIN32
 #define MSG_NOSIGNAL 0
 #define MSG_DONTWAIT 0
@@ -68,288 +73,40 @@ typedef int SOCKET;
 #define BXHUB_MAX_CLIENTS 6
 
 typedef struct {
+  Bit8u      id;
   SOCKET     so;
   struct     sockaddr_in sin, sout;
-  bx_bool    init;
-  dhcp_cfg_t dhcp;
+  int        init;
+  Bit8u      macaddr[6];
+  Bit8u      default_ipv4addr[4];
   Bit8u      *reply_buffer;
-  int        pending_reply_size;
+  unsigned   pending_reply_size;
 } hub_client_t;
 
 const Bit8u default_host_macaddr[6] = {0xb0, 0xc4, 0x20, 0x00, 0x00, 0x0f};
+const Bit8u default_net_ipv4addr[4] = {10, 0, 2, 0};
 const Bit8u default_host_ipv4addr[4] = {10, 0, 2, 2};
 const Bit8u default_dns_ipv4addr[4] = {10, 0, 2, 3};
-const Bit8u default_guest_ipv4addr[4] = {10, 0, 2, 15};
-
-const Bit8u broadcast_ipv4addr[3][4] =
-{
-  {  0,  0,  0,  0},
-  {255,255,255,255},
-  { 10,  0,  2,255},
-};
+const Bit8u default_ftp_ipv4addr[4] = {10, 0, 2, 4};
+const Bit8u dhcp_base_ipv4addr[4] = {10, 0, 2, 15};
+const char  default_bootfile[] = "pxelinux.0";
 
 static Bit16u port_base = 40000;
 static char tftp_root[BX_PATHNAME_LEN];
+static char dhcp_bootfile[128];
 static Bit8u host_macaddr[6];
 static int client_max;
 static Bit8u n_clients;
 static hub_client_t hclient[BXHUB_MAX_CLIENTS];
+static dhcp_cfg_t dhcp;
+static vnet_server_c vnet_server;
 int bx_loglev;
+static char bx_logfname[BX_PATHNAME_LEN];
 
 
-int process_dns(const Bit8u *data, unsigned len, Bit8u *reply, dhcp_cfg_t *dhcpc)
-{
-  char host[256];
-  Bit8u len1, p1, p2;
-  Bit8u ipaddr[4];
-  Bit16u val16[6];
-  bx_bool host_found = 0;
-  int i, rlen = 0;
-
-  for (i = 0; i < 6; i++) {
-    val16[i] = get_net2(&data[i * 2]);
-  }
-  if ((val16[1] != 0x0100) || (val16[2] != 0x0001))
-    return 0;
-  p1 = 12;
-  p2 = 0;
-  while (data[p1] != 0) {
-    len1 = data[p1];
-    if (p2 > 0) {
-      host[p2++] = '.';
-    }
-    memcpy(&host[p2], &data[p1 + 1], len1);
-    p2 += len1;
-    p1 += (len1 + 1);
-  };
-  host[p2] = 0;
-  if ((get_net2(&data[p1 + 1]) != 0x0001) || (get_net2(&data[p1 + 3]) != 0x0001))
-    return 0;
-  if (!stricmp(host, "vnet")) {
-    host_found = 1;
-    memcpy(&ipaddr, dhcpc->host_ipv4addr, 4);
-  } else {
-    for (i = 0; i < client_max; i++) {
-      if (hclient[i].init) {
-        if (!stricmp(host, hclient[i].dhcp.hostname)) {
-          host_found = 1;
-          memcpy(&ipaddr, &hclient[i].dhcp.guest_ipv4addr, 4);
-          break;
-        }
-      }
-    }
-  }
-  if (host_found) {
-    memcpy(reply, data, len);
-    put_net2(&reply[2], 0x8180);
-    put_net2(&reply[6], 0x0001);
-    reply[len] = 0xc0;
-    reply[len + 1] = 12;
-    put_net2(&reply[len + 2], 0x0001);
-    put_net2(&reply[len + 4], 0x0001);
-    put_net4(&reply[len + 6], 86400);
-    put_net2(&reply[len + 10], 4);
-    memcpy(&reply[len + 12], ipaddr, 4);
-    rlen = len + 16;
-  } else {
-    BX_ERROR(("DNS: unknown host '%s'", host));
-    memcpy(reply, data, len);
-    put_net2(&reply[2], 0x8183);
-    rlen = len;
-  }
-  return rlen;
-}
-
-bx_bool handle_ipv4(hub_client_t *client, Bit8u *buf, unsigned len)
-{
-  unsigned total_len;
-  unsigned fragment_flags;
-  unsigned fragment_offset;
-  unsigned l3header_len;
-  const Bit8u *l4pkt;
-  unsigned l4pkt_len;
-  unsigned udp_src_port;
-  unsigned udp_dst_port;
-  unsigned udp_reply_size = 0;
-  unsigned icmptype;
-  unsigned icmpcode;
-  Bit8u *replybuf = client->reply_buffer;
-  dhcp_cfg_t *dhcpc = &client->dhcp;
-  Bit8u srv_ipv4addr[4];
-  bx_bool dns_service = 0;
-
-  // guest-to-host IPv4
-  if (len < (14U+20U)) {
-    return 0;
-  }
-
-  ip_header_t *iphdr = (ip_header_t *)((Bit8u *)buf +
-                                       sizeof(ethernet_header_t));
-  if (iphdr->version != 4) {
-    return 0;
-  }
-  l3header_len = (iphdr->header_len << 2);
-  if (l3header_len != 20) {
-    return 0;
-  }
-  if (ip_checksum((Bit8u*)iphdr, l3header_len) != (Bit16u)0xffff) {
-    return 0;
-  }
-
-  total_len = ntohs(iphdr->total_len);
-
-  if (!memcmp(&iphdr->dst_addr, dhcpc->dns_ipv4addr, 4)) {
-    memcpy(srv_ipv4addr, dhcpc->dns_ipv4addr, 4);
-    dns_service = 1;
-  } else {
-    memcpy(srv_ipv4addr, dhcpc->host_ipv4addr, 4);
-  }
-
-  if (memcmp(&iphdr->dst_addr, dhcpc->host_ipv4addr, 4) && !dns_service &&
-      memcmp(&iphdr->dst_addr, broadcast_ipv4addr[0],4) &&
-      memcmp(&iphdr->dst_addr, broadcast_ipv4addr[1],4) &&
-      memcmp(&iphdr->dst_addr, broadcast_ipv4addr[2],4))
-  {
-    return 0;
-  }
-
-  fragment_flags = ntohs(iphdr->frag_offs) >> 13;
-  fragment_offset = (ntohs(iphdr->frag_offs) & 0x1fff) << 3;
-
-  if ((fragment_flags & 0x1) || (fragment_offset != 0)) {
-    return 0;
-  }
-
-  l4pkt = &buf[14 + l3header_len];
-  l4pkt_len = total_len - l3header_len;
-
-  if (iphdr->protocol == 0x11) {
-    // guest-to-host UDP IPv4
-    if (l4pkt_len < 8) return 0;
-    udp_header_t *udphdr = (udp_header_t *)l4pkt;
-    udp_src_port = ntohs(udphdr->src_port);
-    udp_dst_port = ntohs(udphdr->dst_port);
-    switch (udp_dst_port) {
-      case 53: // DNS
-        if (dns_service) {
-          udp_reply_size = process_dns(&l4pkt[8], l4pkt_len-8, &replybuf[42], dhcpc);
-        }
-        break;
-      case 67: // BOOTP
-        if (!dns_service) {
-          udp_reply_size = vnet_process_dhcp(NULL, &l4pkt[8], l4pkt_len-8,
-                                             &replybuf[42], dhcpc);
-        }
-        break;
-      case 69: // TFTP
-        if (!dns_service && (strlen(tftp_root) > 0)) {
-          udp_reply_size = vnet_process_tftp(NULL, &l4pkt[8], l4pkt_len-8,
-                                             udp_src_port, &replybuf[42], tftp_root);
-        }
-        break;
-      default:
-        break;
-    }
-    if (udp_reply_size > 0) {
-      // host-to-guest UDP IPv4: pseudo-header
-      replybuf[22] = 0;
-      replybuf[23] = 0x11; // UDP
-      put_net2(&replybuf[24], 8U+udp_reply_size);
-      memcpy(&replybuf[26], srv_ipv4addr, 4);
-      memcpy(&replybuf[30], dhcpc->guest_ipv4addr, 4);
-      // udp header
-      put_net2(&replybuf[34], udp_dst_port);
-      put_net2(&replybuf[36], udp_src_port);
-      put_net2(&replybuf[38], 8U+udp_reply_size);
-      put_net2(&replybuf[40], 0);
-      put_net2(&replybuf[40],
-               ip_checksum(&replybuf[22], 12U+8U+udp_reply_size) ^ (Bit16u)0xffff);
-      // ip header
-      memset(&replybuf[14], 0, 20);
-      replybuf[14] = 0x45;
-      replybuf[15] = 0x00;
-      put_net2(&replybuf[16], 20U+8U+udp_reply_size);
-      put_net2(&replybuf[18], 1);
-      replybuf[20] = 0x00;
-      replybuf[21] = 0x00;
-      replybuf[22] = 0x07; // TTL
-      replybuf[23] = 0x11; // UDP
-      client->pending_reply_size = udp_reply_size + 42;
-    }
-  } else if (iphdr->protocol == 0x01) {
-    // guest-to-host ICMP
-    if (l4pkt_len < 8) return 0;
-    icmptype = l4pkt[0];
-    icmpcode = l4pkt[1];
-    if (ip_checksum(l4pkt, l4pkt_len) != (Bit16u)0xffff) {
-      return 0;
-    }
-    switch (icmptype) {
-      case 0x08: // ECHO
-        if (icmpcode == 0) {
-          if (vnet_process_icmp_echo(&buf[14], l3header_len, l4pkt, l4pkt_len,
-                                     replybuf)) {
-            client->pending_reply_size = 14U+l3header_len+l4pkt_len;
-          }
-        }
-        break;
-      default:
-        break;
-    }
-  } else {
-    BX_DEBUG(("Unsupported IP protocol 0x%02x", iphdr->protocol));
-  }
-  if (client->pending_reply_size > 0) {
-    // host-to-guest IPv4
-    replybuf[14] = (replybuf[14] & 0x0f) | 0x40;
-    l3header_len = ((unsigned)(replybuf[14] & 0x0f) << 2);
-    memcpy(&replybuf[26], srv_ipv4addr, 4);
-    memcpy(&replybuf[30], dhcpc->guest_ipv4addr, 4);
-    put_net2(&replybuf[24], 0);
-    put_net2(&replybuf[24], ip_checksum(&replybuf[14], l3header_len) ^ (Bit16u)0xffff);
-    // set up reply packet
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
-bx_bool handle_arp(hub_client_t *client, Bit8u *buf, unsigned len)
-{
-  dhcp_cfg_t *dhcpc = &client->dhcp;
-  arp_header_t *arphdr = (arp_header_t *)((Bit8u *)buf +
-                                          sizeof(ethernet_header_t));
-
-  if ((ntohs(arphdr->hw_addr_space) != 0x0001) ||
-      (ntohs(arphdr->proto_addr_space) != 0x0800) ||
-      (arphdr->hw_addr_len != ETHERNET_MAC_ADDR_LEN) ||
-      (arphdr->proto_addr_len != 4)) {
-    return 0;
-  }
-
-  switch(ntohs(arphdr->opcode)) {
-    case ARP_OPCODE_REQUEST:
-      if (vnet_process_arp_request(buf, client->reply_buffer, dhcpc)) {
-        client->pending_reply_size = MIN_RX_PACKET_LEN;
-        // set up reply packet
-        return 1;
-      }
-      break;
-    case ARP_OPCODE_REPLY:
-    case ARP_OPCODE_REV_REQUEST:
-    case ARP_OPCODE_REV_REPLY:
-    default:
-      break;
-  }
-  return 0;
-}
-
-bx_bool handle_packet(hub_client_t *client, Bit8u *buf, unsigned len)
+bool handle_packet(hub_client_t *client, Bit8u *buf, unsigned len)
 {
   ethernet_header_t *ethhdr = (ethernet_header_t *)buf;
-  dhcp_cfg_t *dhcpc = &client->dhcp;
-  bx_bool ret = 0;
-  Bit8u c;
 
   if (!client->init) {
     if (memcmp(ethhdr->src_mac_addr, host_macaddr, 6) == 0) {
@@ -357,41 +114,17 @@ bx_bool handle_packet(hub_client_t *client, Bit8u *buf, unsigned len)
       return 0;
     } else {
       client->sout.sin_addr.s_addr = client->sin.sin_addr.s_addr;
-      c = n_clients++;
-      memcpy(dhcpc->host_macaddr, host_macaddr, ETHERNET_MAC_ADDR_LEN);
-      memcpy(dhcpc->guest_macaddr, ethhdr->src_mac_addr, ETHERNET_MAC_ADDR_LEN);
-      memcpy(dhcpc->host_ipv4addr, &default_host_ipv4addr[0], 4);
-      memcpy(dhcpc->dns_ipv4addr, &default_dns_ipv4addr, 4);
-      memcpy(dhcpc->guest_ipv4addr, &broadcast_ipv4addr[1][0], 4);
-      memcpy(dhcpc->default_guest_ipv4addr, default_guest_ipv4addr, 4);
-      dhcpc->default_guest_ipv4addr[3] += c;
-      dhcpc->hostname = new char[256];
-      dhcpc->hostname[0] = 0;
+      client->id = n_clients++;
+      memcpy(client->macaddr, ethhdr->src_mac_addr, 6);
+      vnet_server.init_client(client->id, client->macaddr, NULL);
       client->reply_buffer = new Bit8u[BX_PACKET_BUFSIZE];
       client->init = 1;
     }
   }
 
-  if (client->pending_reply_size > 0)
-    return 0;
-
-  switch (ntohs(ethhdr->type)) {
-    case ETHERNET_TYPE_IPV4: 
-      ret = handle_ipv4(client, buf, len);
-      break;
-    case ETHERNET_TYPE_ARP:
-      ret = handle_arp(client, buf, len);
-      break;
-    default:
-      break;
-  }
-  if (ret) {
-    ethernet_header_t *ethrhdr = (ethernet_header_t *)client->reply_buffer;
-    memcpy(ethrhdr->dst_mac_addr, ethhdr->src_mac_addr, ETHERNET_MAC_ADDR_LEN);
-    memcpy(ethrhdr->src_mac_addr, dhcpc->host_macaddr, ETHERNET_MAC_ADDR_LEN);
-    ethrhdr->type = ethhdr->type;
-  }
-  return ret;
+  vnet_server.handle_packet(buf, len);
+  client->pending_reply_size = vnet_server.get_packet(client->reply_buffer);
+  return (client->pending_reply_size > 0);
 }
 
 void send_packet(hub_client_t *client, Bit8u *buf, unsigned len)
@@ -411,12 +144,15 @@ void broadcast_packet(int clientid, Bit8u *buf, unsigned len)
   }
 }
 
-bx_bool find_client(Bit8u *dst_mac_addr, int *clientid)
+bool find_client(Bit8u *dst_mac_addr, int *clientid)
 {
   *clientid = -1;
   for (int i = 0; i < client_max; i++) {
-    if (memcmp(dst_mac_addr, hclient[i].dhcp.guest_macaddr, ETHERNET_MAC_ADDR_LEN) == 0) {
-      *clientid = i;
+    if (hclient[i].init) {
+      if (memcmp(dst_mac_addr, hclient[i].macaddr, ETHERNET_MAC_ADDR_LEN) == 0) {
+        *clientid = i;
+        break;
+      }
     }
   }
   return (*clientid >= 0);
@@ -430,8 +166,10 @@ void print_usage()
     "  -ports=...    number of virtual ethernet ports (2 - 6)\n"
     "  -base=...     base UDP port (bxhub uses 2 ports per Bochs session)\n"
     "  -mac=...      host MAC address (default is b0:c4:20:00:00:0f)\n"
-    "  -tftp=...     enable TFTP support using specified directory\n"
+    "  -tftp=...     enable FTP and TFTP support using specified directory as root\n"
+    "  -bootfile=... network bootfile reported by DHCP - located on TFTP server\n"
     "  -loglev=...   set log level (0 - 3, default 1)\n"
+    "  -logfile=...  send log output to file\n"
     "  --help        display this help and exit\n\n");
 }
 
@@ -446,6 +184,8 @@ int parse_cmdline(int argc, char *argv[])
   bx_loglev = 1;
   port_base = 40000;
   tftp_root[0] = 0;
+  dhcp_bootfile[0] = 0;
+  bx_logfname[0] = 0;
   memcpy(host_macaddr, default_host_macaddr, ETHERNET_MAC_ADDR_LEN);
   while ((arg < argc) && (ret == 1)) {
     // parse next arg
@@ -474,6 +214,9 @@ int parse_cmdline(int argc, char *argv[])
     else if (!strncmp("-tftp=", argv[arg], 6)) {
       strcpy(tftp_root, &argv[arg][6]);
     }
+    else if (!strncmp("-bootfile=", argv[arg], 10)) {
+      strcpy(dhcp_bootfile, &argv[arg][10]);
+    }
     else if (!strncmp("-mac=", argv[arg], 5)) {
       n = sscanf(&argv[arg][5], "%x:%x:%x:%x:%x:%x",
                  &tmp[0],&tmp[1],&tmp[2],&tmp[3],&tmp[4],&tmp[5]);
@@ -493,6 +236,9 @@ int parse_cmdline(int argc, char *argv[])
         ret = 0;
       }
     }
+    else if (!strncmp("-logfile=", argv[arg], 9)) {
+      strcpy(bx_logfname, &argv[arg][9]);
+    }
     else if (argv[arg][0] == '-') {
       printf("Unknown option: %s\n\n", argv[arg]);
       ret = 0;
@@ -510,7 +256,6 @@ void CDECL intHandler(int sig)
     for (int i = 0; i < client_max; i++) {
       if (hclient[i].init) {
         delete [] hclient[i].reply_buffer;
-        delete [] hclient[i].dhcp.hostname;
       }
       closesocket(hclient[i].so);
     }
@@ -574,14 +319,32 @@ int CDECL main(int argc, char **argv)
     printf("RX port #%d in use: %d\n", i + 1, ntohs(hclient[i].sin.sin_port));
   }
 
+  memcpy(dhcp.host_macaddr, host_macaddr, ETHERNET_MAC_ADDR_LEN);
+  memcpy(dhcp.net_ipv4addr, default_net_ipv4addr, 4);
+  memcpy(dhcp.srv_ipv4addr[VNET_SRV], default_host_ipv4addr, 4);
+  memcpy(dhcp.srv_ipv4addr[VNET_DNS], default_dns_ipv4addr, 4);
+  memcpy(dhcp.srv_ipv4addr[VNET_MISC], default_ftp_ipv4addr, 4);
+  memcpy(dhcp.client_base_ipv4addr, dhcp_base_ipv4addr, 4);
+  if (strlen(dhcp_bootfile) > 0) {
+    strcpy(dhcp.bootfile, dhcp_bootfile);
+  } else {
+    strcpy(dhcp.bootfile, default_bootfile);
+  }
+  vnet_server.init(NULL, &dhcp, tftp_root);
   printf("Host MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n",
          host_macaddr[0], host_macaddr[1], host_macaddr[2],
          host_macaddr[3], host_macaddr[4], host_macaddr[5]
          );
   if (strlen(tftp_root) > 0) {
-    printf("TFTP using root directory '%s'\n", tftp_root);
+    printf("FTP / TFTP using root directory '%s'\n", tftp_root);
+    printf("Network bootfile set to '%s'\n", dhcp.bootfile);
   } else {
-    printf("TFTP support disabled\n");
+    printf("FTP / TFTP support and network boot disabled\n");
+  }
+
+  if (strlen(bx_logfname) > 0) {
+    vnet_server.init_log(bx_logfname);
+    printf("Using log file '%s'\n", bx_logfname);
   }
   printf("Press CTRL+C to quit bxhub\n");
 
@@ -615,9 +378,10 @@ int CDECL main(int argc, char **argv)
         }
       }
       // send reply from builtin service
-      if (hclient[i].pending_reply_size > 0) {
+      while (hclient[i].pending_reply_size > 0) {
         send_packet(&hclient[i], hclient[i].reply_buffer, hclient[i].pending_reply_size);
-        hclient[i].pending_reply_size = 0;
+        // check for another pending packet
+        hclient[i].pending_reply_size = vnet_server.get_packet(hclient[i].reply_buffer);
       }
       // check MAC address of new client
       if (hclient[i].init != 0) {

@@ -1,12 +1,13 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vpc-img.cc 13475 2018-03-18 09:07:31Z vruppert $
+// $Id: vpc.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-// Block driver for Connectix / Microsoft Virtual PC images (ported from QEMU)
+// Block driver and image creation code for
+// Connectix / Microsoft Virtual PC images (ported from QEMU)
 //
 // Copyright (c) 2005  Alex Beregszaszi
 // Copyright (c) 2009  Kevin Wolf <kwolf@suse.de>
-// Copyright (C) 2012-2018  The Bochs Project
+// Copyright (C) 2012-2021  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,12 +40,43 @@
 #include "osdep.h"
 #include "misc/bswap.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #endif
 #include "hdimage.h"
-#include "vpc-img.h"
+#include "vpc.h"
 
-#define LOG_THIS bx_devices.pluginHDImageCtl->
+#define LOG_THIS bx_hdimage_ctl.
+
+#ifndef BXIMAGE
+
+// disk image plugin entry point
+
+PLUGIN_ENTRY_FOR_IMG_MODULE(vpc)
+{
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_IMG;
+  }
+  return 0; // Success
+}
+
+#endif
+
+//
+// Define the static class that registers the derived device image class,
+// and allocates one on request.
+//
+class bx_vpc_locator_c : public hdimage_locator_c {
+public:
+  bx_vpc_locator_c(void) : hdimage_locator_c("vpc") {}
+protected:
+  device_image_t *allocate(Bit64u disk_size, const char *journal) {
+    return (new vpc_image_t());
+  }
+  int check_format(int fd, Bit64u disk_size) {
+    return ((vpc_image_t::check_format(fd, disk_size) > 0) ? HDIMAGE_FORMAT_OK : -1);
+  }
+} bx_vpc_match;
 
 Bit32u vpc_checksum(Bit8u *buf, size_t size)
 {
@@ -293,8 +325,93 @@ Bit32u vpc_image_t::get_capabilities(void)
   return HDIMAGE_HAS_GEOMETRY;
 }
 
-#ifndef BXIMAGE
-bx_bool vpc_image_t::save_state(const char *backup_fname)
+#ifdef BXIMAGE
+int vpc_image_t::create_image(const char *pathname, Bit64u size)
+{
+  Bit8u buf[1024];
+  Bit16u cyls = 0;
+  Bit8u heads = 16, secs_per_cyl = 63;
+  Bit64u total_sectors;
+  Bit64s offset;
+  size_t block_size, num_bat_entries;
+  int fd, i;
+
+  total_sectors = size >> 9;
+  cyls = (Bit16u)(size/heads/secs_per_cyl/512.0);
+
+  vhd_footer_t *footer = (vhd_footer_t*)buf;
+  memset(footer, 0, HEADER_SIZE);
+  memcpy(footer->creator, "conectix", 8);
+  // TODO Check if "bxic" creator_app is ok for VPC
+  memcpy(footer->creator_app, "bxic", 4);
+  memcpy(footer->creator_os, "Wi2k", 4);
+
+  footer->features = be32_to_cpu(0x02);
+  footer->version = be32_to_cpu(0x00010000);
+  footer->data_offset = be64_to_cpu(HEADER_SIZE);
+  footer->timestamp = be32_to_cpu((Bit32u)time(NULL) - VHD_TIMESTAMP_BASE);
+
+  // Version of Virtual PC 2007
+  footer->major = be16_to_cpu(0x0005);
+  footer->minor = be16_to_cpu(0x0003);
+  footer->orig_size = be64_to_cpu(total_sectors * 512);
+  footer->size = be64_to_cpu(total_sectors * 512);
+  footer->cyls = be16_to_cpu(cyls);
+  footer->heads = heads;
+  footer->secs_per_cyl = secs_per_cyl;
+  footer->type = be32_to_cpu(VHD_DYNAMIC);
+  footer->checksum = be32_to_cpu(vpc_checksum(buf, HEADER_SIZE));
+
+  fd = bx_create_image_file(pathname);
+  if (fd < 0)
+    BX_FATAL(("ERROR: failed to create vpc image file"));
+  // Write the footer (twice: at the beginning and at the end)
+  block_size = 0x200000;
+  num_bat_entries = (size_t)(total_sectors + block_size / 512) / (block_size / 512);
+  if (bx_write_image(fd, 0, footer, HEADER_SIZE) != HEADER_SIZE) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write footer!"));
+  }
+  offset = 1536 + ((num_bat_entries * 4 + 511) & ~511);
+  if (bx_write_image(fd, offset, footer, HEADER_SIZE) != HEADER_SIZE) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write footer!"));
+  }
+
+  // Write the initial BAT
+  memset(buf, 0xFF, 512);
+  offset = 3 * 512;
+  for (i = 0; i < (int)(num_bat_entries * 4 + 511) / 512; i++) {
+    if (bx_write_image(fd, offset, buf, 512) != 512) {
+      ::close(fd);
+      BX_FATAL(("ERROR: The disk image is not complete - could not write BAT!"));
+    }
+    offset += 512;
+  }
+
+  vhd_dyndisk_header_t *header = (vhd_dyndisk_header_t*)buf;
+  memset(header, 0, 1024);
+  memcpy(header->magic, "cxsparse", 8);
+  /*
+   * Note: The spec is actually wrong here for data_offset, it says
+   * 0xFFFFFFFF, but MS tools expect all 64 bits to be set.
+   */
+  header->data_offset = be64_to_cpu(0xFFFFFFFFFFFFFFFFULL);
+  header->table_offset = be64_to_cpu(3 * 512);
+  header->version = be32_to_cpu(0x00010000);
+  header->block_size = be32_to_cpu(block_size);
+  header->max_table_entries = be32_to_cpu(num_bat_entries);
+  header->checksum = be32_to_cpu(vpc_checksum(buf, 1024));
+  if (bx_write_image(fd, 512, header, 1024) != 1024) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write header!"));
+  }
+
+  ::close(fd);
+  return 0;
+}
+#else
+bool vpc_image_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(fd, backup_fname);
 }

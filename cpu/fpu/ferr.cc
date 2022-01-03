@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ferr.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: ferr.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2003-2017 Stanislav Shwartsman
@@ -54,7 +54,7 @@ void BX_CPU_C::FPU_stack_underflow(bxInstruction_c *i, int stnr, int pop_stack)
 }
 
 /* Returns unmasked exceptions if occurred */
-unsigned BX_CPU_C::FPU_exception(bxInstruction_c *i, unsigned exception, bx_bool is_store)
+unsigned BX_CPU_C::FPU_exception(bxInstruction_c *i, unsigned exception, bool is_store)
 {
   /* Extract only the bits which we use to set the status word */
   exception &= (FPU_SW_Exceptions_Mask);

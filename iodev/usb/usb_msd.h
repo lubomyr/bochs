@@ -1,12 +1,12 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_msd.h 13769 2020-01-03 21:17:15Z vruppert $
+// $Id: usb_msd.h 14155 2021-02-19 13:13:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  USB mass storage device support (ported from QEMU)
 //
 //  Copyright (c) 2006 CodeSourcery.
 //  Written by Paul Brook
-//  Copyright (C) 2009-2020  The Bochs Project
+//  Copyright (C) 2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -32,11 +32,11 @@ class scsi_device_t;
 
 class usb_msd_device_c : public usb_device_c {
 public:
-  usb_msd_device_c(usbdev_type type, const char *filename);
+  usb_msd_device_c(const char *devname);
   virtual ~usb_msd_device_c(void);
 
-  virtual bx_bool init();
-  virtual bx_bool set_option(const char *option);
+  virtual bool init();
+  virtual bool set_option(const char *option);
   virtual const char* get_info();
   virtual void runtime_config(void);
   void restore_handler(bx_list_c *conf);
@@ -46,9 +46,9 @@ public:
   virtual int handle_data(USBPacket *p);
   virtual void register_state_specific(bx_list_c *parent);
   virtual void cancel_packet(USBPacket *p);
-  bx_bool set_inserted(bx_bool value);
-  bx_bool get_inserted();
-  bx_bool get_locked();
+  bool set_inserted(bool value);
+  bool get_inserted();
+  bool get_locked();
 
 protected:
   void copy_data();
@@ -59,7 +59,7 @@ protected:
 private:
   struct {
     // members set in constructor / init
-    Bit8u image_mode;
+    char *image_mode;
     device_image_t *hdimage;
     cdrom_base_c *cdrom;
     scsi_device_t *scsi_dev;
@@ -71,7 +71,7 @@ private:
     int size; // VVFAT disk only
     unsigned sect_size; // sector size for disks only (default = 512 bytes)
     // members handled by runtime config
-    bx_bool status_changed;
+    bool status_changed;
     // members handled by save/restore
     Bit8u mode;
     Bit32u scsi_len;
@@ -86,9 +86,9 @@ private:
     USBPacket *packet;
   } s;
 
-  static const char *cdrom_path_handler(bx_param_string_c *param, int set,
-                                             const char *oldval, const char *val, int maxlen);
-  static Bit64s cdrom_status_handler(bx_param_c *param, int set, Bit64s val);
+  static const char *cdrom_path_handler(bx_param_string_c *param, bool set,
+                                        const char *oldval, const char *val, int maxlen);
+  static Bit64s cdrom_status_handler(bx_param_c *param, bool set, Bit64s val);
 };
 
 #endif

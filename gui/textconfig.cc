@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: textconfig.cc 13459 2018-02-04 22:20:46Z vruppert $
+// $Id: textconfig.cc 14204 2021-03-27 17:23:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,11 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 //
 /////////////////////////////////////////////////////////////////////////
+
+// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
+// platforms that require a special tag on exported symbols, BX_PLUGGABLE
+// is used to know when we are exporting symbols and when we are importing.
+#define BX_PLUGGABLE
 
 //
 // This is code for a text-mode configuration interface.  Note that this file
@@ -49,9 +54,12 @@ extern "C" {
 #endif
 
 #include "osdep.h"
+#include "bx_debug/debug.h"
 #include "param_names.h"
-#include "textconfig.h"
+#include "logio.h"
+#include "paramtree.h"
 #include "siminterface.h"
+#include "plugin.h"
 
 #define CI_PATH_LENGTH 512
 
@@ -63,8 +71,42 @@ extern "C" {
 #define bx_fgets  fgets
 #endif
 
+enum {
+  BX_CI_START_MENU,
+  BX_CI_START_OPTS,
+  BX_CI_START_SIMULATION,
+  BX_CI_RUNTIME,
+  BX_CI_N_MENUS
+};
+
+enum {
+  BX_CI_RT_FLOPPYA = 1,
+  BX_CI_RT_FLOPPYB,
+  BX_CI_RT_CDROM,
+  BX_CI_RT_LOGOPTS1,
+  BX_CI_RT_LOGOPTS2,
+  BX_CI_RT_USB,
+  BX_CI_RT_MISC,
+  BX_CI_RT_SAVE_CFG,
+  BX_CI_RT_CONT,
+  BX_CI_RT_QUIT
+};
+
+static int text_ci_callback(void *userdata, ci_command_t command);
+static BxEvent* textconfig_notify_callback(void *unused, BxEvent *event);
+
+PLUGIN_ENTRY_FOR_MODULE(textconfig)
+{
+  if (mode == PLUGIN_INIT) {
+    SIM->register_configuration_interface("textconfig", text_ci_callback, NULL);
+    SIM->set_notify_callback(textconfig_notify_callback, NULL);
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_CI;
+  }
+  return 0; // Success
+}
+
 /* functions for changing particular options */
-void bx_text_config_interface_init();
 int bx_read_rc(char *rc);
 int bx_write_rc(char *rc);
 void bx_plugin_ctrl();
@@ -73,6 +115,7 @@ int bx_atexit();
 #if BX_DEBUGGER
 void bx_dbg_exit(int code);
 #endif
+int text_ask(bx_param_c *param);
 
 /******************************************************************/
 /* lots of code stolen from bximage.c */
@@ -378,29 +421,38 @@ void build_runtime_options_prompt(const char *format, char *buf, int size)
 int do_menu(const char *pname)
 {
   bx_list_c *menu = (bx_list_c *)SIM->get_param(pname, NULL);
-  while (1) {
-    menu->set_choice(0);
-    int status = menu->text_ask();
-    if (status < 0) return status;
-    if (menu->get_choice() < 1)
-      return menu->get_choice();
-    else {
-      int index = menu->get_choice() - 1;  // choosing 1 means list[0]
-      bx_param_c *chosen = menu->get(index);
-      assert(chosen != NULL);
-      if (chosen->get_enabled()) {
-        if (SIM->get_init_done() && !chosen->get_runtime_param()) {
-          bx_printf("\nWARNING: parameter not available at runtime!\n");
-        } else if (chosen->get_type() == BXT_LIST) {
-          char chosen_pname[80];
-          chosen->get_param_path(chosen_pname, 80);
-          do_menu(chosen_pname);
-        } else {
-          chosen->text_ask();
+  if (menu != NULL) {
+    if (menu->get_size() > 0) {
+      while (1) {
+        menu->set_choice(0);
+        int status = text_ask(menu);
+        if (status < 0) return status;
+        if (menu->get_choice() < 1)
+          return menu->get_choice();
+        else {
+          int index = menu->get_choice() - 1;  // choosing 1 means list[0]
+          bx_param_c *chosen = menu->get(index);
+          assert(chosen != NULL);
+          if (chosen->get_enabled()) {
+            if (SIM->get_init_done() && !chosen->get_runtime_param()) {
+              bx_printf("\nWARNING: parameter not available at runtime!\n");
+            } else if (chosen->get_type() == BXT_LIST) {
+              char chosen_pname[80];
+              chosen->get_param_path(chosen_pname, 80);
+              do_menu(chosen_pname);
+            } else {
+              text_ask(chosen);
+            }
+          }
         }
       }
+    } else {
+      bx_printf("\nERROR: nothing to configure in this section!\n");
     }
+  } else {
+     bx_printf("\nERROR: nothing to configure in this section!\n");
   }
+  return -1;
 }
 
 int bx_text_config_interface(int menu)
@@ -409,9 +461,6 @@ int bx_text_config_interface(int menu)
   char sr_path[CI_PATH_LENGTH];
   while (1) {
     switch (menu) {
-      case BX_CI_INIT:
-        bx_text_config_interface_init();
-        return 0;
       case BX_CI_START_SIMULATION:
         SIM->begin_simulation(bx_startup_flags.argc, bx_startup_flags.argv);
         // we don't expect it to return, but if it does, quit
@@ -646,7 +695,7 @@ int bx_write_rc(char *rc)
       // return code -2 indicates the file already exists, and overwrite
       // confirmation is required.
       Bit32u overwrite = 0;
-      char prompt[256];
+      char prompt[570];
       sprintf(prompt, "Configuration file '%s' already exists.  Overwrite it? [no] ", newrc);
       if (ask_yn(prompt, "", 0, &overwrite) < 0) return -1;
       if (!overwrite) continue;  // if "no", start loop over, asking for a different file
@@ -665,7 +714,8 @@ void bx_plugin_ctrl()
 {
   Bit32u choice;
   bx_list_c *plugin_ctrl;
-  int count;
+  bx_param_bool_c *plugin;
+  int i, j, count;
   char plugname[512];
 
   while (1) {
@@ -676,27 +726,45 @@ void bx_plugin_ctrl()
       plugin_ctrl = (bx_list_c*) SIM->get_param(BXPN_PLUGIN_CTRL);
       count = plugin_ctrl->get_size();
       if (count == 0) {
-        bx_printf("\nNo optional plugins loaded\n");
+        bx_printf("\nNo optional plugins available\n");
       } else {
         bx_printf("\nCurrently loaded plugins:");
-        for (int i = 0; i < count; i++) {
-          if (i > 0) bx_printf(",");
-          bx_printf(" %s", plugin_ctrl->get(i)->get_name());
+        j = 0;
+        for (i = 0; i < count; i++) {
+          plugin = (bx_param_bool_c*)plugin_ctrl->get(i);
+          if (plugin->get()) {
+            if (j > 0) bx_printf(",");
+            bx_printf(" %s", plugin->get_name());
+            j++;
+          }
         }
         bx_printf("\n");
+        if (choice == 1) {
+          bx_printf("\nAdditionally available plugins:");
+          j = 0;
+          for (i = 0; i < count; i++) {
+            plugin = (bx_param_bool_c*)plugin_ctrl->get(i);
+            if (!plugin->get()) {
+              if (j > 0) bx_printf(",");
+              bx_printf(" %s", plugin->get_name());
+              j++;
+            }
+          }
+          bx_printf("\n");
+        }
       }
       if (choice == 1) {
         ask_string("\nEnter the name of the plugin to load.\nTo cancel, type 'none'. [%s] ", "none", plugname);
         if (strcmp(plugname, "none")) {
-          if (!SIM->opt_plugin_ctrl(plugname, 1)) {
-            bx_printf("\nPlugin already loaded.\n");
+          if (SIM->opt_plugin_ctrl(plugname, 1)) {
+            bx_printf("\nLoaded plugin '%s'.\n", plugname);
           }
         }
       } else {
         ask_string("\nEnter the name of the plugin to unload.\nTo cancel, type 'none'. [%s] ", "none", plugname);
         if (strcmp(plugname, "none")) {
-          if (!SIM->opt_plugin_ctrl(plugname, 0)) {
-            bx_printf("\nNo plugin unloaded.\n");
+          if (SIM->opt_plugin_ctrl(plugname, 0)) {
+            bx_printf("\nUnloaded plugin '%s'.\n", plugname);
           }
         }
       }
@@ -708,7 +776,7 @@ const char *log_action_ask_choices[] = { "cont", "alwayscont", "die", "abort", "
 int log_action_n_choices = 4 + (BX_DEBUGGER||BX_GDBSTUB?1:0);
 
 BxEvent *
-config_interface_notify_callback(void *unused, BxEvent *event)
+textconfig_notify_callback(void *unused, BxEvent *event)
 {
   event->retcode = -1;
   switch (event->type)
@@ -717,7 +785,7 @@ config_interface_notify_callback(void *unused, BxEvent *event)
       event->retcode = 0;
       return event;
     case BX_SYNC_EVT_ASK_PARAM:
-      event->retcode = event->u.param.param->text_ask();
+      event->retcode = text_ask(event->u.param.param);
       return event;
     case BX_SYNC_EVT_LOG_DLG:
       if (event->u.logmsg.mode == BX_LOG_DLG_ASK) {
@@ -768,280 +836,278 @@ ask:
   assert(0); // switch statement should return
 }
 
-void bx_text_config_interface_init()
-{
-  SIM->set_notify_callback(config_interface_notify_callback, NULL);
-}
-
 /////////////////////////////////////////////////////////////////////
 // implement the text_* methods for bx_param types.
 
-void bx_param_num_c::text_print()
+void text_print(bx_param_c *param)
 {
-  if (get_long_format()) {
-    bx_printf(get_long_format(), get());
-  } else {
-    const char *format = "%s: %d";
-    assert(base==10 || base==16);
-    if (base==16) format = "%s: 0x%x";
-    if (get_label()) {
-      bx_printf(format, get_label(), get());
-    } else {
-      bx_printf(format, get_name(), get());
-    }
-  }
-}
-
-void bx_param_bool_c::text_print()
-{
-  if (get_format()) {
-    bx_printf(get_format(), get() ? "yes" : "no");
-  } else {
-    const char *format = "%s: %s";
-    if (get_label()) {
-      bx_printf(format, get_label(), get() ? "yes" : "no");
-    } else {
-      bx_printf(format, get_name(), get() ? "yes" : "no");
-    }
-  }
-}
-
-void bx_param_enum_c::text_print()
-{
-  int n = get();
-  assert(n >= min && n <= max);
-  const char *choice = choices[n - min];
-  if (get_format()) {
-    bx_printf(get_format(), choice);
-  } else {
-    const char *format = "%s: %s";
-    if (get_label()) {
-      bx_printf(format, get_label(), choice);
-    } else {
-      bx_printf(format, get_name(), choice);
-    }
-  }
-}
-
-void bx_param_string_c::text_print()
-{
-  char value[1024];
-
-  this->dump_param(value, 1024);
-  if (get_format()) {
-    bx_printf(get_format(), value);
-  } else {
-    if (get_label()) {
-      bx_printf("%s: %s", get_label(), value);
-    } else {
-      bx_printf("%s: %s", get_name(), value);
-    }
-  }
-}
-
-void bx_list_c::text_print()
-{
-  bx_listitem_t *item;
-  int i = 0;
-
-  bx_printf("%s: ", get_name());
-  for (item = list; item; item = item->next) {
-    if (item->param->get_enabled()) {
-      if ((i > 0) && (options & SERIES_ASK))
-        bx_printf(", ");
-      item->param->text_print();
-      if (!(options & SERIES_ASK))
-        bx_printf("\n");
-    }
-    i++;
-  }
-}
-
-int bx_param_num_c::text_ask()
-{
-  bx_printf("\n");
-  int status;
-  const char *prompt = get_ask_format();
-  const char *help = get_description();
-  if (prompt == NULL) {
-    // default prompt, if they didn't set an ask format string
-    text_print();
-    bx_printf("\n");
-    prompt = "Enter new value or '?' for help: [%d] ";
-    if (base==16)
-      prompt = "Enter new value in hex or '?' for help: [%x] ";
-  }
-  Bit32u n = get();
-  status = ask_uint(prompt, help, (Bit32u)min, (Bit32u)max, n, &n, base);
-  if (status < 0) return status;
-  set(n);
-  return 0;
-}
-
-int bx_param_bool_c::text_ask()
-{
-  bx_printf("\n");
-  int status;
-  const char *prompt = get_ask_format();
-  const char *help = get_description();
-  char buffer[512];
-  if (prompt == NULL) {
-    if (get_label() != NULL) {
-      sprintf(buffer, "%s? [%%s] ", get_label());
-      prompt = buffer;
-    } else {
-      // default prompt, if they didn't set an ask format or label string
-      sprintf(buffer, "%s? [%%s] ", get_name());
-      prompt = buffer;
-    }
-  }
-  Bit32u n = get();
-  status = ask_yn(prompt, help, n, &n);
-  if (status < 0) return status;
-  set(n);
-  return 0;
-}
-
-int bx_param_enum_c::text_ask()
-{
-  bx_printf("\n");
-  const char *prompt = get_ask_format();
-  const char *help = get_description();
-  if (prompt == NULL) {
-    // default prompt, if they didn't set an ask format string
-    bx_printf("%s = ", get_name());
-    text_print();
-    bx_printf("\n");
-    prompt = "Enter new value or '?' for help: [%s] ";
-  }
-  Bit32s n = (Bit32s)(get() - min);
-  int status = ask_menu(prompt, help, (Bit32u)(max-min+1), choices, n, &n);
-  if (status < 0) return status;
-  n += (Bit32s)min;
-  set(n);
-  return 0;
-}
-
-int bx_param_string_c::text_ask()
-{
-  bx_printf("\n");
-  const char *prompt = get_ask_format();
-  if (prompt == NULL) {
-    if (options & SELECT_FOLDER_DLG) {
-      bx_printf("%s\n\n", get_label());
-      prompt = "Enter a path to an existing folder or press enter to cancel\n";
-    } else {
-      // default prompt, if they didn't set an ask format string
-      text_print();
-      bx_printf("\n");
-      prompt = "Enter a new value, '?' for help, or press return for no change.\n";
-    }
-  }
-  while (1) {
-    char buffer[1024];
-    int status = ask_string(prompt, getptr(), buffer);
-    if (status == -2) {
-      bx_printf("\n%s\n", get_description());
-      continue;
-    }
-    if (status < 0) return status;
-    if (!equals(buffer))
-      set(buffer);
-    return 0;
-  }
-}
-
-int bx_param_bytestring_c::text_ask()
-{
-  bx_printf("\n");
-  const char *prompt = get_ask_format();
-  if (prompt == NULL) {
-    // default prompt, if they didn't set an ask format string
-    text_print();
-    bx_printf("\n");
-    prompt = "Enter a new value, '?' for help, or press return for no change.\n";
-  }
-  while (1) {
-    char buffer[1024];
-    int status = ask_string(prompt, getptr(), buffer);
-    if (status == -2) {
-      bx_printf("\n%s\n", get_description());
-      continue;
-    }
-    if (status < 0) return status;
-    if (status == 0) return 0;
-    // copy raw hex into buffer
-    status = parse_param(buffer);
-    if (status == 0) {
-      bx_printf("Illegal raw byte format.  I expected something like 3A%c03%c12%c...\n", separator, separator, separator);
-      continue;
-    }
-    return 0;
-  }
-}
-
-int bx_list_c::text_ask()
-{
-  bx_listitem_t *item;
-  bx_list_c *child;
-
-  const char *my_title = title;
-  bx_printf("\n");
-  int i, imax = strlen(my_title);
-  for (i=0; i<imax; i++) bx_printf("-");
-  bx_printf("\n%s\n", my_title);
-  for (i=0; i<imax; i++) bx_printf("-");
-  bx_printf("\n");
-  if (options & SERIES_ASK) {
-    for (item = list; item; item = item->next) {
-      if (item->param->get_enabled()) {
-        if (!SIM->get_init_done() || item->param->get_runtime_param()) {
-          item->param->text_ask();
+  switch (param->get_type()) {
+    case BXT_PARAM_NUM:
+      {
+        bx_param_num_c *nparam = (bx_param_num_c*)param;
+        Bit64s nval = nparam->get64();
+        if (nparam->get_long_format()) {
+          bx_printf(nparam->get_long_format(), nval);
+        } else {
+          const char *format;
+          int base = nparam->get_base();
+          if (base == 16)
+            format = "%s: 0x%x";
+          else
+            format = "%s: %d";
+          if (nparam->get_label()) {
+            bx_printf(format, nparam->get_label(), (Bit32s)nval);
+          } else {
+            bx_printf(format, nparam->get_name(), (Bit32s)nval);
+          }
         }
       }
-    }
-  } else {
-    if (options & SHOW_PARENT)
-      bx_printf("0. Return to previous menu\n");
-    int i = 0;
-    for (item = list; item; item = item->next) {
-      bx_printf("%d. ", i+1);
-      if ((item->param->get_enabled()) &&
-          (!SIM->get_init_done() || item->param->get_runtime_param())) {
-        if (item->param->get_type() == BXT_LIST) {
-          child = (bx_list_c*)item->param;
-          bx_printf("%s\n", child->get_title());
+      break;
+    case BXT_PARAM_BOOL:
+      {
+        bx_param_bool_c *bparam = (bx_param_bool_c*)param;
+        bool bval = (bool)bparam->get();
+        if (bparam->get_format()) {
+          bx_printf(bparam->get_format(), bval ? "yes" : "no");
         } else {
-          if ((options & SHOW_GROUP_NAME) && (item->param->get_group() != NULL))
-            bx_printf("%s ", item->param->get_group());
-          item->param->text_print();
+          const char *format = "%s: %s";
+          if (bparam->get_label()) {
+            bx_printf(format, bparam->get_label(), bval ? "yes" : "no");
+          } else {
+            bx_printf(format, bparam->get_name(), bval ? "yes" : "no");
+          }
+        }
+      }
+      break;
+    case BXT_PARAM_ENUM:
+      {
+        bx_param_enum_c *eparam = (bx_param_enum_c*)param;
+        const char *choice = eparam->get_selected();
+        if (eparam->get_format()) {
+          bx_printf(eparam->get_format(), choice);
+        } else {
+          const char *format = "%s: %s";
+          if (eparam->get_label()) {
+            bx_printf(format, eparam->get_label(), choice);
+          } else {
+            bx_printf(format, eparam->get_name(), choice);
+          }
+        }
+      }
+      break;
+    case BXT_PARAM_STRING:
+    case BXT_PARAM_BYTESTRING:
+      {
+        bx_param_string_c *sparam = (bx_param_string_c*)param;
+        char value[1024];
+
+        sparam->dump_param(value, 1024);
+        if (sparam->get_format()) {
+          bx_printf(sparam->get_format(), value);
+        } else {
+          if (sparam->get_label()) {
+            bx_printf("%s: %s", sparam->get_label(), value);
+          } else {
+            bx_printf("%s: %s", sparam->get_name(), value);
+          }
+        }
+      }
+      break;
+    default:
+      bx_printf("ERROR: unsupported parameter type\n");
+  }
+}
+
+int text_ask(bx_param_c *param)
+{
+  const char *prompt = param->get_ask_format();
+  const char *help = param->get_description();
+  Bit32u options = param->get_options();
+
+  bx_printf("\n");
+  switch (param->get_type()) {
+    case BXT_PARAM_NUM:
+      {
+        bx_param_num_c *nparam = (bx_param_num_c*)param;
+        int status;
+        if (prompt == NULL) {
+          // default prompt, if they didn't set an ask format string
+          text_print(param);
           bx_printf("\n");
+          if (nparam->get_base() == 16)
+            prompt = "Enter new value in hex or '?' for help: [%x] ";
+          else
+            prompt = "Enter new value or '?' for help: [%d] ";
         }
-      } else {
-        if (item->param->get_type() == BXT_LIST) {
-          child = (bx_list_c*)item->param;
-          bx_printf("%s (disabled)\n", child->get_title());
-        } else {
-          bx_printf("(disabled)\n");
+        Bit32u n = nparam->get();
+        status = ask_uint(prompt, help, (Bit32u)nparam->get_min(),
+                          (Bit32u)nparam->get_max(), n, &n, nparam->get_base());
+        if (status < 0) return status;
+        nparam->set(n);
+      }
+      break;
+    case BXT_PARAM_BOOL:
+      {
+        bx_param_bool_c *bparam = (bx_param_bool_c*)param;
+        int status;
+        char buffer[512];
+        if (prompt == NULL) {
+          if (bparam->get_label() != NULL) {
+            sprintf(buffer, "%s? [%%s] ", bparam->get_label());
+            prompt = buffer;
+          } else {
+            // default prompt, if they didn't set an ask format or label string
+            sprintf(buffer, "%s? [%%s] ", bparam->get_name());
+            prompt = buffer;
+          }
+        }
+        Bit32u n = bparam->get();
+        status = ask_yn(prompt, help, n, &n);
+        if (status < 0) return status;
+        bparam->set(n);
+      }
+      break;
+    case BXT_PARAM_ENUM:
+      {
+        bx_param_enum_c *eparam = (bx_param_enum_c*)param;
+        if (prompt == NULL) {
+          // default prompt, if they didn't set an ask format string
+          text_print(param);
+          bx_printf("\n");
+          prompt = "Enter new value or '?' for help: [%s] ";
+        }
+        Bit32s min = (Bit32s)eparam->get_min();
+        Bit32s max = (Bit32s)eparam->get_max();
+        Bit32s n = eparam->get() - min;
+        int status = ask_menu(prompt, help, (Bit32u)(max-min+1),
+                              eparam->get_choices(), n, &n);
+        if (status < 0) return status;
+        n += min;
+        eparam->set(n);
+      }
+      break;
+    case BXT_PARAM_STRING:
+      {
+        bx_param_string_c *sparam = (bx_param_string_c*)param;
+        if (prompt == NULL) {
+          if (options & sparam->SELECT_FOLDER_DLG) {
+            bx_printf("%s\n\n", sparam->get_label());
+            prompt = "Enter a path to an existing folder or press enter to cancel\n";
+          } else {
+            // default prompt, if they didn't set an ask format string
+            text_print(param);
+            bx_printf("\n");
+            prompt = "Enter a new value, '?' for help, or press return for no change.\n";
+          }
+        }
+        while (1) {
+          char buffer[1024];
+          int status = ask_string(prompt, sparam->getptr(), buffer);
+          if (status == -2) {
+            bx_printf("\n%s\n", help);
+            continue;
+          }
+          if (status < 0) return status;
+          if (!sparam->equals(buffer))
+            sparam->set(buffer);
+          return 0;
         }
       }
-      i++;
-    }
-    bx_printf("\n");
-    int min = (options & SHOW_PARENT) ? 0 : 1;
-    int max = size;
-    int status = ask_uint("Please choose one: [%d] ", "", min, max, choice, &choice, 10);
-    if (status < 0) return status;
+      break;
+    case BXT_PARAM_BYTESTRING:
+      {
+        bx_param_bytestring_c *hparam = (bx_param_bytestring_c*)param;
+        if (prompt == NULL) {
+          // default prompt, if they didn't set an ask format string
+          text_print(param);
+          bx_printf("\n");
+          prompt = "Enter a new value, '?' for help, or press return for no change.\n";
+        }
+        while (1) {
+          char buffer[1024];
+          int status = ask_string(prompt, hparam->getptr(), buffer);
+          if (status == -2) {
+            bx_printf("\n%s\n", help);
+            continue;
+          }
+          if (status < 0) return status;
+          if (status == 0) return 0;
+          // copy raw hex into buffer
+          status = hparam->parse_param(buffer);
+          if (status == 0) {
+            char separator = hparam->get_separator();
+            bx_printf("Illegal raw byte format.  I expected something like 3A%c03%c12%c...\n", separator, separator, separator);
+            continue;
+          }
+          return 0;
+        }
+      }
+      break;
+    case BXT_LIST:
+      {
+        bx_list_c *list = (bx_list_c*)param;
+        bx_param_c *child;
+        const char *my_title = list->get_title();
+        int i, imax = strlen(my_title);
+        for (i=0; i<imax; i++) bx_printf("-");
+        bx_printf("\n%s\n", my_title);
+        for (i=0; i<imax; i++) bx_printf("-");
+        bx_printf("\n");
+        if (options & list->SERIES_ASK) {
+          for (i = 0; i < list->get_size(); i++) {
+            child = list->get(i);
+            if (child->get_enabled()) {
+              if (!SIM->get_init_done() || child->get_runtime_param()) {
+                text_ask(child);
+              }
+            }
+          }
+        } else {
+          if (options & list->SHOW_PARENT)
+            bx_printf("0. Return to previous menu\n");
+          for (i = 0; i < list->get_size(); i++) {
+            bx_printf("%d. ", i+1);
+            child = list->get(i);
+            if ((child->get_enabled()) &&
+                (!SIM->get_init_done() || child->get_runtime_param())) {
+              if (child->get_type() == BXT_LIST) {
+                bx_printf("%s\n", ((bx_list_c*)child)->get_title());
+              } else {
+                if ((options & list->SHOW_GROUP_NAME) &&
+                    (child->get_group() != NULL))
+                  bx_printf("%s ", child->get_group());
+                text_print(child);
+                bx_printf("\n");
+              }
+            } else {
+              if (child->get_type() == BXT_LIST) {
+                bx_printf("%s (disabled)\n", ((bx_list_c*)child)->get_title());
+              } else {
+                bx_printf("(disabled)\n");
+              }
+            }
+          }
+          bx_printf("\n");
+          int min = (options & list->SHOW_PARENT) ? 0 : 1;
+          int max = list->get_size();
+          Bit32u choice = list->get_choice();
+          int status = ask_uint("Please choose one: [%d] ", "", min, max, choice, &choice, 10);
+          if (status < 0) return status;
+          list->set_choice(choice);
+        }
+      }
+      break;
+    default:
+      bx_printf("ERROR: unsupported parameter type\n");
   }
   return 0;
 }
 
-static int ci_callback(void *userdata, ci_command_t command)
+static int text_ci_callback(void *userdata, ci_command_t command)
 {
   switch (command)
   {
     case CI_START:
-      bx_text_config_interface_init();
       if (SIM->get_param_enum(BXPN_BOCHS_START)->get() == BX_QUICK_START)
         bx_text_config_interface(BX_CI_START_SIMULATION);
       else {
@@ -1057,14 +1123,6 @@ static int ci_callback(void *userdata, ci_command_t command)
       break;
   }
   return 0;
-}
-
-// if I can make things compile without this module linked in, then
-// this file can become a plugin too.
-int init_text_config_interface()
-{
-  SIM->register_configuration_interface("textconfig", ci_callback, NULL);
-  return 0;  // success
 }
 
 #endif

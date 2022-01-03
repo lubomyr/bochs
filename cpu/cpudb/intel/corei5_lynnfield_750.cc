@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei5_lynnfield_750.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: corei5_lynnfield_750.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "corei5_lynnfield_750.h"
 
@@ -81,7 +82,7 @@ void corei5_lynnfield_750_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction,
 {
   static const char* brand_string = "Intel(R) Core(TM) i5 CPU         750  @ 2.67GHz";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
 
@@ -170,18 +171,11 @@ Bit32u corei5_lynnfield_750_t::get_vmx_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void corei5_lynnfield_750_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xB;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x2;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xB, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -319,7 +313,9 @@ void corei5_lynnfield_750_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC

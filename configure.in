@@ -2,20 +2,20 @@ dnl // Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
 AC_INIT(bochs.h)
-AC_REVISION([[$Id: configure.in 13772 2020-01-05 07:36:44Z vruppert $]])
+AC_REVISION([[$Id: configure.in 14330 2021-08-01 08:07:38Z vruppert $]])
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_HEADER(ltdlconf.h)
 
 dnl // Put Bochs version information right here so that it gets substituted
 dnl // into all the right places.
-VERSION="2.6.11"
+VERSION="2.7"
 VER_MAJOR=2
-VER_MINOR=6
+VER_MINOR=7
 dnl // this should be > 90 for pre-release of next version otherwise revision level
-VER_REVISION=11
+VER_REVISION=0
 dnl // this should be 0 for release and 1 for svn version
 VER_SVN=0
-REL_STRING="Built from SVN snapshot on January 5, 2020"
+REL_STRING="Built from SVN snapshot on August  1, 2021"
 REL_TIMESTAMP=`grep "Updated:" $srcdir/README | sed 's/Updated: //'`
 
 changequote(<<, >>)
@@ -48,13 +48,15 @@ case "$target" in
     case "$target" in
       x86_64*)
         MSVC_TARGET=64
+        AC_DEFINE(MSVC_TARGET, 64)
         ;;
       *)
         MSVC_TARGET=32
+        AC_DEFINE(MSVC_TARGET, 32)
         ;;
     esac
     ;;
-  *-cygwin* | *-mingw32*)
+  *-cygwin* | *-mingw32* | *-msys)
     NO_LT=1   # do not use libtool at all
     if test "$with_term" = yes; then
       # ncurses won't compile with -DWIN32
@@ -63,7 +65,7 @@ case "$target" in
       ADD_FLAGS="-DBROKEN_LINKER=1"
     else
       # default case
-      ADD_FLAGS="-DWIN32"   # required for cygwin/mingw compile+win32 gui
+      ADD_FLAGS="-DWIN32"   # required for cygwin/mingw/msys compile+win32 gui
       DEFAULT_GUI=win32     # default to win32 gui
     fi
     ;;
@@ -92,7 +94,15 @@ if test "${ADD_FLAGS:+set}" = set; then
       CXXFLAGS="$CXXFLAGS $ADD_FLAGS"
       CPPFLAGS="$CPPFLAGS $ADD_FLAGS"
 fi
-BOCHS_BITS=$MSVC_TARGET
+
+case "$target" in
+  x86_64*)
+    BOCHS_BITS=64
+    ;;
+  *)
+    BOCHS_BITS=32
+    ;;
+esac
 
 AC_MSG_CHECKING(for standard CFLAGS on this platform)
 AC_MSG_RESULT($ADD_FLAGS)
@@ -100,7 +110,6 @@ AC_MSG_RESULT($ADD_FLAGS)
 dnl // make sure the default gui is enabled if no other chosen
 if (test "$with_sdl" != yes) && \
    (test "$with_sdl2" != yes) && \
-   (test "$with_svga" != yes) && \
    (test "$with_x11" != yes) && \
    (test "$with_win32" != yes) && \
    (test "$with_nogui" != yes) && \
@@ -352,7 +361,7 @@ if test "$with_all_libs" = yes; then
   if test "$with_rfb" != yes; then
     can_compile_rfb=1
     case $target in
-      *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+      *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32* | *-msys)
 	AC_CHECK_HEADER([winsock2.h], [], [ can_compile_rfb=0 ])
 	AC_CHECK_HEADER([process.h], [], [ can_compile_rfb=0 ])
         ;;
@@ -370,10 +379,10 @@ if test "$with_all_libs" = yes; then
   if test "$with_vncsrv" != yes; then
     can_compile_vncsrv=1
     case $target in
-      *-pc-windows* | *-pc-winnt* | *-cygwin*)
+      *-pc-windows* | *-pc-winnt*)
         can_compile_vncsrv=0
         ;;
-      *-mingw32*)
+      *-cygwin* | *-mingw32* | *-msys)
         AC_CHECK_HEADER([rfb/rfb.h], [], [ can_compile_vncsrv=0 ])
         ;;
       *)
@@ -819,29 +828,6 @@ AC_ARG_ENABLE(debugger,
     ]
   )
 AC_SUBST(DEBUGGER_VAR)
-
-AC_MSG_CHECKING(for disassembler support)
-AC_ARG_ENABLE(disasm,
-  AS_HELP_STRING([--enable-disasm], [compile in support for disassembler (no)]),
-  [if test "$enableval" = yes; then
-    AC_MSG_RESULT(yes)
-    AC_DEFINE(BX_DISASM, 1)
-    DISASM_VAR='$(DISASM_LIB)'
-   else
-    AC_MSG_RESULT(no)
-    if test "$bx_debugger" = 1; then
-      echo "ERROR: debugger is enabled, so --enable-disasm is required"
-      exit 1
-    fi
-    AC_DEFINE(BX_DISASM, 0)
-    DISASM_VAR=''
-   fi],
-  [
-    AC_MSG_RESULT(yes)
-    AC_DEFINE(BX_DISASM, 1)
-    DISASM_VAR='$(DISASM_LIB)'
-  ])
-AC_SUBST(DISASM_VAR)
 
 AC_MSG_CHECKING(enable Bochs internal debugger GUI)
 AC_ARG_ENABLE(debugger-gui,
@@ -1690,7 +1676,7 @@ if test "$networking" = yes; then
   ethernet_modules='null vnet'
   can_compile_slirp=0
   case "$target" in
-    *-cygwin* | *-mingw32*)
+    *-cygwin* | *-mingw32* | *-msys)
       can_compile_slirp=1
       DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -liphlpapi"
       ;;
@@ -1723,7 +1709,7 @@ if test "$networking" = yes; then
       ])
   fi
   case "$target" in
-    *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+    *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32* | *-msys)
     NETLOW_OBJS="$NETLOW_OBJS eth_win32.o"
     ethernet_modules="$ethernet_modules win32"
     AC_DEFINE(BX_NETMOD_WIN32, 1)
@@ -1735,7 +1721,7 @@ if test "$networking" = yes; then
     ;;
     *)
     AC_CHECK_HEADER(net/if.h, [
-        use_ethertap=yes
+        use_vde=yes
         AC_DEFINE(BX_HAVE_NET_IF_H, 1)
       ], [],
       [
@@ -1743,17 +1729,16 @@ if test "$networking" = yes; then
       #include <sys/socket.h>
     ])
     AC_CHECK_HEADER(linux/netlink.h, [
-        use_ethertap=yes
+        use_vde=yes
       ], [],
       [
       #include <asm/types.h>
       #include <sys/socket.h>
     ])
 
-    if test "$use_ethertap" = yes; then
-      NETLOW_OBJS="$NETLOW_OBJS eth_tap.o eth_vde.o"
-      ethernet_modules="$ethernet_modules tap vde"
-      AC_DEFINE(BX_NETMOD_TAP, 1)
+    if test "$use_vde" = yes; then
+      NETLOW_OBJS="$NETLOW_OBJS eth_vde.o"
+      ethernet_modules="$ethernet_modules vde"
       AC_DEFINE(BX_NETMOD_VDE, 1)
     fi
 
@@ -1799,7 +1784,7 @@ if test "$bx_plugins" = 0; then
     *-pc-windows*)
       DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS ws2_32.lib"
       ;;
-    *-mingw32* | *-cygwin*)
+    *-mingw32* | *-cygwin* | *-msys)
       DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lws2_32"
       ;;
   esac
@@ -1883,7 +1868,7 @@ CDROM_OBJS='cdrom.o'
 if test "$bx_cdrom" = 1; then
   AC_MSG_RESULT(yes)
   case $target in
-    *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+    *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32* | *.msys)
       CDROM_OBJS="$CDROM_OBJS cdrom_win32.o"
       AC_DEFINE(LOWLEVEL_CDROM, cdrom_win32_c)
       AC_DEFINE(BX_SUPPORT_CDROM, 1)
@@ -2006,7 +1991,7 @@ if test "$soundcard_present" = 1; then
       soundlow_default="win"
       AC_DEFINE(BX_HAVE_SOUND_WIN, 1)
       ;;
-    *-cygwin* | *-mingw32*)
+    *-cygwin* | *-mingw32* | *-msys)
       SOUNDLOW_OBJS='soundwin.o'
       DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lwinmm"
       soundlow_drivers="win"
@@ -2059,15 +2044,17 @@ if test "$soundcard_present" = 1; then
       AC_DEFINE(BX_HAVE_SDL2_AUDIO_CAPTURE, 1)
     fi
   fi
-  AC_CHECK_HEADER([samplerate.h], [bx_have_libsamplerate=1])
-  if test "$bx_have_libsamplerate" = 1; then
-    DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsamplerate"
-    AC_DEFINE(BX_HAVE_LIBSAMPLERATE, 1)
-  else
-    AC_CHECK_HEADER([soxr-lsr.h], [bx_have_soxr_lsr=1])
-    if test "$bx_have_soxr_lsr" = 1; then
-      DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsoxr-lsr"
-      AC_DEFINE(BX_HAVE_SOXR_LSR, 1)
+  if test "$MSVC_TARGET" = 0; then
+    AC_CHECK_HEADER([samplerate.h], [bx_have_libsamplerate=1])
+    if test "$bx_have_libsamplerate" = 1; then
+      DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsamplerate"
+      AC_DEFINE(BX_HAVE_LIBSAMPLERATE, 1)
+    else
+      AC_CHECK_HEADER([soxr-lsr.h], [bx_have_soxr_lsr=1])
+      if test "$bx_have_soxr_lsr" = 1; then
+        DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lsoxr-lsr"
+        AC_DEFINE(BX_HAVE_SOXR_LSR, 1)
+      fi
     fi
   fi
   SOUND_LIB_VAR='iodev/sound/libsound.a'
@@ -2096,7 +2083,7 @@ AC_ARG_ENABLE(gameport,
     if test "$gameport_present" = 0; then
       GAME_OBJS='gameport.o'
       case $target in
-        *-cygwin* | *-mingw32*)
+        *-cygwin* | *-mingw32* | *-msys)
            DEVICE_LINK_OPTS="$DEVICE_LINK_OPTS -lwinmm"
            ;;
       esac
@@ -2140,6 +2127,7 @@ AC_SUBST(BUSM_OBJS)
 
 
 AC_PATH_PROG(DOCBOOK2HTML, docbook2html, not_found)
+AC_CHECK_PROGS([JADE], [jade openjade], not_found)
 AC_MSG_CHECKING(whether to build docbook documentation)
 build_docbook=0
 AC_ARG_ENABLE(docbook,
@@ -2148,8 +2136,12 @@ AC_ARG_ENABLE(docbook,
     if test "$enableval" = yes; then build_docbook=1; fi
   ],
   [
-    dnl Not specified. If they have docbook2html, then yes.
-    if test "$DOCBOOK2HTML" != not_found; then build_docbook=1; fi
+    dnl Not specified. If they have docbook2html or jade, then yes.
+    if test "$DOCBOOK2HTML" != not_found; then
+      build_docbook=1
+    else
+      if test "$JADE" != not_found; then build_docbook=1; fi
+    fi
     ]
   )
 
@@ -2158,8 +2150,8 @@ if test $build_docbook = 1; then
   BUILD_DOCBOOK_VAR=build_docbook
   INSTALL_DOCBOOK_VAR=install_docbook
   CLEAN_DOCBOOK_VAR=clean_docbook
-  if test "$DOCBOOK2HTML" = not_found; then
-    echo "ERROR: docbook2html must be installed to build the documentation"
+  if test "$DOCBOOK2HTML" = not_found -a "$JADE" = not_found; then
+    echo "ERROR: docbook2html or jade must be installed to build the documentation"
     exit 1
   fi
 else
@@ -2172,13 +2164,15 @@ AC_SUBST(DOCBOOK2HTML)
 
 PRIMARY_TARGET='bochs'
 PLUGIN_LIBNAME_TRANSFORMATION='%.o=libbx_%.la'
+GUI_PLUGIN_NAME_TRANSFORMATION='%.o=libbx_%_gui.la'
+IMG_PLUGIN_NAME_TRANSFORMATION='%.o=libbx_%_img.la'
 
 if test "$bx_plugins" = 0; then
-  HDIMAGE_LIB_VAR='iodev/hdimage/libhdimage.a'
-  AC_SUBST(HDIMAGE_LIB_VAR)
   DISPLAY_LIB_VAR='iodev/display/libdisplay.a'
   AC_SUBST(DISPLAY_LIB_VAR)
 fi
+HDIMAGE_LIB_VAR='iodev/hdimage/libhdimage.a'
+AC_SUBST(HDIMAGE_LIB_VAR)
 IODEV_LIB_VAR='iodev/libiodev.a'
 NONINLINE_VAR='$(NONINLINE_OBJS)'
 
@@ -2232,10 +2226,6 @@ AC_ARG_WITH(sdl,
 
 AC_ARG_WITH(sdl2,
   [  --with-sdl2                       use SDL2 libraries],
-  )
-
-AC_ARG_WITH(svga,
-  [  --with-svga                       use SVGALib libraries],
   )
 
 AC_ARG_WITH(wx,
@@ -2415,7 +2405,7 @@ AC_SUBST(X_LIBS)
 
 if test "$with_sdl" = yes; then
   display_libs="$display_libs sdl"
-  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_sdl.dll"
+  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_sdl_gui.dll"
   AC_DEFINE(BX_WITH_SDL, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_SDL)"
   # GUI_*FLAGS are added to the compilation of every bochs file, not just
@@ -2439,7 +2429,7 @@ if test "$with_sdl" = yes; then
          RC_CMD="rc /fo"
          EXTRA_BX_OBJS="$EXTRA_BX_OBJS win32res.o"
          ;;
-      *-cygwin* | *-mingw32*)
+      *-cygwin* | *-mingw32* | *-msys)
          RC_CMD="windres -I. -o "
          EXTRA_BX_OBJS="$EXTRA_BX_OBJS win32res.o"
          ;;
@@ -2450,7 +2440,7 @@ fi
 
 if test "$with_sdl2" = yes; then
   display_libs="$display_libs sdl2"
-  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_sdl2.dll"
+  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_sdl2_gui.dll"
   AC_DEFINE(BX_WITH_SDL2, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_SDL2)"
   # GUI_*FLAGS are added to the compilation of every bochs file, not just
@@ -2474,7 +2464,7 @@ if test "$with_sdl2" = yes; then
          RC_CMD="rc /fo"
          EXTRA_BX_OBJS="$EXTRA_BX_OBJS win32res.o"
          ;;
-      *-cygwin* | *-mingw32*)
+      *-cygwin* | *-mingw32* | *-msys)
          RC_CMD="windres -I. -o "
          EXTRA_BX_OBJS="$EXTRA_BX_OBJS win32res.o"
          ;;
@@ -2483,21 +2473,9 @@ if test "$with_sdl2" = yes; then
   use_gui_console=1
 fi
 
-if test "$with_svga" = yes; then
-  display_libs="$display_libs svga"
-  AC_DEFINE(BX_WITH_SVGA, 1)
-  SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_SVGA)"
-  # GUI_*FLAGS are added to the compilation of every bochs file, not just
-  # the files in gui/*.cc.
-  GUI_CFLAGS="$GUI_CFLAGS"
-  GUI_CXXFLAGS="$GUI_CXXFLAGS"
-  GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_SVGA)"
-  AC_MSG_WARN([This Bochs feature is not maintained yet and may fail])
-fi
-
 if test "$with_rfb" = yes; then
   display_libs="$display_libs rfb"
-  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_rfb.dll"
+  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_rfb_gui.dll"
   AC_DEFINE(BX_WITH_RFB, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_RFB)"
   GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_RFB)"
@@ -2505,17 +2483,27 @@ if test "$with_rfb" = yes; then
 fi
 
 if test "$with_vncsrv" = yes; then
-  AC_CHECK_PROG(LIBVNCSERVER_CONFIG, [ libvncserver-config --version ], libvncserver-config, not_found)
-  AC_MSG_CHECKING(for LibVNCServer configuration script)
-  AC_MSG_RESULT($LIBVNCSERVER_CONFIG_CONFIG)
-  if test x$LIBVNCSERVER_CONFIG != xnot_found; then
-    display_libs="$display_libs vncsrv"
-    AC_DEFINE(BX_WITH_VNCSRV, 1)
+  if test "$PKGCONFIG" != not_found; then
+    pkg-config --exists libvncserver
+    if test x$? = x0; then
+      VNCSRV_CXXFLAGS="`pkg-config --cflags libvncserver`"
+      GUI_LINK_OPTS_VNCSRV="`pkg-config --libs libvncserver`"
+    fi
+  else
+    AC_CHECK_PROG(LIBVNCSERVER_CONFIG, [ libvncserver-config --version ], libvncserver-config, not_found)
+    AC_MSG_CHECKING(for LibVNCServer configuration script)
+    AC_MSG_RESULT($LIBVNCSERVER_CONFIG_CONFIG)
     VNCSRV_CXXFLAGS="`$LIBVNCSERVER_CONFIG --cflags`"
     GUI_LINK_OPTS_VNCSRV="`$LIBVNCSERVER_CONFIG --libs`"
+  fi
+  if test "$GUI_LINK_OPTS_VNCSRV" != ""; then
+    display_libs="$display_libs vncsrv"
+    AC_DEFINE(BX_WITH_VNCSRV, 1)
     SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_VNCSRV)"
     GUI_CXXFLAGS="$GUI_CXXFLAGS $VNCSRV_CXXFLAGS"
-    GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_VNCSRV)"
+    if test "$bx_plugins" = 0; then
+      GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_VNCSRV)"
+    fi
   else
     AC_MSG_WARN([Bochs for LibVNCServer cannot be compiled here, disabling it])
     with_vncsrv=no
@@ -2532,7 +2520,7 @@ fi
 
 if test "$with_win32" = yes; then
   display_libs="$display_libs win32"
-  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_win32.dll"
+  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_win32_gui.dll"
   AC_DEFINE(BX_WITH_WIN32, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_WIN32)"
   case $target in
@@ -2543,9 +2531,13 @@ if test "$with_win32" = yes; then
        fi
        GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_WIN32_VCPP)"
        ;;
-    *-cygwin* | *-mingw32*)
+    *-cygwin* | *-mingw32* | *-msys)
        if test "$with_wx" != yes; then
-         RC_CMD="windres -I. -o "
+         if test "$cross_compiling" = no; then
+           RC_CMD="windres -I. -o "
+         else
+           RC_CMD="$WINDRES -I. -o "
+         fi
          EXTRA_BX_OBJS="$EXTRA_BX_OBJS win32res.o"
        fi
        GUI_LINK_OPTS="$GUI_LINK_OPTS \$(GUI_LINK_OPTS_WIN32)"
@@ -2627,7 +2619,7 @@ if test "$with_wx" = yes; then
   # using debugger with readline is failing due to thread/signal handler
   # problems.
   case $target in
-    *-pc-windows* | *-cygwin* | *-mingw32*)
+    *-pc-windows* | *-cygwin* | *-mingw32* | *-msys)
        EXTRA_BX_OBJS="$EXTRA_BX_OBJS wxbochs_resources.o"
 	   GUI_LINK_OPTS_WX="$GUI_LINK_OPTS_WX"
        ;;
@@ -2646,7 +2638,7 @@ fi
 
 if test "$with_nogui" = yes; then
   display_libs="$display_libs nogui"
-  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_nogui.dll"
+  GUI_DLL_TARGETS="$GUI_DLL_TARGETS bx_nogui_gui.dll"
   AC_DEFINE(BX_WITH_NOGUI, 1)
   SPECIFIC_GUI_OBJS="$SPECIFIC_GUI_OBJS \$(GUI_OBJS_NOGUI)"
 fi
@@ -2683,10 +2675,8 @@ if test "$needs_gtk2" = 1; then
       fi
     fi
   else
-    echo "ERROR: pkg-config was not found, or unable to access the gtk+-2.0 package."
-    echo "Install pkg-config and the gtk+ development package,"
-    echo "or disable the gui debugger, or the wxWidgets display library (whichever is being used)."
-    exit 1
+    echo "ERROR: pkg-config was not found, unable to access the gtk+-2.0 package."
+    echo "The gui debugger support is disabled now."
   fi
 fi
 
@@ -2705,6 +2695,16 @@ if test "$display_libs" = " wxWidgets"; then
   AC_DEFINE(BX_DEFAULT_DISPLAY_LIBRARY, "wx")
   AC_DEFINE(BX_USE_TEXTCONFIG, 0)
 else
+  if test "$DEFAULT_GUI" = win32; then
+    AC_DEFINE(BX_DEFAULT_CONFIG_INTERFACE, "win32config")
+  else
+    AC_DEFINE(BX_DEFAULT_CONFIG_INTERFACE, "textconfig")
+  fi
+  if test "$DEFAULT_GUI" = x11; then
+    AC_DEFINE(BX_DEFAULT_DISPLAY_LIBRARY, "x")
+  else
+    AC_DEFINE_UNQUOTED(BX_DEFAULT_DISPLAY_LIBRARY, "$DEFAULT_GUI")
+  fi
   AC_DEFINE(BX_USE_TEXTCONFIG, 1)
 fi
 
@@ -2714,15 +2714,8 @@ else
   AC_DEFINE(BX_USE_GUI_CONSOLE, 0)
 fi
 
-if test "$bx_plugins" = 1; then
-  # every item in this list will be compiled as a plugin. Do not include
-  # support objs; they will be mentioned in plugin-specific makefile rules.
-  GUI_PLUGIN_OBJS="$GUI_PLUGIN_OBJS $SPECIFIC_GUI_OBJS"
-else
-  # include support objs
-  GUI_NON_PLUGIN_OBJS="$GUI_NON_PLUGIN_OBJS $SPECIFIC_GUI_OBJS $SPECIFIC_GUI_SUPPORT_OBJS"
-fi
-
+AC_SUBST(SPECIFIC_GUI_OBJS)
+AC_SUBST(SPECIFIC_GUI_SUPPORT_OBJS)
 AC_SUBST(GUI_CFLAGS)
 AC_SUBST(GUI_CXXFLAGS)
 AC_SUBST(WX_CONFIG)
@@ -2751,7 +2744,6 @@ case "$target" in
     AC_DEFINE(BX_HAVE_GETTIMEOFDAY, 0)
     AC_DEFINE(BX_NO_ATTRIBUTES, 1)
     AC_DEFINE(BX_NETMOD_TUNTAP, 0)
-    AC_DEFINE(BX_NETMOD_TAP, 0)
     ;;
   *-pc-windows*)
     INSTALL_TARGET='install_win32'
@@ -2807,7 +2799,6 @@ case "$target" in
     AC_DEFINE(HAVE_READLINE_HISTORY_H, 0)
     READLINE_LIB="";
     AC_DEFINE(BX_HAVE_DLFCN_H, 0)
-    AC_DEFINE(BX_NETMOD_TAP, 0)
     ;;
   *-cygwin*)
     EXE=".exe"
@@ -2820,7 +2811,7 @@ case "$target" in
     fi
     AC_DEFINE(BX_HAVE_SELECT, 1)
     ;;
-  *-mingw32*)
+  *-mingw32* | *-msys)
     BXIMAGE_LINK_OPTS="-luser32"
     if test "$networking" = yes; then
       OPTIONAL_TARGET="$OPTIONAL_TARGET bxhub niclist"
@@ -2864,11 +2855,12 @@ if test "$gui_debugger" = 1; then
     AC_DEFINE(BX_DEBUGGER_GUI, 1)
   else
     AC_MSG_WARN([The Bochs debugger gui cannot be compiled here, disabling it])
+    AC_DEFINE(BX_DEBUGGER_GUI, 0)
   fi
 fi
 AC_SUBST(ENH_DBG_OBJS)
 
-DIALOG_OBJS=""
+CI_PLUGIN_OBJS="textconfig.o"
 EXPORT_DYNAMIC="-export-dynamic"
 case $target in
   *-pc-windows* | *-pc-winnt*)
@@ -2876,6 +2868,8 @@ case $target in
       # set variables for building DLL plugins
       PLUGIN_VAR=""
       PLUGIN_LIBNAME_TRANSFORMATION='%.o=bx_%.dll'
+      GUI_PLUGIN_NAME_TRANSFORMATION='%.o=bx_%_gui.dll'
+      IMG_PLUGIN_NAME_TRANSFORMATION='%.o=bx_%_img.dll'
       INSTALL_PLUGINS_VAR=install_dll_plugins
       WIN32_DLL_IMPORT_LIB="bochs.lib"
       LINK_DLL="link /dll /nologo /subsystem:console /incremental:no /out:\$@"
@@ -2906,14 +2900,17 @@ case $target in
         LIBS="$LIBS comctl32.lib"
       fi
     fi
-    DIALOG_OBJS="win32dialog.o win32paramdlg.o scrollwin.o"
+    CI_PLUGIN_OBJS="$CI_PLUGIN_OBJS \$(CI_OBJS_WIN32)"
+    CI_SUPPORT_OBJS="\$(CI_OBJS_WIN32_SUPPORT)"
     EXPORT_DYNAMIC=""
     ;;
-  *-cygwin* | *-mingw*)
+  *-cygwin* | *-mingw* | *-msys)
     if test "$bx_plugins" = 1; then
       # set variables for building DLL plugins
       PRIMARY_TARGET=".win32_dll_plugin_target"
       PLUGIN_LIBNAME_TRANSFORMATION='%.o=bx_%.dll'
+      GUI_PLUGIN_NAME_TRANSFORMATION='%.o=bx_%_gui.dll'
+      IMG_PLUGIN_NAME_TRANSFORMATION='%.o=bx_%_img.dll'
       INSTALL_PLUGINS_VAR=install_dll_plugins
       WIN32_DLL_IMPORT_LIB="dllexports.a"
       LINK_DLL="\$(CXX) \$(CXXFLAGS) -shared -o \$@"
@@ -2922,11 +2919,13 @@ case $target in
         LIBS="$LIBS -lcomctl32"
       fi
     fi
-    DIALOG_OBJS="win32dialog.o win32paramdlg.o scrollwin.o"
+    CI_PLUGIN_OBJS="$CI_PLUGIN_OBJS \$(CI_OBJS_WIN32)"
+    CI_SUPPORT_OBJS="\$(CI_OBJS_WIN32_SUPPORT)"
     EXPORT_DYNAMIC=""
     ;;
 esac
-AC_SUBST(DIALOG_OBJS)
+AC_SUBST(CI_PLUGIN_OBJS)
+AC_SUBST(CI_SUPPORT_OBJS)
 AC_SUBST(EXPORT_DYNAMIC)
 
 if test "$use_curses" = yes; then
@@ -2963,7 +2962,7 @@ if test "$with_rfb" = yes; then
       RFB_LIBS="$RFB_LIBS ws2_32.lib"
       have_socket=yes
       ;;
-    *-mingw32*)
+    *-mingw32* | *-msys)
       RFB_LIBS="$RFB_LIBS -lws2_32"
       have_socket=yes
       ;;
@@ -3192,7 +3191,7 @@ ACX_PTHREAD([
 # since some features need the pthread library, check that it was found.
 # But on win32 platforms, the pthread library is not needed.
 case "$target" in
-  *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32*)
+  *-pc-windows* | *-pc-winnt* | *-cygwin* | *-mingw32* | *-msys)
     # pthread not needed for win32 platform
     ;;
   *)
@@ -3247,7 +3246,6 @@ AC_SUBST(RFB_LIBS)
 AC_SUBST(GUI_LINK_OPTS_VNCSRV)
 AC_SUBST(GUI_LINK_OPTS_SDL)
 AC_SUBST(GUI_LINK_OPTS_SDL2)
-AC_SUBST(GUI_OBJS)
 AC_SUBST(DEVICE_LINK_OPTS)
 AC_SUBST(GUI_LINK_OPTS)
 AC_SUBST(GUI_LINK_OPTS_TERM)
@@ -3268,6 +3266,8 @@ AC_SUBST(EXE)
 AC_SUBST(PRIMARY_TARGET)
 AC_SUBST(OPTIONAL_TARGET)
 AC_SUBST(PLUGIN_LIBNAME_TRANSFORMATION)
+AC_SUBST(GUI_PLUGIN_NAME_TRANSFORMATION)
+AC_SUBST(IMG_PLUGIN_NAME_TRANSFORMATION)
 AC_SUBST(COMMAND_SEPARATOR)
 AC_SUBST(CD_UP_ONE)
 AC_SUBST(CD_UP_TWO)
@@ -3305,7 +3305,7 @@ AC_OUTPUT(Makefile iodev/Makefile iodev/display/Makefile iodev/hdimage/Makefile 
 	 iodev/usb/Makefile iodev/network/Makefile iodev/sound/Makefile \
 	 bx_debug/Makefile bios/Makefile cpu/Makefile cpu/avx/Makefile \
 	 cpu/cpudb/Makefile cpu/fpu/Makefile memory/Makefile gui/Makefile \
-	 disasm/Makefile ${INSTRUMENT_DIR}/Makefile misc/Makefile \
+	 ${INSTRUMENT_DIR}/Makefile misc/Makefile \
 	 doc/docbook/Makefile build/linux/bochs-dlx bxversion.h bxversion.rc \
 	 build/macosx/Info.plist build/win32/nsis/Makefile \
 	 build/win32/nsis/bochs.nsi host/linux/pcidev/Makefile ${USER_PLUGINS_MAKEFILE})

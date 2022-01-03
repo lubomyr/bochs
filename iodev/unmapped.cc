@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: unmapped.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: unmapped.cc 14241 2021-05-11 14:42:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -31,16 +31,17 @@
 
 bx_unmapped_c *theUnmappedDevice = NULL;
 
-int CDECL libunmapped_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(unmapped)
 {
-  theUnmappedDevice = new bx_unmapped_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUnmappedDevice, BX_PLUGIN_UNMAPPED);
+  if (mode == PLUGIN_INIT) {
+    theUnmappedDevice = new bx_unmapped_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theUnmappedDevice, BX_PLUGIN_UNMAPPED);
+  } else if (mode == PLUGIN_FINI) {
+    delete theUnmappedDevice;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libunmapped_LTX_plugin_fini(void)
-{
-  delete theUnmappedDevice;
 }
 
 bx_unmapped_c::bx_unmapped_c(void)
@@ -62,6 +63,7 @@ void bx_unmapped_c::init(void)
   s.port8e = 0x00;
   s.shutdown = 0;
   s.port_e9_hack = SIM->get_param_bool(BXPN_PORT_E9_HACK)->get();
+  SIM->get_param_num(BXPN_PORT_E9_HACK)->set_handler(param_handler);
 }
 
 // static IO port read callback handler
@@ -281,4 +283,20 @@ return_from_write:
       BX_PANIC(("unmapped: %d-bit write to %04x = %x", io_len * 8, address, value));
       break;
   }
+}
+
+Bit64s bx_unmapped_c::param_handler(bx_param_c *param, bool set, Bit64s val)
+{
+  if (set) {
+    char pname[BX_PATHNAME_LEN];
+    param->get_param_path(pname, BX_PATHNAME_LEN);
+    if (set) {
+      if (!strcmp(pname, BXPN_PORT_E9_HACK)) {
+        BX_UM_THIS s.port_e9_hack = (val != 0);
+      } else {
+        BX_PANIC(("param_handler called with unexpected parameter '%s'", pname));
+      }
+    }
+  }
+  return val;
 }

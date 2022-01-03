@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vbox.cc 13475 2018-03-18 09:07:31Z vruppert $
+// $Id: vbox.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -10,7 +10,7 @@
  * Contact: fys [at] fysnet [dot] net
  *
  * Copyright (C) 2015       Benjamin D Lunt.
- * Copyright (C) 2006-2018  The Bochs Project
+ * Copyright (C) 2006-2021  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -45,15 +45,46 @@
 #include "misc/bswap.h"
 #include "osdep.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #endif
 #include "hdimage.h"
 #include "vbox.h"
 
-#define LOG_THIS bx_devices.pluginHDImageCtl->
+#define LOG_THIS bx_hdimage_ctl.
 
 const off_t vbox_image_t::INVALID_OFFSET = (off_t)-1;
 const int vbox_image_t::SECTOR_SIZE = 512;
+
+#ifndef BXIMAGE
+
+// disk image plugin entry point
+
+PLUGIN_ENTRY_FOR_IMG_MODULE(vbox)
+{
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_IMG;
+  }
+  return 0; // Success
+}
+
+#endif
+
+//
+// Define the static class that registers the derived device image class,
+// and allocates one on request.
+//
+class bx_vbox_locator_c : public hdimage_locator_c {
+public:
+  bx_vbox_locator_c(void) : hdimage_locator_c("vbox") {}
+protected:
+  device_image_t *allocate(Bit64u disk_size, const char *journal) {
+    return (new vbox_image_t());
+  }
+  int check_format(int fd, Bit64u disk_size) {
+    return (vbox_image_t::check_format(fd, disk_size));
+  }
+} bx_vbox_match;
 
 vbox_image_t::vbox_image_t()
   : file_descriptor(-1),
@@ -261,12 +292,12 @@ int vbox_image_t::check_format(int fd, Bit64u imgsize)
   return HDIMAGE_FORMAT_OK;
 }
 
-bx_bool vbox_image_t::is_open() const
+bool vbox_image_t::is_open() const
 {
   return (file_descriptor != -1);
 }
 
-bx_bool vbox_image_t::read_header()
+bool vbox_image_t::read_header()
 {
   int ret;
 
@@ -395,7 +426,7 @@ Bit32u vbox_image_t::get_capabilities(void)
 }
 
 #ifndef BXIMAGE
-bx_bool vbox_image_t::save_state(const char *backup_fname)
+bool vbox_image_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(file_descriptor, backup_fname);
 }

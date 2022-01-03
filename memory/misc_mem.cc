@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: misc_mem.cc 13515 2018-05-21 16:11:46Z vruppert $
+// $Id: misc_mem.cc 14290 2021-06-24 17:03:09Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2018  The Bochs Project
+//  Copyright (C) 2001-2020  The Bochs Project
 //
 //  I/O memory handlers API Copyright (C) 2003 by Frank Cornelis
 //
@@ -45,6 +45,15 @@
 #if BX_LARGE_RAMFILE
 Bit8u* const BX_MEM_C::swapped_out = ((Bit8u*)NULL - sizeof(Bit8u));
 #endif
+
+#define FLASH_READ_ARRAY  0xff
+#define FLASH_INT_ID      0x90
+#define FLASH_READ_STATUS 0x70
+#define FLASH_CLR_STATUS  0x50
+#define FLASH_ERASE_SETUP 0x20
+#define FLASH_ERASE_SUSP  0xb0
+#define FLASH_PROG_SETUP  0x40
+#define FLASH_ERASE       0xd0
 
 BX_MEM_C::BX_MEM_C()
 {
@@ -97,7 +106,7 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 {
   unsigned i, idx;
 
-  BX_DEBUG(("Init $Id: misc_mem.cc 13515 2018-05-21 16:11:46Z vruppert $"));
+  BX_DEBUG(("Init $Id: misc_mem.cc 14290 2021-06-24 17:03:09Z vruppert $"));
 
   // accept only memory size which is multiply of 1M
   BX_ASSERT((host & 0xfffff) == 0);
@@ -148,6 +157,11 @@ void BX_MEM_C::init_memory(Bit64u guest, Bit64u host)
 
   BX_MEM_THIS pci_enabled = SIM->get_param_bool(BXPN_PCI_ENABLED)->get();
   BX_MEM_THIS bios_write_enabled = 0;
+  BX_MEM_THIS bios_rom_addr = 0xffff0000;
+  BX_MEM_THIS flash_type = 0;
+  BX_MEM_THIS flash_status = 0x80;
+  BX_MEM_THIS flash_wsm_state = FLASH_READ_ARRAY;
+
   BX_MEM_THIS smram_available = 0;
   BX_MEM_THIS smram_enable = 0;
   BX_MEM_THIS smram_restricted = 0;
@@ -189,7 +203,7 @@ void BX_MEM_C::allocate_block(Bit32u block)
   if (BX_MEM_THIS used_blocks >= max_blocks) {
     Bit32u original_replacement_block = BX_MEM_THIS next_swapout_idx;
     // Find a block to replace
-    bx_bool used_for_tlb;
+    bool used_for_tlb;
     Bit8u *buffer;
     do {
       do {
@@ -314,17 +328,16 @@ void BX_MEM_C::register_state()
 #if BX_LARGE_RAMFILE
   bx_shadow_filedata_c *ramfile = new bx_shadow_filedata_c(list, "ram", &(BX_MEM_THIS overflow_file));
   ramfile->set_sr_handlers(this, ramfile_save_handler, (filedata_restore_handler)NULL);
+  BXRS_DEC_PARAM_FIELD(list, next_swapout_idx, BX_MEM_THIS next_swapout_idx);
 #else
   new bx_shadow_data_c(list, "ram", BX_MEM_THIS vector, BX_MEM_THIS allocated);
 #endif
-  BXRS_DEC_PARAM_FIELD(list, len, BX_MEM_THIS len);
-  BXRS_DEC_PARAM_FIELD(list, allocated, BX_MEM_THIS allocated);
   BXRS_DEC_PARAM_FIELD(list, used_blocks, BX_MEM_THIS used_blocks);
 
   bx_list_c *mapping = new bx_list_c(list, "mapping");
   for (Bit32u blk=0; blk < num_blocks; blk++) {
     sprintf(param_name, "blk%d", blk);
-    bx_param_num_c *param = new bx_param_num_c(mapping, param_name, "", "", 0, BX_MAX_BIT32U, 0);
+    bx_param_num_c *param = new bx_param_num_c(mapping, param_name, "", "", -2, BX_MAX_BIT32U, 0);
     param->set_base(BASE_DEC);
     param->set_sr_handlers(this, memory_param_save_handler, memory_param_restore_handler);
   }
@@ -335,6 +348,8 @@ void BX_MEM_C::register_state()
     sprintf(param_name, "%d_w", i);
     new bx_shadow_bool_c(memtype, param_name, &BX_MEM_THIS memory_type[i][1]);
   }
+  BXRS_HEX_PARAM_FIELD(list, flash_status, BX_MEM_THIS flash_status);
+  BXRS_DEC_PARAM_FIELD(list, flash_wsm_state, BX_MEM_THIS flash_wsm_state);
 }
 
 void BX_MEM_C::cleanup_memory()
@@ -377,7 +392,7 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
   struct stat stat_buf;
   int fd, ret, i, start_idx, end_idx;
   unsigned long size, max_size, offset;
-  bx_bool is_bochs_bios = 0;
+  bool is_bochs_bios = 0;
 
   if (*path == '\0') {
     if (type == 2) {
@@ -445,7 +460,14 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
     if ((romaddress & 0xf0000) < 0xf0000) {
       BX_MEM_THIS rom_present[64] = 1;
     }
-    is_bochs_bios = (strstr(path, "BIOS-bochs-latest") != NULL);
+    BX_MEM_THIS bios_rom_addr = (Bit32u)romaddress;
+    is_bochs_bios = ((strstr(path, "BIOS-bochs-latest") != NULL) ||
+                     (strstr(path, "BIOS-bochs-legacy") != NULL));
+    if (size == 0x40000) {
+      BX_MEM_THIS flash_type = 2; // 28F002BC-T
+    } else if (size == 0x20000) {
+      BX_MEM_THIS flash_type = 1; // 28F001BX-T
+    }
   } else {
     if ((size % 512) != 0) {
       close(fd);
@@ -492,10 +514,15 @@ void BX_MEM_C::load_ROM(const char *path, bx_phy_address romaddress, Bit8u type)
   }
   close(fd);
   offset -= (unsigned long)stat_buf.st_size;
-  if (((romaddress & 0xfffff) != 0xe0000) ||
+  size = (unsigned long)stat_buf.st_size;
+  if (is_bochs_bios ||
       ((BX_MEM_THIS rom[offset] == 0x55) && (BX_MEM_THIS rom[offset+1] == 0xaa))) {
+    if ((type == 0) && ((romaddress & 0xfffff) == 0xe0000)) {
+      offset += 0x10000;
+      size = 0x10000;
+    }
     Bit8u checksum = 0;
-    for (i = 0; i < stat_buf.st_size; i++) {
+    for (i = 0; i < (int)size; i++) {
       checksum += BX_MEM_THIS rom[offset + i];
     }
     if (checksum != 0) {
@@ -557,60 +584,88 @@ void BX_MEM_C::load_RAM(const char *path, bx_phy_address ramaddress)
                          path));
 }
 
-#if (BX_DEBUGGER || BX_DISASM || BX_GDBSTUB)
-bx_bool BX_MEM_C::dbg_fetch_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len, Bit8u *buf)
+bool BX_MEM_C::dbg_fetch_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len, Bit8u *buf)
 {
-  bx_bool ret = 1;
+  bx_phy_address a20addr = A20ADDR(addr);
+  struct memory_handler_struct *memory_handler = NULL;
+  bool ret = 1, use_memory_handler = 0, use_smram = 0;
+
+  bool is_bios = (a20addr >= (bx_phy_address)BX_MEM_THIS bios_rom_addr);
+#if BX_PHY_ADDRESS_LONG
+  if (a20addr > BX_CONST64(0xffffffff)) is_bios = 0;
+#endif
+
+  if ((a20addr >= 0x000a0000 && a20addr < 0x000c0000) && BX_MEM_THIS smram_available)
+  {
+    // SMRAM memory space
+    if (BX_MEM_THIS smram_enable || (cpu->smm_mode() && !BX_MEM_THIS smram_restricted))
+      use_smram = 1;
+  }
+
+  memory_handler = BX_MEM_THIS memory_handlers[a20addr >> 20];
+  while (memory_handler) {
+    if (memory_handler->begin <= a20addr && memory_handler->end >= a20addr)
+    {
+      if (!use_smram) {
+        use_memory_handler = 1;
+        break;
+      }
+    }
+    memory_handler = memory_handler->next;
+  }
 
   for (; len>0; len--) {
-    // Reading standard PCI/ISA Video Mem / SMMRAM
-    if (addr >= 0x000a0000 && addr < 0x000c0000) {
-      if (BX_MEM_THIS smram_enable || cpu->smm_mode())
-        *buf = *(BX_MEM_THIS get_vector(addr));
-      else
-        *buf = DEV_vga_mem_read(addr);
+    if (use_memory_handler) {
+      memory_handler->read_handler(a20addr, 1, buf, memory_handler->param);
     }
 #if BX_SUPPORT_PCI
-    else if (BX_MEM_THIS pci_enabled && (addr >= 0x000c0000 && addr < 0x00100000)) {
-      unsigned area = (unsigned)(addr >> 14) & 0x0f;
+    else if (BX_MEM_THIS pci_enabled && (a20addr >= 0x000c0000 && a20addr < 0x00100000)) {
+      unsigned area = (unsigned)(a20addr >> 14) & 0x0f;
       if (area > BX_MEM_AREA_F0000) area = BX_MEM_AREA_F0000;
       if (BX_MEM_THIS memory_type[area][0] == 0) {
         // Read from ROM
-        if ((addr & 0xfffe0000) == 0x000e0000) {
+        if ((a20addr & 0xfffe0000) == 0x000e0000) {
           // last 128K of BIOS ROM mapped to 0xE0000-0xFFFFF
-          *buf = BX_MEM_THIS rom[BIOS_MAP_LAST128K(addr)];
+          if (BX_MEM_THIS flash_type > 0) {
+            *buf = BX_MEM_THIS flash_read(BIOS_MAP_LAST128K(a20addr));
+          } else {
+            *buf = BX_MEM_THIS rom[BIOS_MAP_LAST128K(a20addr)];
+          }
         } else {
-          *buf = BX_MEM_THIS rom[(addr & EXROM_MASK) + BIOSROMSZ];
+          *buf = BX_MEM_THIS rom[(a20addr & EXROM_MASK) + BIOSROMSZ];
         }
       } else {
         // Read from ShadowRAM
-        *buf = *(BX_MEM_THIS get_vector(addr));
+        *buf = *(BX_MEM_THIS get_vector(a20addr));
       }
     }
 #endif  // #if BX_SUPPORT_PCI
-    else if (addr < BX_MEM_THIS len)
+    else if ((a20addr < BX_MEM_THIS len) && !is_bios)
     {
-      if (addr < 0x000c0000 || addr >= 0x00100000) {
-        *buf = *(BX_MEM_THIS get_vector(addr));
+      if (a20addr < 0x000c0000 || a20addr >= 0x00100000) {
+        *buf = *(BX_MEM_THIS get_vector(a20addr));
       }
       // must be in C0000 - FFFFF range
-      else if ((addr & 0xfffe0000) == 0x000e0000) {
+      else if ((a20addr & 0xfffe0000) == 0x000e0000) {
         // last 128K of BIOS ROM mapped to 0xE0000-0xFFFFF
-        *buf = BX_MEM_THIS rom[BIOS_MAP_LAST128K(addr)];
-      }
-      else {
-        *buf = BX_MEM_THIS rom[(addr & EXROM_MASK) + BIOSROMSZ];
+        *buf = BX_MEM_THIS rom[BIOS_MAP_LAST128K(a20addr)];
+      } else {
+        *buf = BX_MEM_THIS rom[(a20addr & EXROM_MASK) + BIOSROMSZ];
       }
     }
 #if BX_PHY_ADDRESS_LONG
-    else if (addr > BX_CONST64(0xffffffff)) {
+    else if (a20addr > BX_CONST64(0xffffffff)) {
       *buf = 0xff;
       ret = 0; // error, beyond limits of memory
     }
 #endif
-    else if (addr >= (bx_phy_address)~BIOS_MASK)
+    else if (is_bios)
     {
-      *buf = BX_MEM_THIS rom[addr & BIOS_MASK];
+      if (BX_MEM_THIS flash_type > 0) {
+        *buf = BX_MEM_THIS flash_read(a20addr & BIOS_MASK);
+      } else {
+        *buf = BX_MEM_THIS rom[a20addr & BIOS_MASK];
+      }
     }
     else
     {
@@ -618,49 +673,73 @@ bx_bool BX_MEM_C::dbg_fetch_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len
       ret = 0; // error, beyond limits of memory
     }
     buf++;
-    addr++;
+    a20addr++;
   }
   return ret;
 }
-#endif
 
 #if BX_DEBUGGER || BX_GDBSTUB
-bx_bool BX_MEM_C::dbg_set_mem(bx_phy_address addr, unsigned len, Bit8u *buf)
+bool BX_MEM_C::dbg_set_mem(BX_CPU_C *cpu, bx_phy_address addr, unsigned len, Bit8u *buf)
 {
-  if ((addr + len - 1) > BX_MEM_THIS len) {
+  bx_phy_address a20addr = A20ADDR(addr);
+  struct memory_handler_struct *memory_handler = NULL;
+  bool use_memory_handler = 0, use_smram = 0;
+
+  if ((a20addr + len - 1) > BX_MEM_THIS len) {
     return(0); // error, beyond limits of memory
   }
+
+  bool is_bios = (a20addr >= (bx_phy_address)BX_MEM_THIS bios_rom_addr);
+#if BX_PHY_ADDRESS_LONG
+  if (a20addr > BX_CONST64(0xffffffff)) is_bios = 0;
+#endif
+
+  if ((a20addr >= 0x000a0000 && a20addr < 0x000c0000) && BX_MEM_THIS smram_available)
+  {
+    // SMRAM memory space
+    if (BX_MEM_THIS smram_enable || (cpu->smm_mode() && !BX_MEM_THIS smram_restricted))
+      use_smram = 1;
+  }
+
+  memory_handler = BX_MEM_THIS memory_handlers[a20addr >> 20];
+  while (memory_handler) {
+    if (memory_handler->begin <= a20addr && memory_handler->end >= a20addr)
+    {
+      if (!use_smram) {
+        use_memory_handler = 1;
+        break;
+      }
+    }
+    memory_handler = memory_handler->next;
+  }
+
   for (; len>0; len--) {
-    // Write to standard PCI/ISA Video Mem / SMMRAM
-    if (addr >= 0x000a0000 && addr < 0x000c0000) {
-      if (BX_MEM_THIS smram_enable)
-        *(BX_MEM_THIS get_vector(addr)) = *buf;
-      else
-        DEV_vga_mem_write(addr, *buf);
+    if (use_memory_handler) {
+      memory_handler->write_handler(a20addr, 1, buf, memory_handler->param);
     }
 #if BX_SUPPORT_PCI
-    else if (BX_MEM_THIS pci_enabled && (addr >= 0x000c0000 && addr < 0x00100000)) {
-      unsigned area = (unsigned)(addr >> 14) & 0x0f;
+    else if (BX_MEM_THIS pci_enabled && (a20addr >= 0x000c0000 && a20addr < 0x00100000)) {
+      unsigned area = (unsigned)(a20addr >> 14) & 0x0f;
       if (area > BX_MEM_AREA_F0000) area = BX_MEM_AREA_F0000;
       if (BX_MEM_THIS memory_type[area][1] == 1) {
         // Write to ShadowRAM
-        *(BX_MEM_THIS get_vector(addr)) = *buf;
+        *(BX_MEM_THIS get_vector(a20addr)) = *buf;
       } else {
         // Ignore write to ROM
       }
     }
 #endif  // #if BX_SUPPORT_PCI
-    else if ((addr < 0x000c0000 || addr >= 0x00100000) && (addr < (bx_phy_address)(~BIOS_MASK)))
+    else if ((a20addr < 0x000c0000 || a20addr >= 0x00100000) && !is_bios)
     {
-      *(BX_MEM_THIS get_vector(addr)) = *buf;
+      *(BX_MEM_THIS get_vector(a20addr)) = *buf;
     }
     buf++;
-    addr++;
+    a20addr++;
   }
   return(1);
 }
 
-bx_bool BX_MEM_C::dbg_crc32(bx_phy_address addr1, bx_phy_address addr2, Bit32u *crc)
+bool BX_MEM_C::dbg_crc32(bx_phy_address addr1, bx_phy_address addr2, Bit32u *crc)
 {
   *crc = 0;
   if (addr1 > addr2)
@@ -710,12 +789,12 @@ Bit8u *BX_MEM_C::getHostMemAddr(BX_CPU_C *cpu, bx_phy_address addr, unsigned rw)
 {
   bx_phy_address a20addr = A20ADDR(addr);
 
-  bx_bool is_bios = (a20addr >= (bx_phy_address)~BIOS_MASK);
+  bool is_bios = (a20addr >= (bx_phy_address)BX_MEM_THIS bios_rom_addr);
 #if BX_PHY_ADDRESS_LONG
   if (a20addr > BX_CONST64(0xffffffff)) is_bios = 0;
 #endif
 
-  bx_bool write = rw & 1;
+  bool write = rw & 1;
 
   // allow direct access to SMRAM memory space for code and veto data
   if ((cpu != NULL) && (rw == BX_EXECUTE)) {
@@ -767,7 +846,7 @@ Bit8u *BX_MEM_C::getHostMemAddr(BX_CPU_C *cpu, bx_phy_address addr, unsigned rw)
       }
     }
 #endif
-    else if(a20addr < BX_MEM_THIS len && ! is_bios)
+    else if ((a20addr < BX_MEM_THIS len) && !is_bios)
     {
       if (a20addr < 0x000c0000 || a20addr >= 0x00100000) {
         return BX_MEM_THIS get_vector(a20addr);
@@ -787,7 +866,7 @@ Bit8u *BX_MEM_C::getHostMemAddr(BX_CPU_C *cpu, bx_phy_address addr, unsigned rw)
       return (Bit8u *) &BX_MEM_THIS bogus[a20addr & 0xfff];
     }
 #endif
-    else if (a20addr >= (bx_phy_address)~BIOS_MASK)
+    else if (is_bios)
     {
       return (Bit8u *) &BX_MEM_THIS rom[a20addr & BIOS_MASK];
     }
@@ -799,7 +878,7 @@ Bit8u *BX_MEM_C::getHostMemAddr(BX_CPU_C *cpu, bx_phy_address addr, unsigned rw)
   }
   else
   { // op == {BX_WRITE, BX_RW}
-    if (a20addr >= BX_MEM_THIS len || is_bios)
+    if ((a20addr >= BX_MEM_THIS len) || is_bios)
       return(NULL); // Error, requested addr is out of bounds.
     else if (a20addr >= 0x000a0000 && a20addr < 0x000c0000)
       return(NULL); // Vetoed!  Mem mapped IO (VGA)
@@ -827,7 +906,7 @@ Bit8u *BX_MEM_C::getHostMemAddr(BX_CPU_C *cpu, bx_phy_address addr, unsigned rw)
 /*
  * One needs to provide both a read_handler and a write_handler.
  */
-  bx_bool
+  bool
 BX_MEM_C::registerMemoryHandlers(void *param, memory_handler_t read_handler,
                 memory_handler_t write_handler, memory_direct_access_handler_t da_handler,
                 bx_phy_address begin_addr, bx_phy_address end_addr)
@@ -867,10 +946,10 @@ BX_MEM_C::registerMemoryHandlers(void *param, memory_handler_t read_handler,
   return 1;
 }
 
-  bx_bool
+  bool
 BX_MEM_C::unregisterMemoryHandlers(void *param, bx_phy_address begin_addr, bx_phy_address end_addr)
 {
-  bx_bool ret = 1;
+  bool ret = 1;
   BX_INFO(("Memory access handlers unregistered: 0x" FMT_PHY_ADDRX " - 0x" FMT_PHY_ADDRX, begin_addr, end_addr));
   for (Bit32u page_idx = (Bit32u)(begin_addr >> 20); page_idx <= (Bit32u)(end_addr >> 20); page_idx++) {
     Bit16u bitmap = 0xffff;
@@ -904,11 +983,11 @@ BX_MEM_C::unregisterMemoryHandlers(void *param, bx_phy_address begin_addr, bx_ph
   return ret;
 }
 
-void BX_MEM_C::enable_smram(bx_bool enable, bx_bool restricted)
+void BX_MEM_C::enable_smram(bool enable, bool restricted)
 {
   BX_MEM_THIS smram_available = 1;
-  BX_MEM_THIS smram_enable = (enable > 0);
-  BX_MEM_THIS smram_restricted = (restricted > 0);
+  BX_MEM_THIS smram_enable = enable;
+  BX_MEM_THIS smram_restricted = restricted;
 }
 
 void BX_MEM_C::disable_smram(void)
@@ -919,22 +998,119 @@ void BX_MEM_C::disable_smram(void)
 }
 
 // check if SMRAM is aavailable for CPU data accesses
-bx_bool BX_MEM_C::is_smram_accessible(void)
+bool BX_MEM_C::is_smram_accessible(void)
 {
   return(BX_MEM_THIS smram_available) &&
         (BX_MEM_THIS smram_enable || !BX_MEM_THIS smram_restricted);
 }
 
-void BX_MEM_C::set_memory_type(memory_area_t area, bx_bool rw, bx_bool dram)
+void BX_MEM_C::set_memory_type(memory_area_t area, bool rw, bool dram)
 {
   if (area <= BX_MEM_AREA_F0000) {
     BX_MEM_THIS memory_type[area][rw] = dram;
   }
 }
 
-void BX_MEM_C::set_bios_write(bx_bool enabled)
+void BX_MEM_C::set_bios_write(bool enabled)
 {
   BX_MEM_THIS bios_write_enabled = enabled;
+}
+
+void BX_MEM_C::set_bios_rom_access(Bit8u region, bool enabled)
+{
+  if (enabled) {
+    BX_MEM_THIS bios_rom_access |= region;
+  } else {
+    BX_MEM_THIS bios_rom_access &= ~region;
+  }
+}
+
+Bit8u BX_MEM_C::flash_read(Bit32u addr)
+{
+  Bit8u ret = 0;
+
+  switch (BX_MEM_THIS flash_wsm_state) {
+    case FLASH_INT_ID:
+      if (addr & 1) {
+        ret = (BX_MEM_THIS flash_type == 2) ? 0x7c : 0x94;
+      } else {
+        ret = 0x89;
+      }
+      BX_DEBUG(("flash read ID (address = 0x%08x value = 0x%02x)", addr, ret));
+      break;
+    case FLASH_READ_ARRAY:
+      BX_DEBUG(("flash read from ROM (address = 0x%08x)", addr));
+      ret = BX_MEM_THIS rom[addr];
+      break;
+    default:
+      ret = BX_MEM_THIS flash_status;
+      if (BX_MEM_THIS flash_wsm_state == FLASH_ERASE) {
+        BX_MEM_THIS flash_status |= 0x80;
+      }
+      BX_DEBUG(("flash read status (address = 0x%08x value = 0x%02x)", addr, ret));
+  }
+  return ret;
+}
+
+void BX_MEM_C::flash_write(Bit32u addr, Bit8u data)
+{
+  Bit32u flash_addr;
+  int i;
+
+  if (BX_MEM_THIS flash_type == 2) {
+    flash_addr = addr & 0x3ffff;
+  } else {
+    flash_addr = addr & 0x1ffff;
+  }
+  if (BX_MEM_THIS flash_wsm_state == FLASH_PROG_SETUP) {
+    BX_DEBUG(("flash write to ROM (address = 0x%08x, data = 0x%02x)", flash_addr, data));
+    BX_MEM_THIS rom[addr] &= data;
+    BX_MEM_THIS flash_wsm_state = FLASH_READ_STATUS;
+  } else {
+    BX_DEBUG(("flash write command (address = 0x%08x, code = 0x%02x)", flash_addr, data));
+    switch (data) {
+      case FLASH_INT_ID:
+      case FLASH_READ_ARRAY:
+      case FLASH_ERASE_SETUP:
+      case FLASH_ERASE_SUSP:
+      case FLASH_PROG_SETUP:
+        BX_MEM_THIS flash_wsm_state = data;
+        break;
+      case FLASH_READ_STATUS:
+        if (BX_MEM_THIS flash_wsm_state != FLASH_ERASE) {
+          BX_MEM_THIS flash_wsm_state = data;
+        }
+        break;
+      case FLASH_CLR_STATUS:
+        BX_MEM_THIS flash_status &= ~0x38;
+        BX_MEM_THIS flash_wsm_state = FLASH_READ_ARRAY;
+        break;
+      case FLASH_ERASE:
+        if (BX_MEM_THIS flash_wsm_state == FLASH_ERASE_SETUP) {
+          BX_MEM_THIS flash_status &= ~0xc0;
+          BX_MEM_THIS flash_wsm_state = FLASH_ERASE;
+          if ((BX_MEM_THIS flash_type == 1) &&
+              ((flash_addr = 0x1c000) || (flash_addr = 0x1d000))) {
+            for (i = 0; i < 0x1000; i++) {
+              BX_MEM_THIS rom[addr + i] = 0xff;
+            }
+          } else if ((BX_MEM_THIS flash_type == 2) &&
+                     ((flash_addr = 0x38000) || (flash_addr = 0x3a000))) {
+            for (i = 0; i < 0x2000; i++) {
+              BX_MEM_THIS rom[addr + i] = 0xff;
+            }
+          }
+        } else if (BX_MEM_THIS flash_wsm_state == FLASH_ERASE_SUSP) {
+          BX_MEM_THIS flash_status &= ~0x40;
+          BX_MEM_THIS flash_wsm_state = FLASH_ERASE;
+        } else {
+          BX_DEBUG(("flash_write(): unexpected ERASE CONFIRM / ERASE RESUME"));
+        }
+        break;
+      default:
+        BX_DEBUG(("flash_write(): unsupported code 0x%02x", data));
+    }
+  }
 }
 
 #if BX_SUPPORT_MONITOR_MWAIT
@@ -943,7 +1119,7 @@ void BX_MEM_C::set_bios_write(bx_bool enabled)
 // MONITOR/MWAIT - x86arch way to optimize idle loops in CPU
 //
 
-bx_bool BX_MEM_C::is_monitor(bx_phy_address begin_addr, unsigned len)
+bool BX_MEM_C::is_monitor(bx_phy_address begin_addr, unsigned len)
 {
   for (int i=0; i<BX_SMP_PROCESSORS;i++) {
     if (BX_CPU(i)->is_monitor(begin_addr, len))

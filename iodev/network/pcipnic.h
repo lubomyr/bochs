@@ -1,10 +1,10 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pcipnic.h 13301 2017-10-08 15:54:21Z vruppert $
+// $Id: pcipnic.h 14117 2021-02-01 12:42:12Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2003  Fen Systems Ltd.
 //  http://www.fensystems.co.uk/
-//  Copyright (C) 2003-2017  The Bochs Project
+//  Copyright (C) 2003-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -74,12 +74,12 @@ public:
 private:
   bx_pnic_t s;
 
-  static void set_irq_level(bx_bool level);
+  static void set_irq_level(bool level);
 
   static void pnic_timer_handler(void *);
   void pnic_timer(void);
 
-  BX_PNIC_SMF bx_bool mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  BX_PNIC_SMF bool mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
 
   static Bit32u read_handler(void *this_ptr, Bit32u address, unsigned io_len);
   static void   write_handler(void *this_ptr, Bit32u address, Bit32u value, unsigned io_len);

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dma.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: dma.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -37,21 +37,18 @@
 
 bx_dma_c *theDmaDevice = NULL;
 
-int CDECL libdma_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(dma)
 {
-  if (type == PLUGTYPE_CORE) {
+  if (mode == PLUGIN_INIT) {
     theDmaDevice = new bx_dma_c ();
     bx_devices.pluginDmaDevice = theDmaDevice;
     BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theDmaDevice, BX_PLUGIN_DMA);
-    return 0; // Success
-  } else {
-    return -1;
+  } else if (mode == PLUGIN_FINI) {
+    delete theDmaDevice;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_CORE;
   }
-}
-
-void CDECL libdma_LTX_plugin_fini(void)
-{
-  delete theDmaDevice;
+  return 0; // Success
 }
 
 bx_dma_c::bx_dma_c()
@@ -109,8 +106,7 @@ unsigned bx_dma_c::registerDMA16Channel(unsigned channel,
 
 unsigned bx_dma_c::unregisterDMAChannel(unsigned channel)
 {
-  bx_bool ma_sl = (channel > 3);
-  BX_DMA_THIS s[ma_sl].chan[channel & 0x03].used = 0;
+  BX_DMA_THIS s[(channel > 3) ? 1 : 0].chan[channel & 0x03].used = 0;
   BX_INFO(("channel %u no longer used", channel));
   return 1;
 }
@@ -123,7 +119,7 @@ unsigned bx_dma_c::get_TC(void)
 void bx_dma_c::init(void)
 {
   unsigned c, i, j;
-  BX_DEBUG(("Init $Id: dma.cc 13051 2017-01-28 09:52:09Z vruppert $"));
+  BX_DEBUG(("Init $Id: dma.cc 14163 2021-02-26 20:37:49Z vruppert $"));
 
   /* 8237 DMA controller */
 
@@ -257,7 +253,7 @@ bx_dma_c::read(Bit32u address, unsigned io_len)
   return(0xff);
 #endif
 
-  bx_bool ma_sl = (address >= 0xc0);
+  Bit8u ma_sl = (address >= 0xc0) ? 1 : 0;
 
   switch (address) {
     case 0x00: /* DMA-1 current address, channel 0 */
@@ -343,7 +339,7 @@ bx_dma_c::read(Bit32u address, unsigned io_len)
 
     case 0x0f: // DMA-1: undocumented: read all mask bits
     case 0xde: // DMA-2: undocumented: read all mask bits
-      retval = BX_DMA_THIS s[ma_sl].mask[0] |
+      retval = (Bit8u)BX_DMA_THIS s[ma_sl].mask[0] |
                (BX_DMA_THIS s[ma_sl].mask[1] << 1) |
                (BX_DMA_THIS s[ma_sl].mask[2] << 2) |
                (BX_DMA_THIS s[ma_sl].mask[3] << 3);
@@ -403,7 +399,7 @@ bx_dma_c::write(Bit32u   address, Bit32u   value, unsigned io_len)
   return;
 #endif
 
-  bx_bool ma_sl = (address >= 0xc0);
+  Bit8u ma_sl = (address >= 0xc0) ? 1 : 0;
 
   switch (address) {
     case 0x00:
@@ -570,16 +566,16 @@ bx_dma_c::write(Bit32u   address, Bit32u   value, unsigned io_len)
   }
 }
 
-void bx_dma_c::set_DRQ(unsigned channel, bx_bool val)
+void bx_dma_c::set_DRQ(unsigned channel, bool val)
 {
   Bit32u dma_base, dma_roof;
-  bx_bool ma_sl;
+  Bit8u ma_sl;
 
   if (channel > 7) {
     BX_PANIC(("set_DRQ() channel > 7"));
     return;
   }
-  ma_sl = (channel > 3);
+  ma_sl = (channel > 3) ? 1 : 0;
   BX_DMA_THIS s[ma_sl].DRQ[channel & 0x03] = val;
   if (!BX_DMA_THIS s[ma_sl].chan[channel & 0x03].used) {
     BX_PANIC(("set_DRQ(): channel %d not connected to device", channel));
@@ -621,7 +617,7 @@ void bx_dma_c::set_DRQ(unsigned channel, bx_bool val)
   control_HRQ(ma_sl);
 }
 
-void bx_dma_c::control_HRQ(bx_bool ma_sl)
+void bx_dma_c::control_HRQ(Bit8u ma_sl)
 {
   unsigned channel;
 
@@ -658,7 +654,7 @@ void bx_dma_c::raise_HLDA(void)
 {
   unsigned channel;
   bx_phy_address phy_addr;
-  bx_bool ma_sl = 0;
+  Bit8u ma_sl = 0;
   Bit16u maxlen, len = 1;
   Bit8u buffer[BX_DMA_BUFFER_SIZE];
 

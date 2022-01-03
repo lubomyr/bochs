@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cmos.h 13470 2018-02-24 18:04:36Z vruppert $
+// $Id: cmos.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -55,7 +55,7 @@ public:
   virtual time_t get_timeval() {
     return s.timeval;
   }
-  virtual void enable_irq(bx_bool enabled) {
+  virtual void enable_irq(bool enabled) {
     s.irq_enabled = enabled;
   }
 
@@ -67,14 +67,16 @@ public:
     time_t  timeval;
     Bit8u   cmos_mem_address;
     Bit8u   cmos_ext_mem_addr;
-    bx_bool timeval_change;
-    bx_bool rtc_mode_12hour;
-    bx_bool rtc_mode_binary;
-    bx_bool rtc_sync;
-    bx_bool irq_enabled;
+    bool    timeval_change;
+    bool    rtc_mode_12hour;
+    bool    rtc_mode_binary;
+    bool    rtc_sync;
+    bool    irq_enabled;
 
     Bit8u   reg[256];
     Bit8u   max_reg;
+
+    bool    use_image;
   } s;  // state information
 
 private:

@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: extfpuirq.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: extfpuirq.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -34,16 +34,17 @@
 
 bx_extfpuirq_c *theExternalFpuIrq = NULL;
 
-int CDECL libextfpuirq_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(extfpuirq)
 {
-  theExternalFpuIrq = new bx_extfpuirq_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theExternalFpuIrq, BX_PLUGIN_EXTFPUIRQ);
+  if (mode == PLUGIN_INIT) {
+    theExternalFpuIrq = new bx_extfpuirq_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theExternalFpuIrq, BX_PLUGIN_EXTFPUIRQ);
+  } else if (mode == PLUGIN_FINI) {
+    delete theExternalFpuIrq;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libextfpuirq_LTX_plugin_fini(void)
-{
-  delete theExternalFpuIrq;
 }
 
 bx_extfpuirq_c::bx_extfpuirq_c(void)

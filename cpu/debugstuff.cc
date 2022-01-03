@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: debugstuff.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: debugstuff.cc 14105 2021-01-30 20:31:03Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2009  The Bochs Project
@@ -25,9 +25,8 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
-#if BX_DISASM
-
-#include "disasm/disasm.h"
+#include "memory/memory-bochs.h"
+#include "pc_system.h"
 
 void BX_CPU_C::debug_disasm_instruction(bx_address offset)
 {
@@ -40,17 +39,19 @@ void BX_CPU_C::debug_disasm_instruction(bx_address offset)
   size_t i=0;
 
   static char letters[] = "0123456789ABCDEF";
-  static disassembler bx_disassemble;
   unsigned remainsInPage = 0x1000 - PAGE_OFFSET(offset);
 
-  bx_bool valid = dbg_xlate_linear2phy(get_laddr(BX_SEG_REG_CS, offset), &phy_addr);
+  bool valid = dbg_xlate_linear2phy(get_laddr(BX_SEG_REG_CS, offset), &phy_addr);
   if (valid) {
     BX_MEM(0)->dbg_fetch_mem(BX_CPU_THIS, phy_addr, 16, instr_buf);
-    unsigned isize = bx_disassemble.disasm(
-        BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.u.segment.d_b,
-        BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64,
-        BX_CPU_THIS_PTR get_segment_base(BX_SEG_REG_CS), offset,
-        instr_buf, char_buf+i);
+
+    bxInstruction_c instr;
+    disasm(instr_buf,
+      BX_CPU_THIS_PTR sregs[BX_SEG_REG_CS].cache.u.segment.d_b,
+      BX_CPU_THIS_PTR cpu_mode == BX_MODE_LONG_64, char_buf+i, &instr,
+      BX_CPU_THIS_PTR get_segment_base(BX_SEG_REG_CS), offset, BX_DISASM_INTEL);
+    unsigned isize = instr.ilen();
+
     if (isize <= remainsInPage) {
       i=strlen(char_buf);
       char_buf[i++] = ' ';
@@ -72,8 +73,6 @@ void BX_CPU_C::debug_disasm_instruction(bx_address offset)
   }
 #endif  // #if BX_DEBUGGER
 }
-
-#endif  // #if BX_DISASM
 
 const char* cpu_mode_string(unsigned cpu_mode)
 {
@@ -249,9 +248,7 @@ void BX_CPU_C::debug(bx_address offset)
 #endif
   }
 
-#if BX_DISASM
   debug_disasm_instruction(offset);
-#endif  // #if BX_DISASM
 }
 
 
@@ -262,7 +259,7 @@ void BX_CPU_C::dbg_set_eip(bx_address val)
   invalidate_prefetch_q();
 }
 
-bx_bool BX_CPU_C::dbg_set_eflags(Bit32u val)
+bool BX_CPU_C::dbg_set_eflags(Bit32u val)
 {
   // returns 1=OK, 0=can't change
 
@@ -305,7 +302,7 @@ unsigned BX_CPU_C::dbg_query_pending(void)
   return ret;
 }
 
-bx_bool BX_CPU_C::dbg_get_sreg(bx_dbg_sreg_t *sreg, unsigned sreg_no)
+bool BX_CPU_C::dbg_get_sreg(bx_dbg_sreg_t *sreg, unsigned sreg_no)
 {
   if (sreg_no > 5)
     return(0);
@@ -319,7 +316,7 @@ bx_bool BX_CPU_C::dbg_get_sreg(bx_dbg_sreg_t *sreg, unsigned sreg_no)
   return(1);
 }
 
-bx_bool BX_CPU_C::dbg_set_sreg(unsigned sreg_no, bx_segment_reg_t *sreg)
+bool BX_CPU_C::dbg_set_sreg(unsigned sreg_no, bx_segment_reg_t *sreg)
 {
   if (sreg_no < 6) {
     BX_CPU_THIS_PTR sregs[sreg_no] = *sreg;

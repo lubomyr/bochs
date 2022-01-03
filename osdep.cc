@@ -306,7 +306,7 @@ int fd_stat(struct stat *buf)
 //////////////////////////////////////////////////////////////////////
 // Missing library functions, implemented for MorphOS only
 //////////////////////////////////////////////////////////////////////
-
+//#if defined(__MORPHOS__) || defined(ANDROID)
 #ifdef __MORPHOS__
 #include <stdio.h>
 #include <time.h>

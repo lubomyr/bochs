@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: biosdev.cc 13051 2017-01-28 09:52:09Z vruppert $
+// $Id: biosdev.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -45,16 +45,17 @@ bx_biosdev_c *theBiosDevice = NULL;
 #define bioslog theBiosDevice
 logfunctions  *vgabioslog;
 
-int CDECL libbiosdev_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(biosdev)
 {
-  theBiosDevice = new bx_biosdev_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theBiosDevice, BX_PLUGIN_BIOSDEV);
+  if (mode == PLUGIN_INIT) {
+    theBiosDevice = new bx_biosdev_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theBiosDevice, BX_PLUGIN_BIOSDEV);
+  } else if (mode == PLUGIN_FINI) {
+    delete theBiosDevice;
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  }
   return(0); // Success
-}
-
-void CDECL libbiosdev_LTX_plugin_fini(void)
-{
-  delete theBiosDevice;
 }
 
 bx_biosdev_c::bx_biosdev_c(void)

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: io.cc 13580 2019-10-16 20:46:00Z sshwarts $
+// $Id: io.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -859,7 +859,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::OUT_DXEAX(bxInstruction_c *i)
   BX_NEXT_INSTR(i);
 }
 
-bx_bool BX_CPP_AttrRegparmN(3) BX_CPU_C::allow_io(bxInstruction_c *i, Bit16u port, unsigned len)
+bool BX_CPP_AttrRegparmN(3) BX_CPU_C::allow_io(bxInstruction_c *i, Bit16u port, unsigned len)
 {
   /* If CPL <= IOPL, then all IO portesses are accessible.
    * Otherwise, must check the IO permission map on >286.

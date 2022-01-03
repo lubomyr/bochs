@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci_ide.h 13147 2017-03-24 19:57:25Z vruppert $
+// $Id: pci_ide.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2004-2017  The Bochs Project
+//  Copyright (C) 2004-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,7 @@ public:
   virtual ~bx_pci_ide_c();
   virtual void init(void);
   virtual void reset(unsigned type);
-  virtual bx_bool bmdma_present(void);
+  virtual bool bmdma_present(void);
   virtual void bmdma_start_transfer(Bit8u channel);
   virtual void bmdma_set_irq(Bit8u channel);
   virtual void register_state(void);
@@ -59,8 +59,8 @@ private:
   struct {
     unsigned chipset;
     struct {
-      bx_bool cmd_ssbm;
-      bx_bool cmd_rwcon;
+      bool cmd_ssbm;
+      bool cmd_rwcon;
       Bit8u  status;
       Bit32u dtpr;
       Bit32u prd_current;
@@ -68,7 +68,7 @@ private:
       Bit8u *buffer;
       Bit8u *buffer_top;
       Bit8u *buffer_idx;
-      bx_bool data_ready;
+      bool data_ready;
     } bmdma[2];
   } s;
 

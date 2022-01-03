@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: sounddummy.cc 13128 2017-03-17 23:09:18Z vruppert $
+// $Id: sounddummy.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2011-2017  The Bochs Project
+//  Copyright (C) 2011-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -25,21 +25,19 @@
 
 // The dummy sound driver contains stubs for all features
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 
 #if BX_SUPPORT_SOUNDLOW
 
 #include "soundlow.h"
 
-int CDECL libdummy_sound_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_SND_MODULE(dummy)
 {
-  // Nothing here yet
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_SND;
+  }
   return 0; // Success
-}
-
-void CDECL libdummy_sound_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 class bx_sound_dummy_c : public bx_sound_lowlevel_c {

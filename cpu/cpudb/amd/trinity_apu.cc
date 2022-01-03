@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: trinity_apu.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: trinity_apu.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2014-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "trinity_apu.h"
 
@@ -99,7 +100,7 @@ void trinity_apu_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_fu
 {
   static const char* brand_string = "AMD A8-5600K APU with Radeon(tm) HD Graphics   ";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 1 && function < 0x80000000) function = 1;
 
@@ -195,18 +196,11 @@ Bit32u trinity_apu_t::get_svm_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void trinity_apu_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "AuthenticAMD";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xD;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x1;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xD, "AuthenticAMD", leaf, 0x1);
 }
 
 // leaf 0x00000001 //
@@ -338,8 +332,11 @@ void trinity_apu_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_MMX |
               BX_CPUID_STD_FXSAVE_FXRSTOR |
               BX_CPUID_STD_SSE |
-              BX_CPUID_STD_SSE2 |
-              BX_CPUID_STD_HT;
+              BX_CPUID_STD_SSE2
+#if BX_SUPPORT_SMP
+              | BX_CPUID_STD_HT
+#endif
+              ;
 #if BX_SUPPORT_APIC
   // if MSR_APICBASE APIC Global Enable bit has been cleared,
   // the CPUID feature flag for the APIC is set to 0.
@@ -412,7 +409,7 @@ void trinity_apu_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t *l
     //   [19:19] ADCX/ADOX instructions support
     //   [20:20] SMAP: Supervisor Mode Access Prevention
     //   [31:21] reserved
-    leaf->ebx = BX_CPUID_EXT3_BMI1;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx();
     leaf->ecx = 0;
     leaf->edx = 0;
     break;

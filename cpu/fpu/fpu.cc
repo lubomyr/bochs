@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fpu.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: fpu.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2003-2018 Stanislav Shwartsman
@@ -32,7 +32,7 @@
 #define CHECK_PENDING_EXCEPTIONS 1
 
 #if BX_SUPPORT_FPU
-void BX_CPU_C::prepareFPU(bxInstruction_c *i, bx_bool check_pending_exceptions)
+void BX_CPU_C::prepareFPU(bxInstruction_c *i, bool check_pending_exceptions)
 {
   if (BX_CPU_THIS_PTR cr0.get_EM() || BX_CPU_THIS_PTR cr0.get_TS())
     exception(BX_NM_EXCEPTION, 0);

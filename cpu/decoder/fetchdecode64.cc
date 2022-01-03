@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode64.cc 13734 2019-12-27 19:34:32Z sshwarts $
+// $Id: fetchdecode64.cc 14133 2021-02-08 13:06:44Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -104,12 +104,12 @@ extern Bit16u findOpcode(const Bit64u *opMap, Bit32u opMsk);
 
 extern BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, unsigned nnn, unsigned rm);
 #if BX_SUPPORT_AVX
-extern BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bx_bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bx_bool had_evex = false, bx_bool displ8 = false);
+extern BxDecodeError assign_srcs(bxInstruction_c *i, unsigned ia_opcode, bool is_64, unsigned nnn, unsigned rm, unsigned vvv, unsigned vex_w, bool had_evex = false, bool displ8 = false);
 #endif
 
 extern const Bit8u *decodeModrm64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned mod, unsigned nnn, unsigned rm, unsigned rex_r, unsigned rex_x, unsigned rex_b);
 extern const Bit8u *parseModrm64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned rex_prefix, struct bx_modrm *modrm);
-extern int fetchImmediate(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, Bit16u ia_opcode, bx_bool is_64);
+extern int fetchImmediate(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, Bit16u ia_opcode, bool is_64);
 
 extern int decoder_simple64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, unsigned rex_prefix, const void *opcode_table);
 extern int decoder_creg64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsigned b1, unsigned sse_prefix, unsigned rex_prefix, const void *opcode_table);
@@ -1188,7 +1188,7 @@ int decoder_vex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
   if (sse_prefix | rex_prefix)
     return(BX_IA_ERROR);
 
-  bx_bool vex_w = 0;
+  bool vex_w = 0;
   unsigned vex_opcext = 1;
   unsigned vex = *iptr++;
   remain--;
@@ -1225,7 +1225,7 @@ int decoder_vex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
   opcode_byte += 256 * vex_opcext;
   if (opcode_byte < 256 || opcode_byte >= 1024)
     return(ia_opcode);
-  bx_bool has_modrm = (opcode_byte != 0x177); // if not VZEROUPPER/VZEROALL opcode
+  bool has_modrm = (opcode_byte != 0x177); // if not VZEROUPPER/VZEROALL opcode
   opcode_byte -= 256;
 
   if (has_modrm) {
@@ -1273,7 +1273,7 @@ int decoder_vex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
 
   ia_opcode = findOpcode(BxOpcodeTableVEX[opcode_byte], decmask);
 
-  bx_bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
+  bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
   if (has_immediate) {
     if (remain != 0) {
       i->modRMForm.Ib[0] = *iptr;
@@ -1304,7 +1304,7 @@ int decoder_evex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
   unsigned rm = 0, mod = 0, nnn = 0;
   unsigned b2 = 0;
 
-  bx_bool displ8 = false;
+  bool displ8 = false;
 
   // EVEX prefix 0x62
   assert(b1 == 0x62);
@@ -1431,7 +1431,7 @@ int decoder_evex64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsi
 
   ia_opcode = findOpcode(BxOpcodeTableEVEX[opcode_byte], decmask);
 
-  bx_bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
+  bool has_immediate = (opcode_byte >= 0x70 && opcode_byte <= 0x73) || (opcode_byte >= 0xC2 && opcode_byte <= 0xC6) || (opcode_byte >= 0x200);
   if (has_immediate) {
     if (remain != 0) {
       i->modRMForm.Ib[0] = *iptr;
@@ -1474,7 +1474,7 @@ int decoder_xop64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, unsig
   unsigned rex_r = 0, rex_x = 0, rex_b = 0;
   unsigned rm = 0, mod = 0, nnn = 0;
   unsigned b2 = 0;
-  bx_bool vex_w = 0;
+  bool vex_w = 0;
 
   if (sse_prefix | rex_prefix)
     return(ia_opcode);
@@ -1747,7 +1747,7 @@ int decoder_simple64(const Bit8u *iptr, unsigned &remain, bxInstruction_c *i, un
 
   // no immediate expected, no sources expected, take first opcode
   // check attributes ?
-  Bit64u ia_opcode = Bit16u(*op >> 48) & 0x7FFF; // upper bit indicates that parsing is done and doesn't belong to opcode
+  Bit16u ia_opcode = Bit16u(*op >> 48) & 0x7FFF; // upper bit indicates that parsing is done and doesn't belong to opcode
   return ia_opcode;
 }
 
@@ -1879,7 +1879,10 @@ int fetchDecode64(const Bit8u *iptr, bxInstruction_c *i, unsigned remainingInPag
   unsigned b1;
   int ia_opcode = BX_IA_ERROR;
   unsigned seg_override = BX_SEG_REG_NULL;
-  bx_bool lock = 0;
+#if BX_SUPPORT_CET
+  unsigned seg_override_cet = BX_SEG_REG_NULL;
+#endif
+  bool lock = 0;
   unsigned sse_prefix = SSE_PREFIX_NONE;
   unsigned rex_prefix = 0;
 
@@ -1894,8 +1897,9 @@ fetch_b1:
 
 #if BX_SUPPORT_CET
   // in 64-bit mode DS prefix is ignored but still recorded for CET Endranch suppress hint
+  // keep it even if overridden by FS: or GS:
   if (b1 == 0x3e)
-    seg_override = BX_SEG_REG_DS;
+    seg_override_cet = BX_SEG_REG_DS;
 #endif
 
   switch (b1) {
@@ -1998,7 +2002,7 @@ fetch_b1:
 
   i->setSeg(BX_SEG_REG_DS); // default segment is DS:
 #if BX_SUPPORT_CET
-  i->setSegOverride(seg_override);
+  i->setCetSegOverride(seg_override_cet);
 #endif
 
   i->modRMForm.Id = 0;

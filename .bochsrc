@@ -24,12 +24,12 @@
 # allows you to change all the settings that control Bochs's behavior.
 # Depending on the platform there are up to 3 choices of configuration
 # interface: a text mode version called "textconfig" and two graphical versions
-# called "win32config" and "wx".  The text mode version uses stdin/stdout and
-# is always compiled in, unless Bochs is compiled for wx only. The choice
-# "win32config" is only available on win32 and it is the default there.
-# The choice "wx" is only available when you use "--with-wx" on the configure
-# command.  If you do not write a config_interface line, Bochs will
-# choose a default for you.
+# called "win32config" and "wx".  The text mode version uses stdin/stdout or
+# gui console (if available / runtime config) and is always compiled in, unless
+# Bochs is compiled for wx only. The choice "win32config" is only available on
+# win32/win64 and it is the default on these platforms. The choice "wx" is only
+# available when Bochs is compiled with wxWidgets support.  If you do not write
+# a config_interface line, Bochs will choose a default for you.
 #
 # NOTE: if you use the "wx" configuration interface, you must also use
 # the "wx" display library.
@@ -56,7 +56,6 @@
 #   amigaos        use native AmigaOS libraries
 #   sdl            use SDL 1.2.x library, cross platform
 #   sdl2           use SDL 2.x library, cross platform
-#   svga           use SVGALIB library for Linux, allows graphics without X11
 #   term           text only, uses curses/ncurses library, cross platform
 #   rfb            provides an interface to AT&T's VNC viewer, cross platform
 #   vncsrv         use LibVNCServer for extended RFB(VNC) support
@@ -70,28 +69,36 @@
 # Some display libraries now support specific options to control their
 # behaviour. These options are supported by more than one display library:
 #
+# "cmdmode"     - call a headerbar button handler after pressing F7 (sdl, sdl2,
+#                 win32, x)
+# "fullscreen"  - startup in fullscreen mode (sdl, sdl2)
 # "gui_debug"   - use GTK debugger gui (sdl, sdl2, x) / Win32 debugger gui (sdl,
 #                 sdl2, win32)
-# "hideIPS"     - disable IPS output in status bar (rfb, sdl, sdl2, vncsrv,
+# "hideIPS"     - disable IPS output in status bar (rfb, sdl, sdl2, term, vncsrv,
 #                 win32, wx, x)
 # "nokeyrepeat" - turn off host keyboard repeat (sdl, sdl2, win32, x)
+# "no_gui_console" - use system console instead of builtin gui console
+#                    (rfb, sdl, sdl2, vncsrv, x)
 # "timeout"     - time (in seconds) to wait for client (rfb, vncsrv)
 #
 # See the examples below for other currently supported options.
+# Setting up options without specifying display library is also supported.
 #=======================================================================
 #display_library: amigaos
 #display_library: carbon
 #display_library: macintosh
 #display_library: nogui
 #display_library: rfb
-#display_library: sdl, options="fullscreen" # startup in fullscreen mode
-#display_library: sdl2, options="fullscreen" # startup in fullscreen mode
+#display_library: sdl
+#display_library: sdl2
 #display_library: term
 #display_library: vncsrv
 # "traphotkeys" - system hotkeys not handled by host OS, but sent to guest
 #                 (win32 in mouse capture and fullscreen mode: alt-tab, win,
 #                 alt-space, alt-esc, ctrl-esc)
-#display_library: win32, options="traphotkeys"
+# "autoscale"   - scale small simulation window by factor 2, 4 or 8 depending
+#                 on desktop window size
+#display_library: win32, options="traphotkeys, autoscale"
 #display_library: wx
 #display_library: x
 
@@ -426,10 +433,15 @@ vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest
 #     to 0 and "clock: sync=none" may improve the responsiveness of the guest
 #     GUI when the guest is otherwise idle.
 #
+#   DDC
+#     This parameter defines the behaviour of the DDC emulation that returns
+#     the monitor EDID data. By default the 'builtin' values for 'Bochs Screen'
+#     are used. Other choices are 'disabled' (no DDC emulation) and 'file'
+#     (read monitor EDID from file / path name separated with a colon).
 # Examples:
-#   vga: extension=cirrus, update_freq=10
+#   vga: extension=cirrus, update_freq=10, ddc=builtin
 #=======================================================================
-#vga: extension=vbe, update_freq=5, realtime=1
+#vga: extension=vbe, update_freq=5, realtime=1, ddc=file:monitor.bin
 
 #=======================================================================
 # VOODOO:
@@ -528,18 +540,36 @@ mouse: enabled=0
 
 #=======================================================================
 # PCI:
-# This option controls the presence of a PCI chipset in Bochs. Currently it
-# supports the i430FX, i440FX and i440BX chipsets. You can also specify the
-# devices connected to PCI slots. Up to 5 slots are available. For these
-# combined PCI/ISA devices assigning to slot is mandatory if you want to emulate
-# the PCI model: cirrus, ne2k and pcivga. These PCI-only devices are also
-# supported, but they are auto-assigned if you don't use the slot configuration:
-# e1000, es1370, pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci and voodoo.
-# In case of the i440BX chipset, slot #5 is the AGP slot. Currently only the
-# 'voodoo' device can be assigned to AGP.
+# This defines the parameters to set up the Bochs PCI emulation:
+#
+#  ENABLED:
+#  If Bochs is compiled with PCI support, it is enabled by default.
+#
+#  CHIPSET:
+#  Currently the chipsets i430FX, i440FX and i440BX (limited) are supported and
+#  the default is i440FX.
+#
+#  SLOTx:
+#  It is possible to specify the devices connected to PCI slots. Up to 5 slots
+#  are available. For combined PCI/ISA devices assigning to slot is mandatory
+#  if the PCI model should be emulated (cirrus, ne2k and pcivga). Setting up
+#  slot for PCI-only devices is also supported, but they are auto-assigned if
+#  not specified (e1000, es1370, pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci,
+#  voodoo). All device models except the network devices ne2k and e1000 can be
+#  used only once in the slot configuration. In case of the i440BX chipset, the
+#  slot #5 is the AGP slot. Currently only the 'voodoo' device can be assigned
+#  to AGP.
+#
+#  ADVOPTS:
+#  With the advanced PCI options it is possible to control the behaviour of the 
+#  PCI chipset. These options can be specified as comma-separated values.
+#  By default the "Bochs i440FX" chipset enables the ACPI and HPET devices, but
+#  original i440FX doesn't support them. The options 'noacpi' and 'nohpet' make
+#  it possible to disable them. The option 'noagp' disables the incomplete AGP
+#  subsystem of the i440BX chipset.
 #
 # Example:
-#   pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
+#   pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k, advopts=noacpi
 #=======================================================================
 pci: enabled=1, chipset=i440fx
 
@@ -681,9 +711,8 @@ ata3: enabled=0, ioaddr1=0x168, ioaddr2=0x360, irq=9
 #
 # This defines the type and characteristics of all attached ata devices:
 #   type=       type of attached device [disk|cdrom] 
-#   mode=       only valid for disks [flat|concat|external|dll|sparse|vmware3]
-#                                    [vmware4|undoable|growing|volatile|vpc]
-#                                    [vbox|vvfat]
+#   mode=       only valid for disks [flat|concat|dll|sparse|vmware3|vmware4]
+#                                    [undoable|growing|volatile|vpc|vbox|vvfat]
 #   path=       path of the image / directory
 #   cylinders=  only valid for disks
 #   heads=      only valid for disks
@@ -929,12 +958,13 @@ sound: driver=default, waveout=/dev/dsp. wavein=, midiout=
 # SPEAKER:
 # This defines the PC speaker output mode. In the 'sound' mode the beep
 # is generated by the square wave generator which is a part of the
-# lowlevel sound support. The 'system' mode is only available on Linux
-# and Windows. On Linux /dev/console is used for output and on Windows
+# lowlevel sound support. In this mode the 'volume' parameter can be used
+# to set the output volume (0 - 15). The 'system' mode is only available on
+# Linux and Windows. On Linux /dev/console is used for output and on Windows
 # the Beep() function. The 'gui' mode forwards the beep to the related
 # gui methods (currently only used by the Carbon gui).
 #=======================================================================
-speaker: enabled=1, mode=sound
+speaker: enabled=1, mode=sound, volume=15
 
 #=======================================================================
 # SB16:
@@ -994,12 +1024,20 @@ speaker: enabled=1, mode=sound
 # ne2k: NE2000 compatible ethernet adapter
 #
 # Format:
-# ne2k: enabled=1, ioaddr=IOADDR, irq=IRQ, mac=MACADDR, ethmod=MODULE,
-#       ethdev=DEVICE, script=SCRIPT, bootrom=BOOTROM
+# ne2k: card=CARD, enabled=1, type=TYPE, ioaddr=IOADDR, irq=IRQ, mac=MACADDR,
+#       ethmod=MODULE, ethdev=DEVICE, script=SCRIPT, bootrom=BOOTROM
+#
+# CARD: This is the zero-based card number to configure with this ne2k config
+# line. Up to 4 devices are supported now (0...3). If not specified, the
+# following parameters apply to card #0.
+#
+# TYPE: This is the card type to emulate ("isa" or "pci"). If not specified,
+# card #0 defaults to "pci" if assigned to a pci slot. For the additional cards
+# the type parameter should be set up.
 #
 # IOADDR, IRQ: You probably won't need to change ioaddr and irq, unless there
 # are IRQ conflicts. These arguments are ignored when assign the ne2k to a
-# PCI slot.
+# PCI slot or set the type to 'pci'.
 #
 # MAC: The MAC address MUST NOT match the address of any machine on the net.
 # Also, the first byte must be an even number (bit 0 set means a multicast
@@ -1015,16 +1053,16 @@ speaker: enabled=1, mode=sound
 # The 'socket' module uses this parameter to specify the UDP port for
 # receiving packets and (optional) the host to connect.
 #
-# SCRIPT: The script value is optional, and is the name of a script that 
-# is executed after bochs initialize the network interface. You can use 
+# SCRIPT: The script value is optional, and is the name of a script that
+# is executed after bochs initialize the network interface. You can use
 # this script to configure this network interface, or enable masquerading.
 # This is mainly useful for the tun/tap devices that only exist during
 # Bochs execution. The network interface name is supplied to the script
 # as first parameter.
 # The 'slirp' module uses this parameter to specify a config file for
 # setting up an alternative IP configuration or additional features.
-# The 'vnet' module uses this parameter to specify an alternative
-# log file name.
+# The 'vnet' module also uses this parameter to specify a config file similar
+# to slirp, but with only a few settings.
 #
 # BOOTROM: The bootrom value is optional, and is the name of the ROM image
 # to load. Note that this feature is only implemented for the PCI version of
@@ -1034,11 +1072,11 @@ speaker: enabled=1, mode=sound
 # you can use the following 'ethmod's to simulate a virtual network.
 #   null: All packets are discarded, but logged to a few files.
 #   vde:  Virtual Distributed Ethernet
-#   vnet: ARP, ICMP-echo(ping), DHCP and read/write TFTP are simulated.
+#   vnet: ARP, ICMP-echo(ping), DHCP, DNS, FTP and TFTP are simulated.
 #         The virtual host uses 192.168.10.1.
-#         DHCP assigns 192.168.10.2 to the guest.
-#         TFTP uses the 'ethdev' value for the root directory and doesn't
-#         overwrite files.
+#         DHCP assigns 192.168.10.15 to the guest.
+#         FTP/TFTP using the 'ethdev' value for the root directory.
+#         TFTP doesn't overwrite files, DNS for server and client only.
 # socket: Connect up to 6 Bochs instances with external program 'bxhub'
 #         (simulating an ethernet hub). It provides the same services as the
 #         'vnet' module and assigns IP addresses like 'slirp' (10.0.2.x).
@@ -1073,11 +1111,12 @@ speaker: enabled=1, mode=sound
 # e1000: Intel(R) 82540EM Gigabit Ethernet adapter
 #
 # Format:
-# e1000: enabled=1, mac=MACADDR, ethmod=MODULE, ethdev=DEVICE, script=SCRIPT
-#        bootrom=BOOTROM
+# e1000: card=CARD, enabled=1, mac=MACADDR, ethmod=MODULE, ethdev=DEVICE,
+#        script=SCRIPT, bootrom=BOOTROM
 #
-# The E1000 accepts the same syntax (for mac, ethmod, ethdev, script, bootrom)
-# and supports the same networking modules as the NE2000 adapter.
+# The E1000 accepts the same syntax (for card, mac, ethmod, ethdev, script,
+# bootrom) and supports the same networking modules as the NE2000 adapter.
+# It also supports up to 4 devices selected with the card parameter.
 #=======================================================================
 #e1000: enabled=1, mac=52:54:00:12:34:56, ethmod=slirp, script=slirp.conf
 
@@ -1085,42 +1124,48 @@ speaker: enabled=1, mode=sound
 # USB_UHCI:
 # This option controls the presence of the USB root hub which is a part
 # of the i440FX PCI chipset. With the portX parameter you can connect devices
-# to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'disk', 'cdrom',
-# 'floppy', 'hub' and 'printer').
+# to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'keyboard',
+# 'disk', 'cdrom', 'floppy', 'hub' and 'printer').
 #
 # If you connect the mouse or tablet to one of the ports, Bochs forwards the
 # mouse movement data to the USB device instead of the selected mouse type.
 # When connecting the keypad to one of the ports, Bochs forwards the input of
-# the numeric keypad to the USB device instead of the PS/2 keyboard.
+# the numeric keypad to the USB device instead of the PS/2 keyboard. If the
+# keyboard is selected, all key events are sent to the USB device.
 #
-# To connect a 'flat' mode image as a USB hardisk you can use the 'disk' device
-# with the path to the image separated with a colon. To use other disk image modes
-# similar to ATA disks the syntax 'disk:mode:filename' must be used (see below).
+# To connect a disk image as a USB hardisk you can use the 'disk' device. Use
+# the 'path' option in the optionsX parameter to specify the path to the image
+# separated with a colon. To use other disk image modes similar to ATA disks
+# the syntax 'path:mode:filename' must be used (see below).
 #
-# To emulate a USB cdrom you can use the 'cdrom' device name and the path to
-# an ISO image or raw device name also separated with a colon. An option to
-# insert/eject media is available in the runtime configuration.
+# To emulate a USB cdrom you can use the 'cdrom' device and the path to an
+# ISO image or raw device name can be set with the 'path' option in the
+# optionsX parameter also separated with a colon. An option to insert/eject
+# media is available in the runtime configuration.
 #
-# To emulate a USB floppy you can use the 'floppy' device with the path to the
-# image separated with a colon. To use the VVFAT image mode similar to the
-# legacy floppy the syntax 'floppy:vvfat:directory' must be used (see below).
+# To emulate a USB floppy you can use the 'floppy' device and the path to a
+# floppy image can be set with the 'path' option in the optionsX parameter
+# separated with a colon. To use the VVFAT image mode similar to the legacy
+# floppy the syntax 'path:vvfat:directory' must be used (see below).
 # An option to insert/eject media is available in the runtime configuration.
 #
 # The device name 'hub' connects an external hub with max. 8 ports (default: 4)
-# to the root hub. To specify the number of ports you have to add the value
-# separated with a colon. Connecting devices to the external hub ports is only
-# available in the runtime configuration.
+# to the root hub. To specify the number of ports you have to use the 'ports'
+# option in the optionsX parameter with the value separated with a colon.
+# Connecting devices to the external hub ports is only available in the runtime
+# configuration.
 #
 # The device 'printer' emulates the HP Deskjet 920C printer. The PCL data is
-# sent to a file specified in bochsrc.txt. The current code appends the PCL
-# code to the file if the file already existed. The output file can be
-# changed at runtime.
+# sent to a file specified in the 'file' option with the optionsX parameter.
+# The current code appends the PCL code to the file if the file already existed.
+# The output file can be changed at runtime.
 #
 # The optionsX parameter can be used to assign specific options to the device
-# connected to the corresponding USB port. Currently this feature is used to
-# set the speed reported by device ('low', 'full', 'high' or 'super'). The
-# available speed choices depend on both HC and device. The option 'debug' turns
-# on debug output for the device at connection time.
+# connected to the corresponding USB port. The option 'speed' can be used to set
+# the speed reported by device ('low', 'full', 'high' or 'super'). The available
+# speed choices depend on both HC and device. The option 'debug' turns on debug
+# output for the device at connection time. The option 'pcap' turns on packet
+# logging in PCAP format.
 # For the USB 'disk' device the optionsX parameter can be used to specify an
 # alternative redolog file (journal) of some image modes. For 'vvfat' mode USB
 # disks the optionsX parameter can be used to specify the disk size (range
@@ -1132,13 +1177,14 @@ speaker: enabled=1, mode=sound
 # the access mode (default is 0).
 #=======================================================================
 #usb_uhci: enabled=1
-#usb_uhci: enabled=1, port1=mouse, port2=disk:usbstick.img
-#usb_uhci: enabled=1, port1=hub:7, port2=disk:growing:usbdisk.img
-#usb_uhci: enabled=1, port2=disk:undoable:usbdisk.img, options2=journal:redo.log
-#usb_uhci: enabled=1, port2=disk:usbdisk2.img, options2=sect_size:1024
-#usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2="debug,speed:full"
-#usb_uhci: enabled=1, port1=printer:printdata.bin, port2=cdrom:image.iso
-#usb_uhci: enabled=1, port2=floppy:vvfat:diskette, options2="model:teac"
+#usb_uhci: port1=mouse, port2=disk, options2="path:usbstick.img"
+#usb_uhci: port1=hub, options1="ports:6, pcap:outfile.pcap"
+#usb_uhci: port2=disk, options2="path:undoable:usbdisk.img, journal:u.redolog"
+#usb_uhci: port2=disk, options2=""path:usbdisk2.img, sect_size:1024"
+#usb_uhci: port2=disk, options2="path:vvfat:vvfat, debug, speed:full"
+#usb_uhci: port2=cdrom, options2="path:image.iso"
+#usb_uhci: port1=printer, options1="file:printdata.bin"
+#usb_uhci: port2=floppy, options2="path:vvfat:diskette, model:teac"
 
 #=======================================================================
 # USB_OHCI:
@@ -1226,14 +1272,6 @@ speaker: enabled=1, mode=sound
 #port_e9_hack: enabled=1
 
 #=======================================================================
-# other stuff
-#=======================================================================
-# WARNING: This Bochs feature is not maintained yet. Is it still used ?
-# To use it, set BX_LOAD32BITOSHACK in config.h to 1 and recompile Bochs.
-#load32bitOSImage: os=nullkernel, path=../kernel.img, iolog=../vga_io.log
-#load32bitOSImage: os=linux, path=../linux.img, iolog=../vga_io.log, initrd=../initrd.img
-
-#=======================================================================
 # fullscreen: ONLY IMPLEMENTED ON AMIGA
 #             Request that Bochs occupy the entire screen instead of a
 #             window.
@@ -1244,14 +1282,6 @@ speaker: enabled=1, mode=sound
 #=======================================================================
 #fullscreen: enabled=0
 #screenmode: name="sample"
-
-#=======================================================================
-# USER_PLUGIN:
-# Load user-defined plugin. This option is available only if Bochs is
-# compiled with plugin support. Maximum 8 different plugins are supported.
-# See the example in the Bochs sources how to write a plugin device.
-#=======================================================================
-#user_plugin: name=testdev
 
 #=======================================================================
 # for Macintosh, use the style of pathnames in the following

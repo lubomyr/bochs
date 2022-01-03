@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: ioapic.h 11553 2012-11-25 19:06:03Z vruppert $
+// $Id: ioapic.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2012  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -27,14 +27,14 @@
 
 typedef Bit32u apic_dest_t; /* same definition in apic.h */
 
-extern int apic_bus_deliver_lowest_priority(Bit8u vector, apic_dest_t dest, bx_bool trig_mode, bx_bool broadcast);
-extern int apic_bus_deliver_interrupt(Bit8u vector, apic_dest_t dest, Bit8u delivery_mode, bx_bool logical_dest, bx_bool level, bx_bool trig_mode);
-extern int apic_bus_broadcast_interrupt(Bit8u vector, Bit8u delivery_mode, bx_bool trig_mode, int exclude_cpu);
+extern int apic_bus_deliver_lowest_priority(Bit8u vector, apic_dest_t dest, bool trig_mode, bool broadcast);
+extern int apic_bus_deliver_interrupt(Bit8u vector, apic_dest_t dest, Bit8u delivery_mode, bool logical_dest, bool level, bool trig_mode);
+extern int apic_bus_broadcast_interrupt(Bit8u vector, Bit8u delivery_mode, bool trig_mode, int exclude_cpu);
 
 #define BX_IOAPIC_NUM_PINS   (0x18)
 
 // use the same version as 82093 IOAPIC (0x00170011)
-#define BX_IOAPIC_VERSION_ID (((BX_IOAPIC_NUM_PINS - 1) << 16) | 0x11)
+const Bit32u BX_IOAPIC_VERSION_ID = (((BX_IOAPIC_NUM_PINS - 1) << 16) | 0x11);
 
 class bx_io_redirect_entry_t {
   Bit32u hi, lo;
@@ -43,11 +43,11 @@ public:
   bx_io_redirect_entry_t(): hi(0), lo(0x10000) {}
 
   Bit8u destination() const { return (Bit8u)(hi >> 24); }
-  bx_bool is_masked() const { return (bx_bool)((lo >> 16) & 1); }
+  bool is_masked() const { return (bool)((lo >> 16) & 1); }
   Bit8u trigger_mode() const { return (Bit8u)((lo >> 15) & 1); }
-  bx_bool remote_irr() const { return (bx_bool)((lo >> 14) & 1); }
+  bool remote_irr() const { return (bool)((lo >> 14) & 1); }
   Bit8u pin_polarity() const { return (Bit8u)((lo >> 13) & 1); }
-  bx_bool delivery_status() const { return (bx_bool)((lo >> 12) & 1); }
+  bool delivery_status() const { return (bool)((lo >> 12) & 1); }
   Bit8u destination_mode() const { return (Bit8u)((lo >> 11) & 1); }
   Bit8u delivery_mode() const { return (Bit8u)((lo >> 8) & 7); }
   Bit8u vector() const { return (Bit8u)(lo & 0xff); }
@@ -82,9 +82,9 @@ public:
   virtual void debug_dump(int argc, char **argv);
 #endif
 
-  virtual void set_enabled(bx_bool enabled, Bit16u base_offset);
+  virtual void set_enabled(bool enabled, Bit16u base_offset);
   virtual void receive_eoi(Bit8u vector);
-  virtual void set_irq_level(Bit8u int_in, bx_bool level);
+  virtual void set_irq_level(Bit8u int_in, bool level);
 
   Bit32u read_aligned(bx_phy_address address);
   void write_aligned(bx_phy_address address, Bit32u data);
@@ -95,7 +95,7 @@ private:
 
   void service_ioapic(void);
 
-  bx_bool enabled;
+  bool enabled;
   bx_phy_address base_addr;
   Bit32u id;
 

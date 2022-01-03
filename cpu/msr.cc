@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: msr.cc 13767 2020-01-03 19:33:16Z sshwarts $
+// $Id: msr.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2008-2019 Stanislav Shwartsman
@@ -28,11 +28,11 @@
 #define LOG_THIS BX_CPU_THIS_PTR
 
 #if BX_SUPPORT_CET
-extern bx_bool is_invalid_cet_control(bx_address val);
+extern bool is_invalid_cet_control(bx_address val);
 #endif
 
 #if BX_CPU_LEVEL >= 5
-bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
+bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
 {
   Bit64u val64 = 0;
 
@@ -156,6 +156,17 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
 
     case BX_MSR_TSC:
       val64 = BX_CPU_THIS_PTR get_TSC();
+#if BX_SUPPORT_SVM || BX_SUPPORT_VMX
+      val64 = BX_CPU_THIS_PTR get_TSC_VMXAdjust(val64);
+#endif
+      break;
+
+    case BX_MSR_TSC_ADJUST:
+      if (! is_cpu_extension_supported(BX_ISA_TSC_ADJUST)) {
+        BX_ERROR(("RDMSR BX_MSR_TSC_ADJUST: TSC_ADJUST is not enabled in the cpu model"));
+        return handle_unknown_rdmsr(index, msr);
+      }
+      val64 = BX_CPU_THIS_PTR tsc_adjust;
       break;
 
 #if BX_SUPPORT_APIC
@@ -198,6 +209,16 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
         return handle_unknown_rdmsr(index, msr);
       }
       val64 = BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table;
+      break;
+#endif
+
+#if BX_SUPPORT_PKEYS
+    case BX_MSR_IA32_PKRS:
+      if (! is_cpu_extension_supported(BX_ISA_PKS)) {
+        BX_ERROR(("RDMSR BX_MSR_IS32_PKS: Supervisor-Mode Protection Keys not enabled in the cpu model"));
+        return handle_unknown_rdmsr(index, msr);
+      }
+      val64 = BX_CPU_THIS_PTR pkrs;
       break;
 #endif
 
@@ -424,7 +445,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::rdmsr(Bit32u index, Bit64u *msr)
   return 1;
 }
 
-bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::handle_unknown_rdmsr(Bit32u index, Bit64u *msr)
+bool BX_CPP_AttrRegparmN(2) BX_CPU_C::handle_unknown_rdmsr(Bit32u index, Bit64u *msr)
 {
   Bit64u val_64 = 0;
 
@@ -505,7 +526,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::RDMSR(bxInstruction_c *i)
 }
 
 #if BX_CPU_LEVEL >= 6
-bx_bool isMemTypeValidMTRR(unsigned memtype)
+bool isMemTypeValidMTRR(unsigned memtype)
 {
   switch(memtype) {
   case BX_MEMTYPE_UC:
@@ -519,12 +540,12 @@ bx_bool isMemTypeValidMTRR(unsigned memtype)
   }
 }
 
-BX_CPP_INLINE bx_bool isMemTypeValidPAT(unsigned memtype)
+BX_CPP_INLINE bool isMemTypeValidPAT(unsigned memtype)
 {
   return (memtype == 0x07) /* UC- */ || isMemTypeValidMTRR(memtype);
 }
 
-bx_bool isValidMSR_PAT(Bit64u pat_val)
+bool isValidMSR_PAT(Bit64u pat_val)
 {
   // use packed register as 64-bit value with convinient accessors
   BxPackedRegister pat_msr = pat_val;
@@ -534,7 +555,7 @@ bx_bool isValidMSR_PAT(Bit64u pat_val)
   return true;
 }
 
-bx_bool isValidMSR_FixedMTRR(Bit64u fixed_mtrr_val)
+bool isValidMSR_FixedMTRR(Bit64u fixed_mtrr_val)
 {
   // use packed register as 64-bit value with convinient accessors
   BxPackedRegister fixed_mtrr_msr = fixed_mtrr_val;
@@ -546,7 +567,7 @@ bx_bool isValidMSR_FixedMTRR(Bit64u fixed_mtrr_val)
 #endif
 
 #if BX_CPU_LEVEL >= 5
-bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
+bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
 {
   Bit32u val32_lo = GET32L(val_64);
   Bit32u val32_hi = GET32H(val_64);
@@ -755,6 +776,14 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
       BX_CPU_THIS_PTR set_TSC(val_64);
       break;
 
+    case BX_MSR_TSC_ADJUST:
+      if (! is_cpu_extension_supported(BX_ISA_TSC_ADJUST)) {
+        BX_ERROR(("WRMSR BX_MSR_TSC_ADJUST: TSC_ADJUST is not enabled in the cpu model"));
+        return handle_unknown_wrmsr(index, val_64);
+      }
+      BX_CPU_THIS_PTR tsc_adjust = (Bit64s) val_64;
+      break;
+
 #if BX_SUPPORT_APIC
     case BX_MSR_APICBASE:
       return relocate_apic(val_64);
@@ -820,6 +849,17 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
         return 0;
       }
       BX_CPU_THIS_PTR msr.ia32_interrupt_ssp_table = val_64;
+      break;
+#endif
+
+#if BX_SUPPORT_PKEYS
+    case BX_MSR_IA32_PKRS:
+      if (! is_cpu_extension_supported(BX_ISA_PKS)) {
+        BX_ERROR(("WRMSR BX_MSR_IS32_PKS: Supervisor-Mode Protection Keys not enabled in the cpu model"));
+        return handle_unknown_wrmsr(index, val_64);
+      }
+      BX_CPU_THIS_PTR pkrs = val_64;
+      set_PKeys(BX_CPU_THIS_PTR pkru, BX_CPU_THIS_PTR pkrs);
       break;
 #endif
 
@@ -1034,7 +1074,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::wrmsr(Bit32u index, Bit64u val_64)
   return 1;
 }
 
-bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::handle_unknown_wrmsr(Bit32u index, Bit64u val_64)
+bool BX_CPP_AttrRegparmN(2) BX_CPU_C::handle_unknown_wrmsr(Bit32u index, Bit64u val_64)
 {
   // Try to check cpuid_t first (can implement some MSRs)
   int result = BX_CPU_THIS_PTR cpuid->wrmsr(index, val_64);
@@ -1064,7 +1104,7 @@ bx_bool BX_CPP_AttrRegparmN(2) BX_CPU_C::handle_unknown_wrmsr(Bit32u index, Bit6
 #endif // BX_CPU_LEVEL >= 5
 
 #if BX_SUPPORT_APIC
-bx_bool BX_CPU_C::relocate_apic(Bit64u val_64)
+bool BX_CPU_C::relocate_apic(Bit64u val_64)
 {
   /* MSR_APICBASE
    *  [0:7]  Reserved

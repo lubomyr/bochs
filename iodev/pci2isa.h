@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci2isa.h 13470 2018-02-24 18:04:36Z vruppert $
+// $Id: pci2isa.h 14111 2021-01-31 08:22:55Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -36,7 +36,7 @@ public:
   virtual ~bx_piix3_c();
   virtual void init(void);
   virtual void reset(unsigned type);
-  virtual void pci_set_irq(Bit8u devfunc, unsigned line, bx_bool level);
+  virtual void pci_set_irq(Bit8u devfunc, unsigned line, bool level);
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
@@ -50,6 +50,7 @@ private:
   struct {
     unsigned chipset;
     Bit8u devfunc;
+    Bit8u map_slot_to_dev;
     Bit8u elcr1;
     Bit8u elcr2;
     Bit8u apmc;

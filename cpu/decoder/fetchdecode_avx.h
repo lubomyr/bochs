@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: fetchdecode_avx.h 13611 2019-11-20 20:18:22Z sshwarts $
+// $Id: fetchdecode_avx.h 13963 2020-10-03 09:23:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2019 Stanislav Shwartsman
@@ -28,10 +28,8 @@
 
 // VEX-encoded 0x0F opcodes
 static const Bit64u BxOpcodeGroup_VEX_0F10[] = { 
-  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL128, BX_IA_V128_VMOVUPS_VpsWps),
-  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL256, BX_IA_V256_VMOVUPS_VpsWps),
-  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128, BX_IA_V128_VMOVUPD_VpdWpd),
-  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL256, BX_IA_V256_VMOVUPD_VpdWpd),
+  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL128_256, BX_IA_VMOVUPS_VpsWps),
+  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128_256, BX_IA_VMOVUPD_VpdWpd),
 
   form_opcode(ATTR_SSE_PREFIX_F3 | ATTR_MODC0, BX_IA_V128_VMOVSS_VssHpsWss),
   form_opcode(ATTR_SSE_PREFIX_F2 | ATTR_MODC0, BX_IA_V128_VMOVSD_VsdHpdWsd),
@@ -90,10 +88,8 @@ static const Bit64u BxOpcodeGroup_VEX_0F17[] = {
 };
 
 static const Bit64u BxOpcodeGroup_VEX_0F28[] = {
-  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL128, BX_IA_V128_VMOVAPS_VpsWps),
-  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL256, BX_IA_V256_VMOVAPS_VpsWps),
-  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128, BX_IA_V128_VMOVAPD_VpdWpd),
-  last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL256, BX_IA_V256_VMOVAPD_VpdWpd)
+  form_opcode(ATTR_SSE_NO_PREFIX | ATTR_VL128_256, BX_IA_VMOVAPS_VpsWps),
+  last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128_256, BX_IA_VMOVAPD_VpdWpd)
 };
 
 static const Bit64u BxOpcodeGroup_VEX_0F29[] = {
@@ -369,10 +365,8 @@ static const Bit64u BxOpcodeGroup_VEX_0F6E[] = {
 };
 
 static const Bit64u BxOpcodeGroup_VEX_0F6F[] = { 
-  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128, BX_IA_V128_VMOVDQA_VdqWdq),
-  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL256, BX_IA_V256_VMOVDQA_VdqWdq),
-  form_opcode(ATTR_SSE_PREFIX_F3 | ATTR_VL128, BX_IA_V128_VMOVDQU_VdqWdq),
-  last_opcode(ATTR_SSE_PREFIX_F3 | ATTR_VL256, BX_IA_V256_VMOVDQU_VdqWdq)
+  form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VL128_256, BX_IA_VMOVDQA_VdqWdq),
+  last_opcode(ATTR_SSE_PREFIX_F3 | ATTR_VL128_256, BX_IA_VMOVDQU_VdqWdq)
 };
 
 static const Bit64u BxOpcodeGroup_VEX_0F70[] = { 
@@ -999,6 +993,11 @@ static const Bit64u BxOpcodeGroup_VEX_0F3847[] = {
   form_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPSLLVD_VdqHdqWdq),
   last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W1, BX_IA_VPSLLVQ_VdqHdqWdq)
 };
+
+static const Bit64u BxOpcodeGroup_VEX_0F3850[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPDPBUSD_VdqHdqWdq) };
+static const Bit64u BxOpcodeGroup_VEX_0F3851[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPDPBUSDS_VdqHdqWdq) };
+static const Bit64u BxOpcodeGroup_VEX_0F3852[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPDPWSSD_VdqHdqWdq) };
+static const Bit64u BxOpcodeGroup_VEX_0F3853[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPDPWSSDS_VdqHdqWdq) };
 
 static const Bit64u BxOpcodeGroup_VEX_0F3858[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPBROADCASTD_VdqWd) };
 static const Bit64u BxOpcodeGroup_VEX_0F3859[] = { last_opcode(ATTR_SSE_PREFIX_66 | ATTR_VEX_W0, BX_IA_VPBROADCASTQ_VdqWq) };
@@ -1773,10 +1772,10 @@ static const Bit64u *BxOpcodeTableVEX[256*3] = {
   /* 4D  */ ( BxOpcodeGroup_ERR ),
   /* 4E  */ ( BxOpcodeGroup_ERR ),
   /* 4F  */ ( BxOpcodeGroup_ERR ),
-  /* 50  */ ( BxOpcodeGroup_ERR ),
-  /* 51  */ ( BxOpcodeGroup_ERR ),
-  /* 52  */ ( BxOpcodeGroup_ERR ),
-  /* 53  */ ( BxOpcodeGroup_ERR ),
+  /* 50  */ ( BxOpcodeGroup_VEX_0F3850 ),
+  /* 51  */ ( BxOpcodeGroup_VEX_0F3851 ),
+  /* 52  */ ( BxOpcodeGroup_VEX_0F3852 ),
+  /* 53  */ ( BxOpcodeGroup_VEX_0F3853 ),
   /* 54  */ ( BxOpcodeGroup_ERR ),
   /* 55  */ ( BxOpcodeGroup_ERR ),
   /* 56  */ ( BxOpcodeGroup_ERR ),

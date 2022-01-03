@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bmi32.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: bmi32.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2018 Stanislav Shwartsman
@@ -58,7 +58,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::MULX_GdBdEdR(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSI_BdEdR(bxInstruction_c *i)
 {
   Bit32u op1_32 = BX_READ_32BIT_REG(i->src());
-  bx_bool tmpCF = (op1_32 != 0);
+  bool tmpCF = (op1_32 != 0);
 
   op1_32 = (-op1_32) & op1_32;
 
@@ -73,7 +73,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSI_BdEdR(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSMSK_BdEdR(bxInstruction_c *i)
 {
   Bit32u op1_32 = BX_READ_32BIT_REG(i->src());
-  bx_bool tmpCF = (op1_32 == 0);
+  bool tmpCF = (op1_32 == 0);
 
   op1_32 = (op1_32-1) ^ op1_32;
 
@@ -88,7 +88,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSMSK_BdEdR(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::BLSR_BdEdR(bxInstruction_c *i)
 {
   Bit32u op1_32 = BX_READ_32BIT_REG(i->src());
-  bx_bool tmpCF = (op1_32 == 0);
+  bool tmpCF = (op1_32 == 0);
 
   op1_32 = (op1_32-1) & op1_32;
 
@@ -171,7 +171,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::BEXTR_GdEdBdR(bxInstruction_c *i)
 void BX_CPP_AttrRegparmN(1) BX_CPU_C::BZHI_GdEdBdR(bxInstruction_c *i)
 {
   unsigned control = BX_READ_8BIT_REGL(i->src2());
-  bx_bool tmpCF = 0;
+  bool tmpCF = 0;
   Bit32u op1_32 = BX_READ_32BIT_REG(i->src1());
   
   if (control < 32) {

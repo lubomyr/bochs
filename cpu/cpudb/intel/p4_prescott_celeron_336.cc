@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: p4_prescott_celeron_336.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: p4_prescott_celeron_336.cc 13783 2020-01-11 06:18:13Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2017 Stanislav Shwartsman
@@ -240,7 +240,9 @@ void p4_prescott_celeron_336_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) con
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC

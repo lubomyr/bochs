@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: es1370.cc 13497 2018-05-01 15:54:37Z vruppert $
+// $Id: es1370.cc 14163 2021-02-26 20:37:49Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // ES1370 soundcard support (ported from QEMU)
 //
 // Copyright (c) 2005  Vassili Karpov (malc)
-// Copyright (C) 2011-2018  The Bochs Project
+// Copyright (C) 2011-2021  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@
 
 bx_es1370_c* theES1370Device = NULL;
 
-const Bit8u es1370_iomask[64] = {7, 1, 3, 1, 7, 1, 3, 1, 1, 3, 1, 0, 7, 0, 0, 0,
+const Bit8u es1370_iomask[64] = {7, 1, 3, 1, 4, 0, 0, 0, 7, 1, 1, 0, 7, 0, 0, 0,
                                  6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
                                  7, 1, 3, 1, 6, 0, 2, 0, 6, 0, 2, 0, 6, 0, 2, 0,
                                  4, 0, 0, 0, 6, 0, 2, 0, 4, 0, 0, 0, 6, 0, 2, 0};
@@ -185,25 +185,30 @@ Bit32s es1370_options_save(FILE *fp)
   return SIM->write_param_list(fp, (bx_list_c*) SIM->get_param(BXPN_SOUND_ES1370), NULL, 0);
 }
 
-// device plugin entry points
+// device plugin entry point
 
-int CDECL libes1370_LTX_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_MODULE(es1370)
 {
-  theES1370Device = new bx_es1370_c();
-  BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theES1370Device, BX_PLUGIN_ES1370);
-  // add new configuration parameter for the config interface
-  es1370_init_options();
-  // register add-on option for bochsrc and command line
-  SIM->register_addon_option("es1370", es1370_options_parser, es1370_options_save);
+  if (mode == PLUGIN_INIT) {
+    theES1370Device = new bx_es1370_c();
+    BX_REGISTER_DEVICE_DEVMODEL(plugin, type, theES1370Device, BX_PLUGIN_ES1370);
+    // add new configuration parameter for the config interface
+    es1370_init_options();
+    // register add-on option for bochsrc and command line
+    SIM->register_addon_option("es1370", es1370_options_parser, es1370_options_save);
+    bx_devices.add_sound_device();
+  } else if (mode == PLUGIN_FINI) {
+    delete theES1370Device;
+    SIM->unregister_addon_option("es1370");
+    bx_list_c *menu = (bx_list_c*)SIM->get_param("sound");
+    menu->remove("es1370");
+    bx_devices.remove_sound_device();
+  } else if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_OPTIONAL;
+  } else if (mode == PLUGIN_FLAGS) {
+    return PLUGFLAG_PCI;
+  }
   return 0; // Success
-}
-
-void CDECL libes1370_LTX_plugin_fini(void)
-{
-  SIM->unregister_addon_option("es1370");
-  bx_list_c *menu = (bx_list_c*)SIM->get_param("sound");
-  menu->remove("es1370");
-  delete theES1370Device;
 }
 
 // the device object
@@ -563,7 +568,7 @@ Bit32u bx_es1370_c::read(Bit32u address, unsigned io_len)
         val = BX_ES1370_THIS s.legacy1B;
       } else if (offset >= 0x30) {
         val = ~0U; // keep compiler happy
-        BX_ERROR(("unsupported read from memory offset=0x%02x!",
+        BX_DEBUG(("unsupported read from memory offset=0x%02x!",
                   (BX_ES1370_THIS s.mempage << 4) | (offset & 0x0f)));
       } else {
         val = ~0U; // keep compiler happy
@@ -596,7 +601,7 @@ void bx_es1370_c::write(Bit32u address, Bit32u value, unsigned io_len)
   Bit16u  offset;
   Bit32u shift, mask;
   Bit8u index;
-  bx_bool set_wave_vol = 0;
+  bool set_wave_vol = 0;
   chan_t *d = &BX_ES1370_THIS s.chan[0];
   unsigned i;
 
@@ -619,6 +624,9 @@ void bx_es1370_c::write(Bit32u address, Bit32u value, unsigned io_len)
         #endif
       }
       BX_ES1370_THIS update_voices(value, BX_ES1370_THIS s.sctl, 0);
+      break;
+    case ES1370_STATUS:
+      BX_DEBUG(("ignoring write to status register"));
       break;
     case ES1370_UART_DATA:
     case ES1370_UART_CTL:
@@ -706,7 +714,7 @@ void bx_es1370_c::write(Bit32u address, Bit32u value, unsigned io_len)
         BX_ES1370_THIS s.legacy1B = (Bit8u)(value & 0xff);
         set_irq_level(BX_ES1370_THIS s.legacy1B & 0x01);
       } else if (offset >= 0x30) {
-        BX_ERROR(("unsupported write to memory offset=0x%02x!",
+        BX_DEBUG(("unsupported write to memory offset=0x%02x!",
                   (BX_ES1370_THIS s.mempage << 4) | (offset & 0x0f)));
       } else {
         BX_ERROR(("unsupported io write to offset=0x%04x!", offset));
@@ -720,7 +728,7 @@ void bx_es1370_c::write(Bit32u address, Bit32u value, unsigned io_len)
   }
 }
 
-Bit16u bx_es1370_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bx_bool shift)
+Bit16u bx_es1370_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bool shift)
 {
   Bit8u vol1, vol2;
   float fvol1, fvol2;
@@ -728,8 +736,8 @@ Bit16u bx_es1370_c::calc_output_volume(Bit8u reg1, Bit8u reg2, bx_bool shift)
 
   vol1 = (0x1f - (BX_ES1370_THIS s.codec_reg[reg1] & 0x1f));
   vol2 = (0x1f - (BX_ES1370_THIS s.codec_reg[reg2] & 0x1f));
-  fvol1 = pow(10.0f, (float)(31-vol1)*-0.065f);
-  fvol2 = pow(10.0f, (float)(31-vol2)*-0.065f);
+  fvol1 = (float)pow(10.0f, (float)(31-vol1)*-0.065f);
+  fvol2 = (float)pow(10.0f, (float)(31-vol2)*-0.065f);
   result = (Bit8u)(255 * fvol1 * fvol2);
   if (shift) result <<= 8;
   return result;
@@ -762,7 +770,7 @@ Bit32u bx_es1370_c::run_channel(unsigned chan, int timer_id, Bit32u buflen)
   Bit32u new_status = BX_ES1370_THIS s.status;
   Bit32u addr, sc, csc_bytes, cnt, size, left, transfered, temp;
   Bit8u tmpbuf[BX_SOUNDLOW_WAVEPACKETSIZE];
-  bx_bool irq = 0;
+  bool irq = 0;
 
   chan_t *d = &BX_ES1370_THIS s.chan[chan];
 
@@ -837,7 +845,7 @@ Bit32u bx_es1370_c::es1370_adc_handler(void *this_ptr, Bit32u buflen)
   return 0;
 }
 
-void bx_es1370_c::set_irq_level(bx_bool level)
+void bx_es1370_c::set_irq_level(bool level)
 {
   DEV_pci_set_irq(BX_ES1370_THIS s.devfunc, BX_ES1370_THIS pci_conf[0x3d], level);
 }
@@ -872,7 +880,7 @@ void bx_es1370_c::check_lower_irq(Bit32u sctl)
   }
 }
 
-void bx_es1370_c::update_voices(Bit32u ctl, Bit32u sctl, bx_bool force)
+void bx_es1370_c::update_voices(Bit32u ctl, Bit32u sctl, bool force)
 {
   unsigned i;
   Bit32u old_freq, new_freq, old_fmt, new_fmt;
@@ -911,7 +919,7 @@ void bx_es1370_c::update_voices(Bit32u ctl, Bit32u sctl, bx_bool force)
     }
     if (((ctl ^ BX_ES1370_THIS s.ctl) & ctl_ch_en[i]) ||
         ((sctl ^ BX_ES1370_THIS s.sctl) & sctl_ch_pause[i]) || force) {
-      bx_bool on = ((ctl & ctl_ch_en[i]) && !(sctl & sctl_ch_pause[i]));
+      bool on = ((ctl & ctl_ch_en[i]) && !(sctl & sctl_ch_pause[i]));
 
       if (i == DAC1_CHANNEL) {
         timer_id = BX_ES1370_THIS s.dac1_timer_index;
@@ -1111,7 +1119,7 @@ void bx_es1370_c::pci_write_handler(Bit8u address, Bit32u value, unsigned io_len
 }
 
 // runtime parameter handlers
-Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, int set, Bit64s val)
+Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, bool set, Bit64s val)
 {
   if (set) {
     const char *pname = param->get_name();
@@ -1130,7 +1138,7 @@ Bit64s bx_es1370_c::es1370_param_handler(bx_param_c *param, int set, Bit64s val)
   return val;
 }
 
-const char* bx_es1370_c::es1370_param_string_handler(bx_param_string_c *param, int set,
+const char* bx_es1370_c::es1370_param_string_handler(bx_param_string_c *param, bool set,
                                                  const char *oldval, const char *val,
                                                  int maxlen)
 {

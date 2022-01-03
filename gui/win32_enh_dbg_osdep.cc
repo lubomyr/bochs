@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32_enh_dbg_osdep.cc 13438 2018-01-19 20:27:04Z sshwarts $
+// $Id: win32_enh_dbg_osdep.cc 14115 2021-01-31 15:22:58Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  BOCHS ENHANCED DEBUGGER Ver 1.2
@@ -8,15 +8,15 @@
 //
 //  Modified by Bruce Ewing
 //
-//  Copyright (C) 2008-2014  The Bochs Project
-
-#include "config.h"
-
-#if BX_DEBUGGER && BX_DEBUGGER_GUI
+//  Copyright (C) 2008-2021  The Bochs Project
 
 #include "bochs.h"
+#include "bx_debug/debug.h"
+#include "siminterface.h"
 #include "win32dialog.h"
 #include "enh_dbg.h"
+
+#if BX_DEBUGGER && BX_DEBUGGER_GUI
 
 // Important Note! All the string manipulation functions assume one byte chars -- ie. "ascii",
 // instead of "wide" chars. If there exists a compiler that automatically assumes wide chars
@@ -148,7 +148,7 @@ Bit32u SelectedBID;
 #define BTN_BASE            1024
 #define MULTICPU_BTN_BASE   1030
 
-bx_bool UpdInProgress[3];       // flag -- list update incomplete (not OK to paint)
+bool UpdInProgress[3];       // flag -- list update incomplete (not OK to paint)
 
 INT_PTR CALLBACK A_DP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
 {
@@ -176,9 +176,9 @@ INT_PTR CALLBACK A_DP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
     return 0;
 }
 
-bx_bool ShowAskDialog()
+bool ShowAskDialog()
 {
-    bx_bool ret = FALSE;
+    bool ret = FALSE;
     // The dialog box needs a caret, and will destroy the one in hE_I.
     // So destroy it myself, cleanly, and let it be recreated cleanly.
     CallWindowProc(*wEdit, hE_I,WM_KILLFOCUS,(WPARAM) 0,0);
@@ -566,7 +566,7 @@ LRESULT CALLBACK LVProc(HWND hh, UINT mm, WPARAM ww, LPARAM ll)
 }
 
 
-bx_bool SpListView()        // Superclasses a ListView control
+bool SpListView()        // Superclasses a ListView control
 {
     WNDCLASS wClass;
     GetClassInfo(GetModuleHandle(0), WC_LISTVIEW, &wClass);
@@ -579,7 +579,7 @@ bx_bool SpListView()        // Superclasses a ListView control
     return TRUE;
 }
 
-bx_bool SpBtn()             // Superclasses a button control
+bool SpBtn()             // Superclasses a button control
 {
     WNDCLASS wClass;
     GetClassInfo(GetModuleHandle(0), "button", &wClass);
@@ -826,7 +826,7 @@ void VSizeChange()
 // kludgy function to remove column header/autosizing from Fill routines
 void RedrawColumns(int listnum)
 {
-    static bx_bool DumpCResize = FALSE; // flag to force column resize/autosize
+    static bool DumpCResize = FALSE; // flag to force column resize/autosize
     static int PrevDV = -1;             // type of previous Dump window that was displayed
     // ResizeColmns says whether font or 64bit mode has changed,
     // but the Dump windows need to "remember" seeing the flag
@@ -999,7 +999,7 @@ void GetInputEntry(char *buf)
     GetWindowText(hE_I,buf,200);
 }
 
-void SetLIState(int listnum, int itemnum, bx_bool Select)
+void SetLIState(int listnum, int itemnum, bool Select)
 {
     // assume selected
     LV_ITEM lvi = {LVIF_STATE,itemnum,2,LVIS_SELECTED,LVIS_SELECTED,(LPSTR) 0,0,0,0};
@@ -1135,7 +1135,7 @@ void DispMessage(const char *msg, const char *title)
 }
 
 // exit GDT/IDT/Paging/Stack/Tree -- back to the MemDump window
-void ShowMemData(bx_bool initting)
+void ShowMemData(bool initting)
 {
     int i = 1;
     if (LinearDump == FALSE)
@@ -1213,7 +1213,7 @@ void MakeTreeChild (HTREEITEM *h_P, int ChildCount, HTREEITEM *h_TC)
     *h_TC = (HTREEITEM) CallWindowProc(wTreeView,hT,TVM_INSERTITEM,(WPARAM) 0,(LPARAM) &tvis);
 }
 
-bx_bool NewFont()
+bool NewFont()
 {
     if (AtBreak == FALSE)
         return FALSE;
@@ -1259,7 +1259,7 @@ bx_bool NewFont()
 LRESULT CALLBACK B_WP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
 {
     unsigned i;
-    extern bx_bool vgaw_refresh;
+    extern bool vgaw_refresh;
 
     switch(mm)
     {
@@ -1269,14 +1269,14 @@ LRESULT CALLBACK B_WP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
             DefFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
             // Register Window
-            char* txt0[] = {"Reg Name","Hex Value","Decimal"};
-            LV_COLUMN lvc = {LVCF_SUBITEM | LVCF_TEXT,LVCFMT_LEFT,0,txt0[0]};
+            const char* txt0[] = {"Reg Name","Hex Value","Decimal"};
+            LV_COLUMN lvc = {LVCF_SUBITEM | LVCF_TEXT,LVCFMT_LEFT,0, (char*)txt0[0]};
             hL[REG_WND] = CreateWindowEx(0,"sLV","",LVStyle[0],0,0,100,100,hh,(HMENU)1001,GetModuleHandle(0),0);
             // Note; WM_CREATE only happens once, so don't bother eliminating these SendMessage macros
             ListView_InsertColumn(hL[REG_WND],0,&lvc);
-            lvc.pszText = txt0[1];
+            lvc.pszText = (char*)txt0[1];
             ListView_InsertColumn(hL[REG_WND],1,&lvc);
-            lvc.pszText = txt0[2];
+            lvc.pszText = (char*)txt0[2];
             ListView_InsertColumn(hL[REG_WND],2,&lvc);
 
             // Enable the groupID's for the register window
@@ -1285,7 +1285,7 @@ LRESULT CALLBACK B_WP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
             // the group stuff may COMPILE correctly, but still may fail at runtime
             Bit8u MajWinVer, MinWinVer;
             Bit32u PackedVer = GetVersion();
-            bx_bool Group_OK = TRUE;
+            bool Group_OK = TRUE;
             MajWinVer = (Bit8u)(PackedVer & 0xff);      // Major version # is in the LOW byte
             MinWinVer = (Bit8u)((PackedVer>>8) & 0xff);
             if (MajWinVer > 5 || (MajWinVer == 5 && MinWinVer >= 1))     // is it XP or higher?
@@ -1310,13 +1310,13 @@ LRESULT CALLBACK B_WP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
             // Asm Window
             hL[ASM_WND] = CreateWindowEx(0,"sLV","",LVStyle[1] | WS_BORDER,0,0,1,1,hh,(HMENU)1000,GetModuleHandle(0),0);
             CurCenterList = 1;          // ASM window starts with the border
-            char* txt3[] = {"L.Address","Bytes","Mnemonic"};
+            const char* txt3[] = {"L.Address","Bytes","Mnemonic"};
 
-            lvc.pszText = txt3[0];
+            lvc.pszText = (char*)txt3[0];
             ListView_InsertColumn(hL[ASM_WND],0,&lvc);
-            lvc.pszText = txt3[1];
+            lvc.pszText = (char*)txt3[1];
             ListView_InsertColumn(hL[ASM_WND],1,&lvc);
-            lvc.pszText = txt3[2];
+            lvc.pszText = (char*)txt3[2];
             ListView_InsertColumn(hL[ASM_WND],2,&lvc);
 //          SendMessage(hL[ASM_WND], LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER,
 //              LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -1421,7 +1421,7 @@ LRESULT CALLBACK B_WP(HWND hh,UINT mm,WPARAM ww,LPARAM ll)
         {
             RECT rc;
             int i, j, k;
-            bx_bool unchanged = FALSE;
+            bool unchanged = FALSE;
 
             if (hY == NULL)     // sometimes WM_SIZE is called before OSInit completes!
                 hY = hh;
@@ -1779,7 +1779,7 @@ void HitBreak()
 }
 
 // This function must be called immediately after bochs starts
-bx_bool OSInit()
+bool OSInit()
 {
     TEXTMETRIC tm;
 
@@ -1891,7 +1891,7 @@ void MakeBL(HTREEITEM *h_P, bx_param_c *p)
     }
 }
 
-bx_bool ParseOSSettings(const char *param, const char *value)
+bool ParseOSSettings(const char *param, const char *value)
 {
   char *val2, *ptr;
 

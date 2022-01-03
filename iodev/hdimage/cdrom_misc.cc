@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cdrom_misc.cc 12870 2015-10-25 17:02:12Z vruppert $
+// $Id: cdrom_misc.cc 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2015  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -24,11 +24,6 @@
 // needed by the CDROM emulation in 'harddrv.cc'.  Mostly, just
 // ioctl() calls and such.  Should be fairly easy to add support
 // for your OS if it is not supported yet.
-
-// Define BX_PLUGGABLE in files that can be compiled into plugins.  For
-// platforms that require a special tag on exported symbols, BX_PLUGGABLE
-// is used to know when we are exporting symbols and when we are importing.
-#define BX_PLUGGABLE
 
 #include "bochs.h"
 #if BX_SUPPORT_CDROM
@@ -112,7 +107,7 @@ extern "C" {
 #include <stdio.h>
 
 
-bx_bool cdrom_misc_c::start_cdrom()
+bool cdrom_misc_c::start_cdrom()
 {
   // Spin up the cdrom drive.
 
@@ -151,7 +146,7 @@ void cdrom_misc_c::eject_cdrom()
   }
 }
 
-bx_bool cdrom_misc_c::read_toc(Bit8u* buf, int* length, bx_bool msf, int start_track, int format)
+bool cdrom_misc_c::read_toc(Bit8u* buf, int* length, bool msf, int start_track, int format)
 {
   // Read CD TOC. Returns 0 if start track is out of bounds.
 

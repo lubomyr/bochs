@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_uhci.h 12971 2016-12-02 17:30:16Z vruppert $
+// $Id: usb_uhci.h 14158 2021-02-20 19:58:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2016  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2016  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -39,9 +39,6 @@ public:
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  static const char *usb_param_handler(bx_param_string_c *param, int set,
-                                       const char *oldval, const char *val, int maxlen);
-
 private:
   Bit8u device_change;
   int rt_conf_id;
@@ -51,6 +48,9 @@ private:
 
   static void runtime_config_handler(void *);
   void runtime_config(void);
+
+  static Bit64s usb_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static bool usb_param_enable_handler(bx_param_c *param, bool en);
 };
 
 #endif

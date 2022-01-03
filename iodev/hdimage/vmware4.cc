@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmware4.cc 13475 2018-03-18 09:07:31Z vruppert $
+// $Id: vmware4.cc 14181 2021-03-11 21:46:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -10,7 +10,13 @@
  * Contact: snrrrub@gmail.com
  *
  * Copyright (C) 2006       Sharvil Nanavati.
- * Copyright (C) 2006-2018  The Bochs Project
+ *
+ * VMDK version 4 image creation code
+ *
+ * Copyright (C) 2004 Fabrice Bellard
+ * Copyright (C) 2005 Filip Navara
+ *
+ * Copyright (C) 2006-2021  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -38,15 +44,46 @@
 #include "osdep.h"
 #include "misc/bswap.h"
 #else
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
 #endif
 #include "hdimage.h"
 #include "vmware4.h"
 
-#define LOG_THIS bx_devices.pluginHDImageCtl->
+#define LOG_THIS bx_hdimage_ctl.
 
 const off_t vmware4_image_t::INVALID_OFFSET = (off_t)-1;
 const int vmware4_image_t::SECTOR_SIZE = 512;
+
+#ifndef BXIMAGE
+
+// disk image plugin entry point
+
+PLUGIN_ENTRY_FOR_IMG_MODULE(vmware4)
+{
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_IMG;
+  }
+  return 0; // Success
+}
+
+#endif
+
+//
+// Define the static class that registers the derived device image class,
+// and allocates one on request.
+//
+class bx_vmware4_locator_c : public hdimage_locator_c {
+public:
+  bx_vmware4_locator_c(void) : hdimage_locator_c("vmware4") {}
+protected:
+  device_image_t *allocate(Bit64u disk_size, const char *journal) {
+    return (new vmware4_image_t());
+  }
+  int check_format(int fd, Bit64u disk_size) {
+    return (vmware4_image_t::check_format(fd, disk_size));
+  }
+} bx_vmware4_match;
 
 vmware4_image_t::vmware4_image_t()
   : file_descriptor(-1),
@@ -199,12 +236,12 @@ int vmware4_image_t::check_format(int fd, Bit64u imgsize)
   return HDIMAGE_FORMAT_OK;
 }
 
-bx_bool vmware4_image_t::is_open() const
+bool vmware4_image_t::is_open() const
 {
   return (file_descriptor != -1);
 }
 
-bx_bool vmware4_image_t::read_header()
+bool vmware4_image_t::read_header()
 {
   int ret;
 
@@ -353,8 +390,118 @@ Bit32u vmware4_image_t::get_capabilities(void)
   return HDIMAGE_HAS_GEOMETRY;
 }
 
-#ifndef BXIMAGE
-bx_bool vmware4_image_t::save_state(const char *backup_fname)
+#ifdef BXIMAGE
+int vmware4_image_t::create_image(const char *pathname, Bit64u size)
+{
+  const int SECTOR_SIZE = 512;
+  const char desc_template[] =
+    "# Disk DescriptorFile\n"
+    "version=1\n"
+    "CID=%x\n"
+    "parentCID=ffffffff\n"
+    "createType=\"monolithicSparse\"\n"
+    "\n"
+    "# Extent description\n"
+    "%s"
+    "\n"
+    "# The Disk Data Base\n"
+    "#DDB\n"
+    "\n"
+    "ddb.virtualHWVersion = \"4\"\n"
+    "ddb.geometry.cylinders = \"" FMT_LL "d\"\n"
+    "ddb.geometry.heads = \"16\"\n"
+    "ddb.geometry.sectors = \"63\"\n"
+    "ddb.adapterType = \"ide\"\n";
+  int fd, i;
+  Bit64s offset, cyl;
+  Bit32u tmp, grains, gt_size, gt_count, gd_size;
+  Bit8u buffer[SECTOR_SIZE];
+  char desc_line[256];
+  _VM4_Header header;
+
+  header.id[0] = 'K';
+  header.id[1] = 'D';
+  header.id[2] = 'M';
+  header.id[3] = 'V';
+  header.version = htod32(1);
+  header.flags = htod32(3);
+  header.total_sectors = htod64(size / SECTOR_SIZE);
+  header.tlb_size_sectors = 128;
+  header.description_offset_sectors = 1;
+  header.description_size_sectors = 20;
+  header.slb_count = 512;
+  header.flb_offset_sectors = header.description_offset_sectors +
+                              header.description_size_sectors;
+
+  grains = (Bit32u)((size / 512 + header.tlb_size_sectors - 1) / header.tlb_size_sectors);
+  gt_size = ((header.slb_count * sizeof(Bit32u)) + 511) >> 9;
+  gt_count = (grains + header.slb_count - 1) / header.slb_count;
+  gd_size = (gt_count * sizeof(Bit32u) + 511) >> 9;
+
+  header.flb_copy_offset_sectors = header.flb_offset_sectors + gd_size + (gt_size * gt_count);
+  header.tlb_offset_sectors =
+    ((header.flb_copy_offset_sectors + gd_size + (gt_size * gt_count) +
+    header.tlb_size_sectors - 1) / header.tlb_size_sectors) *
+    header.tlb_size_sectors;
+
+  header.tlb_size_sectors = htod64(header.tlb_size_sectors);
+  header.description_offset_sectors = htod64(header.description_offset_sectors);
+  header.description_size_sectors = htod64(header.description_size_sectors);
+  header.slb_count = htod32(header.slb_count);
+  header.flb_offset_sectors = htod64(header.flb_offset_sectors);
+  header.flb_copy_offset_sectors = htod64(header.flb_copy_offset_sectors);
+  header.tlb_offset_sectors = htod64(header.tlb_offset_sectors);
+  header.check_bytes[0] = 0x0a;
+  header.check_bytes[1] = 0x20;
+  header.check_bytes[2] = 0x0d;
+  header.check_bytes[3] = 0x0a;
+
+  memset(buffer, 0, SECTOR_SIZE);
+  memcpy(buffer, &header, sizeof(_VM4_Header));
+
+  fd = bx_create_image_file(pathname);
+  if (fd < 0)
+    BX_FATAL(("ERROR: failed to create vpc image file"));
+  if (bx_write_image(fd, 0, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write header!"));
+  }
+  memset(buffer, 0, SECTOR_SIZE);
+  offset = dtoh64(header.tlb_offset_sectors * SECTOR_SIZE) - SECTOR_SIZE;
+  if (bx_write_image(fd, offset, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write empty table!"));
+  }
+  offset = dtoh64(header.flb_offset_sectors) * SECTOR_SIZE;
+  for (i = 0, tmp = (Bit32u)dtoh64(header.flb_offset_sectors) + gd_size; i < (int)gt_count; i++, tmp += gt_size) {
+    if (bx_write_image(fd, offset, &tmp, sizeof(tmp)) != sizeof(tmp)) {
+      ::close(fd);
+      BX_FATAL(("ERROR: The disk image is not complete - could not write table!"));
+    }
+    offset += sizeof(tmp);
+  }
+  offset = dtoh64(header.flb_copy_offset_sectors) * SECTOR_SIZE;
+  for (i = 0, tmp = (Bit32u)dtoh64(header.flb_copy_offset_sectors) + gd_size; i < (int)gt_count; i++, tmp += gt_size) {
+    if (bx_write_image(fd, offset, &tmp, sizeof(tmp)) != sizeof(tmp)) {
+      ::close(fd);
+      BX_FATAL(("ERROR: The disk image is not complete - could not write backup table!"));
+    }
+    offset += sizeof(tmp);
+  }
+  memset(buffer, 0, SECTOR_SIZE);
+  cyl = (Bit64u)(size / 16 / 63 / 512.0);
+  snprintf(desc_line, 256, "RW " FMT_LL "d SPARSE \"%s\"", size / SECTOR_SIZE, pathname);
+  sprintf((char*)buffer, desc_template, (Bit32u)time(NULL), desc_line, cyl);
+  offset = dtoh64(header.description_offset_sectors) * SECTOR_SIZE;
+  if (bx_write_image(fd, offset, buffer, SECTOR_SIZE) != SECTOR_SIZE) {
+    ::close(fd);
+    BX_FATAL(("ERROR: The disk image is not complete - could not write description!"));
+  }
+  ::close(fd);
+  return 0;
+}
+#else
+bool vmware4_image_t::save_state(const char *backup_fname)
 {
   return hdimage_backup_file(file_descriptor, backup_fname);
 }

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cksum.cc 13727 2019-12-26 19:17:47Z vruppert $
+// $Id: cksum.cc 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1988, 1992, 1993
@@ -53,9 +53,9 @@
 
 int cksum(struct mbuf *m, int len)
 {
-	register uint16_t *w;
-	register int sum = 0;
-	register int mlen = 0;
+	uint16_t *w;
+	int sum = 0;
+	int mlen = 0;
 	int byte_swapped = 0;
 
 	union {

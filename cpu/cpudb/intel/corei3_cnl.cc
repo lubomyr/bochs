@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei3_cnl.cc 13720 2019-12-21 21:06:34Z sshwarts $
+// $Id: corei3_cnl.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2018 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "corei3_cnl.h"
 
@@ -63,6 +64,7 @@ corei3_cnl_t::corei3_cnl_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   enable_cpu_extension(BX_ISA_NX);
   enable_cpu_extension(BX_ISA_1G_PAGES);
   enable_cpu_extension(BX_ISA_PCID);
+  enable_cpu_extension(BX_ISA_TSC_ADJUST);
   enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_SSE);
   enable_cpu_extension(BX_ISA_SSE2);
@@ -95,7 +97,6 @@ corei3_cnl_t::corei3_cnl_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
   enable_cpu_extension(BX_ISA_INVPCID);
   enable_cpu_extension(BX_ISA_SMEP);
   enable_cpu_extension(BX_ISA_RDRAND);
-  enable_cpu_extension(BX_ISA_TSC_DEADLINE);
   enable_cpu_extension(BX_ISA_FCS_FDS_DEPRECATION);
   enable_cpu_extension(BX_ISA_RDSEED);
   enable_cpu_extension(BX_ISA_ADX);
@@ -121,7 +122,7 @@ corei3_cnl_t::corei3_cnl_t(BX_CPU_C *cpu): bx_cpuid_t(cpu)
 void corei3_cnl_t::get_cpuid_leaf(Bit32u function, Bit32u subfunction, cpuid_function_t *leaf) const
 {
   static const char* brand_string = "Intel(R) Core(TM) i3-8121U CPU @ 2.20GHz\0\0\0\0\0\0\0\0";
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
 
@@ -260,18 +261,11 @@ Bit32u corei3_cnl_t::get_vmx_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void corei3_cnl_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0x16;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x2;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0x16, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -421,7 +415,9 @@ void corei3_cnl_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) const
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC
@@ -586,34 +582,7 @@ void corei3_cnl_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t *le
     // * [29:29] SHA instructions support
     // * [30:30] AVX512BW instructions support
     // * [31:31] AVX512VL variable vector length support
-
-    leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-             /* BX_CPUID_EXT3_TSC_ADJUST | */ // not implemented yet
-                BX_CPUID_EXT3_BMI1 | 
-                BX_CPUID_EXT3_AVX2 |
-                BX_CPUID_EXT3_FDP_DEPRECATION |
-                BX_CPUID_EXT3_SMEP | 
-                BX_CPUID_EXT3_BMI2 | 
-                BX_CPUID_EXT3_ENCHANCED_REP_STRINGS |
-                BX_CPUID_EXT3_INVPCID |
-                BX_CPUID_EXT3_DEPRECATE_FCS_FDS |
-#if BX_SUPPORT_EVEX
-                BX_CPUID_EXT3_AVX512F |
-                BX_CPUID_EXT3_AVX512DQ |
-#endif
-                BX_CPUID_EXT3_RDSEED |
-                BX_CPUID_EXT3_ADX |
-                BX_CPUID_EXT3_SMAP |
-#if BX_SUPPORT_EVEX
-                BX_CPUID_EXT3_AVX512IFMA52 |
-#endif
-                BX_CPUID_EXT3_CLFLUSHOPT |
-#if BX_SUPPORT_EVEX
-                BX_CPUID_EXT3_AVX512CD |
-                BX_CPUID_EXT3_AVX512BW |
-                BX_CPUID_EXT3_AVX512VL |
-#endif
-                BX_CPUID_EXT3_SHA;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx(BX_CPUID_EXT3_ENCHANCED_REP_STRINGS);
 
     //   [0:0]    PREFETCHWT1 instruction support
     // * [1:1]    AVX512 VBMI instructions support
@@ -642,19 +611,7 @@ void corei3_cnl_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_function_t *le
     // [29:29]    reserved
     // [30:30]    SGX_LC: SGX Launch Configuration
     // [31:31]    reserved
-    leaf->ecx = 
-#if BX_SUPPORT_EVEX
-                BX_CPUID_EXT4_AVX512_VBMI |
-#endif
-                BX_CPUID_EXT4_UMIP |
-#if BX_SUPPORT_PKEYS
-                BX_CPUID_EXT4_PKU |
-#endif
-                0;
-#if BX_SUPPORT_PKEYS
-    if (cpu->cr4.get_PKE())
-      leaf->ecx |= BX_CPUID_EXT4_OSPKE;
-#endif
+    leaf->ecx = get_std_cpuid_leaf_7_ecx();
 
     leaf->edx = 0;
     break;

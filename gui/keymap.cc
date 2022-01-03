@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: keymap.cc 12089 2013-12-31 09:20:08Z vruppert $
+// $Id: keymap.cc 14095 2021-01-30 18:47:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2013  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@
 
 #include "param_names.h"
 #include "bochs.h"
+#include "gui.h"
 #include "keymap.h"
 
 // Table of bochs "BX_KEY_*" symbols
@@ -102,7 +103,7 @@ void bx_keymap_c::loadKeymap(Bit32u stringToSymbol(const char*))
   }
 }
 
-bx_bool bx_keymap_c::isKeymapLoaded ()
+bool bx_keymap_c::isKeymapLoaded ()
 {
   return (keymapCount > 0);
 }
@@ -148,47 +149,49 @@ static Bit32s get_next_word(char *output)
   return 0;
 }
 
-static Bit32s get_next_keymap_line (FILE *fp, char *bxsym, char *modsym, Bit32s *ascii, char *hostsym)
+static Bit32s get_next_keymap_line(FILE *fp, char *bxsym, char *modsym, Bit32s *ascii, char *hostsym)
 {
   char line[256];
   char buf[256];
-  line[0] = 0;
+
+  buf[0] = 0;
   while (1) {
     lineCount++;
     if (!fgets(line, sizeof(line)-1, fp)) return -1;  // EOF
-    init_parse_line (line);
-    if (get_next_word (bxsym) >= 0) {
+    line[sizeof(line) - 1] = '\0';
+    init_parse_line(line);
+    if (get_next_word(bxsym) >= 0) {
       modsym[0] = 0;
       char *p;
-      if ((p = strchr (bxsym, '+')) != NULL) {
-	*p = 0;  // truncate bxsym.
-	p++;  // move one char beyond the +
-	strcpy (modsym, p);  // copy the rest to modsym
+      if ((p = strchr(bxsym, '+')) != NULL) {
+        *p = 0;  // truncate bxsym.
+        p++;  // move one char beyond the +
+        strcpy(modsym, p);  // copy the rest to modsym
       }
-      if (get_next_word (buf) < 0) {
-	BX_PANIC (("keymap line %d: expected 3 columns", lineCount));
-	return -1;
+      if (get_next_word(buf) < 0) {
+        BX_PANIC(("keymap line %d: expected 3 columns", lineCount));
+        return -1;
       }
-      if (buf[0] == '\'' && buf[2] == '\'' && buf[3]==0) {
-	*ascii = (Bit8u) buf[1];
+      if (buf[0] == '\'' && buf[2] == '\'' && buf[3] == 0) {
+        *ascii = (Bit8u) buf[1];
       } else if (!strcmp(buf, "space")) {
-	*ascii = ' ';
+        *ascii = ' ';
       } else if (!strcmp(buf, "return")) {
-	*ascii = '\n';
+        *ascii = '\n';
       } else if (!strcmp(buf, "tab")) {
-	*ascii = '\t';
+        *ascii = '\t';
       } else if (!strcmp(buf, "backslash")) {
-	*ascii = '\\';
+        *ascii = '\\';
       } else if (!strcmp(buf, "apostrophe")) {
-	*ascii = '\'';
+        *ascii = '\'';
       } else if (!strcmp(buf, "none")) {
-	*ascii = -1;
+        *ascii = -1;
       } else {
-	BX_PANIC (("keymap line %d: ascii equivalent is \"%s\" but it must be char constant like 'x', or one of space,tab,return,none", lineCount, buf));
+        BX_PANIC(("keymap line %d: ascii equivalent is \"%s\" but it must be char constant like 'x', or one of space,tab,return,none", lineCount, buf));
       }
-      if (get_next_word (hostsym) < 0) {
+      if (get_next_word(hostsym) < 0) {
         BX_PANIC (("keymap line %d: expected 3 columns", lineCount));
-	return -1;
+        return -1;
       }
       return 0;
     }

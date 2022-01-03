@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: unmapped.h 10209 2011-02-24 22:05:47Z sshwarts $
+// $Id: unmapped.h 14241 2021-05-11 14:42:31Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2009  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -44,12 +44,13 @@ private:
   Bit32u read(Bit32u address, unsigned io_len);
   void   write(Bit32u address, Bit32u value, unsigned io_len);
 #endif
+  static Bit64s param_handler(bx_param_c *param, bool set, Bit64s val);
 
   struct {
     Bit8u port80;
     Bit8u port8e;
     Bit8u shutdown;
-    bx_bool port_e9_hack;
+    bool port_e9_hack;
   } s;  // state information
 };
 

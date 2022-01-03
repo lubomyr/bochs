@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmware4.h 11921 2013-11-03 07:41:29Z vruppert $
+// $Id: vmware4.h 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 
 /*
@@ -10,7 +10,7 @@
  * Contact: snrrrub@gmail.com
  *
  * Copyright (C) 2006 Sharvil Nanavati.
- * Copyright (C) 2006-2013  The Bochs Project
+ * Copyright (C) 2006-2021  The Bochs Project
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -77,8 +77,10 @@ class vmware4_image_t : public device_image_t
         Bit32u get_capabilities();
         static int check_format(int fd, Bit64u imgsize);
 
-#ifndef BXIMAGE
-        bx_bool save_state(const char *backup_fname);
+#ifdef BXIMAGE
+        int create_image(const char *pathname, Bit64u size);
+#else
+        bool save_state(const char *backup_fname);
         void restore_state(const char *backup_fname);
 #endif
 
@@ -86,9 +88,9 @@ class vmware4_image_t : public device_image_t
         static const off_t INVALID_OFFSET;
         static const int SECTOR_SIZE;
 
-        bx_bool is_open() const;
+        bool is_open() const;
 
-        bx_bool read_header();
+        bool read_header();
         off_t perform_seek();
         void flush();
         Bit32u read_block_index(Bit64u sector, Bit32u index);
@@ -99,7 +101,7 @@ class vmware4_image_t : public device_image_t
         Bit8u* tlb;
         off_t tlb_offset;
         off_t current_offset;
-        bx_bool is_dirty;
+        bool is_dirty;
         const char *pathname;
 };
 

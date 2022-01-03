@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: svm.cc 13729 2019-12-27 13:02:30Z sshwarts $
+// $Id: svm.cc 14318 2021-07-23 09:30:17Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2011-2018 Stanislav Shwartsman
@@ -31,6 +31,24 @@
 #include "decoder/ia_opcodes.h"
 
 extern const char *segname[];
+
+void BX_CPU_C::set_VMCBPTR(Bit64u vmcbptr)
+{
+  BX_CPU_THIS_PTR vmcbptr = vmcbptr;
+
+  if (vmcbptr != 0) {
+    BX_CPU_THIS_PTR vmcbhostptr = BX_CPU_THIS_PTR getHostMemAddr(vmcbptr, BX_WRITE);
+#if BX_SUPPORT_MEMTYPE
+    BX_CPU_THIS_PTR vmcb_memtype = resolve_memtype(BX_CPU_THIS_PTR vmcbptr);
+#endif
+  }
+  else {
+    BX_CPU_THIS_PTR vmcbhostptr = 0;
+#if BX_SUPPORT_MEMTYPE
+    BX_CPU_THIS_PTR vmcb_memtype = BX_MEMTYPE_UC;
+#endif
+  }
+}
 
 // When loading segment bases from the VMCB or the host save area
 // (on VMRUN or #VMEXIT), segment bases are canonicalized (i.e.
@@ -183,7 +201,7 @@ BX_CPP_INLINE void BX_CPU_C::svm_segment_read(bx_segment_reg_t *seg, unsigned of
   Bit16u attr = vmcb_read16(offset + 2);
   Bit32u limit = vmcb_read32(offset + 4);
   bx_address base = CanonicalizeAddress(vmcb_read64(offset + 8));
-  bx_bool valid = (attr >> 7) & 1;
+  bool valid = (attr >> 7) & 1;
 
   set_segment_ar_data(seg, valid, selector, base, limit,
        (attr & 0xff) | ((attr & 0xf00) << 4));
@@ -219,6 +237,8 @@ void BX_CPU_C::SvmEnterSaveHostState(SVM_HOST_STATE *host)
   host->rip = RIP;
   host->rsp = RSP;
   host->rax = RAX;
+
+  host->pat_msr = BX_CPU_THIS_PTR msr.pat;
 }
 
 void BX_CPU_C::SvmExitLoadHostState(SVM_HOST_STATE *host)
@@ -245,6 +265,8 @@ void BX_CPU_C::SvmExitLoadHostState(SVM_HOST_STATE *host)
       shutdown();
     }
   }
+
+  BX_CPU_THIS_PTR msr.pat = host->pat_msr;
 
   BX_CPU_THIS_PTR dr7.set32(0x00000400);
 
@@ -297,14 +319,18 @@ void BX_CPU_C::SvmExitSaveGuestState(void)
 
   SVM_CONTROLS *ctrls = &BX_CPU_THIS_PTR vmcb.ctrls;
 
+  if (ctrls->nested_paging) {
+    vmcb_write64(SVM_GUEST_PAT, BX_CPU_THIS_PTR msr.pat.u64);
+  }
+
   vmcb_write8(SVM_CONTROL_VTPR, ctrls->v_tpr);
   vmcb_write8(SVM_CONTROL_VIRQ, is_pending(BX_EVENT_SVM_VIRQ_PENDING));
   clear_event(BX_EVENT_SVM_VIRQ_PENDING);
 }
 
-extern bx_bool isValidMSR_PAT(Bit64u pat_msr);
+extern bool isValidMSR_PAT(Bit64u pat_msr);
 
-bx_bool BX_CPU_C::SvmEnterLoadCheckControls(SVM_CONTROLS *ctrls)
+bool BX_CPU_C::SvmEnterLoadCheckControls(SVM_CONTROLS *ctrls)
 {
   ctrls->cr_rd_ctrl = vmcb_read16(SVM_CONTROL16_INTERCEPT_CR_READ);
   ctrls->cr_wr_ctrl = vmcb_read16(SVM_CONTROL16_INTERCEPT_CR_WRITE);
@@ -369,7 +395,7 @@ bx_bool BX_CPU_C::SvmEnterLoadCheckControls(SVM_CONTROLS *ctrls)
       return 0;
     }
 
-    Bit64u guest_pat = vmcb_read32(SVM_GUEST_PAT);
+    Bit64u guest_pat = vmcb_read64(SVM_GUEST_PAT);
     if (! isValidMSR_PAT(guest_pat)) {
       BX_ERROR(("VMRUN: invalid memory type in guest PAT_MSR !"));
       return 0;
@@ -389,12 +415,12 @@ bx_bool BX_CPU_C::SvmEnterLoadCheckControls(SVM_CONTROLS *ctrls)
   return 1;
 }
 
-bx_bool BX_CPU_C::SvmEnterLoadCheckGuestState(void)
+bool BX_CPU_C::SvmEnterLoadCheckGuestState(void)
 {
   SVM_GUEST_STATE guest;
   Bit32u tmp;
   unsigned n;
-  bx_bool paged_real_mode = 0;
+  bool paged_real_mode = false;
 
   guest.eflags = vmcb_read32(SVM_GUEST_RFLAGS);
   guest.rip = vmcb_read64(SVM_GUEST_RIP);
@@ -457,6 +483,8 @@ bx_bool BX_CPU_C::SvmEnterLoadCheckGuestState(void)
     return 0;
   }
 
+  guest.pat_msr = vmcb_read64(SVM_GUEST_PAT);
+
   for (n=0;n < 4; n++) {
     svm_segment_read(&guest.sregs[n], SVM_GUEST_ES_SELECTOR + n * 0x10);
   }
@@ -476,7 +504,7 @@ bx_bool BX_CPU_C::SvmEnterLoadCheckGuestState(void)
     if (! guest.cr0.get_PE() && guest.cr0.get_PG()) {
       // special case : entering paged real mode
       BX_DEBUG(("VMRUN: entering paged real mode"));
-      paged_real_mode = 1;
+      paged_real_mode = true;
       guest.cr0.val32 &= ~BX_CR0_PG_MASK;
     }
   }
@@ -534,6 +562,10 @@ bx_bool BX_CPU_C::SvmEnterLoadCheckGuestState(void)
         return 0;
       }
     }
+  }
+  else {
+    // load guest PAT when nested paging is enabled
+    BX_CPU_THIS_PTR msr.pat = guest.pat_msr;
   }
 
   BX_CPU_THIS_PTR dr6.set32(guest.dr6);
@@ -673,7 +705,7 @@ void BX_CPU_C::Svm_Vmexit(int reason, Bit64u exitinfo1, Bit64u exitinfo2)
 
 extern struct BxExceptionInfo exceptions_info[];
 
-bx_bool BX_CPU_C::SvmInjectEvents(void)
+bool BX_CPU_C::SvmInjectEvents(void)
 {
   SVM_CONTROLS *ctrls = &BX_CPU_THIS_PTR vmcb.ctrls;
 
@@ -734,7 +766,7 @@ bx_bool BX_CPU_C::SvmInjectEvents(void)
   return 1;
 }
 
-void BX_CPU_C::SvmInterceptException(unsigned type, unsigned vector, Bit16u errcode, bx_bool errcode_valid, Bit64u qualification)
+void BX_CPU_C::SvmInterceptException(unsigned type, unsigned vector, Bit16u errcode, bool errcode_valid, Bit64u qualification)
 {
   if (! BX_CPU_THIS_PTR in_svm_guest) return;
 
@@ -880,7 +912,7 @@ void BX_CPU_C::SvmInterceptMSR(unsigned op, Bit32u msr)
 
   BX_ASSERT(op == BX_READ || op == BX_WRITE);
 
-  bx_bool vmexit = 1;
+  bool vmexit = true;
 
   int msr_map_offset = -1;
   if (msr <= 0x1fff) msr_map_offset = 0;
@@ -904,7 +936,7 @@ void BX_CPU_C::SvmInterceptMSR(unsigned op, Bit32u msr)
   }
 }
 
-void BX_CPU_C::SvmInterceptTaskSwitch(Bit16u tss_selector, unsigned source, bx_bool push_error, Bit32u error_code)
+void BX_CPU_C::SvmInterceptTaskSwitch(Bit16u tss_selector, unsigned source, bool push_error, Bit32u error_code)
 {
   BX_ASSERT(BX_CPU_THIS_PTR in_svm_guest);
 
@@ -972,11 +1004,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMRUN(bxInstruction_c *i)
     BX_ERROR(("VMRUN: invalid or not page aligned VMCB physical address !"));
     exception(BX_GP_EXCEPTION, 0);
   }
-  BX_CPU_THIS_PTR vmcbptr = pAddr;
-  BX_CPU_THIS_PTR vmcbhostptr = BX_CPU_THIS_PTR getHostMemAddr(pAddr, BX_WRITE);
-#if BX_SUPPORT_MEMTYPE
-  BX_CPU_THIS_PTR vmcb_memtype = resolve_memtype(BX_CPU_THIS_PTR vmcbptr);
-#endif
+  set_VMCBPTR(pAddr);
 
   BX_DEBUG(("VMRUN VMCB ptr: 0x" FMT_ADDRX64, BX_CPU_THIS_PTR vmcbptr));
 
@@ -1046,8 +1074,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMLOAD(bxInstruction_c *i)
     BX_ERROR(("VMLOAD: invalid or not page aligned VMCB physical address !"));
     exception(BX_GP_EXCEPTION, 0);
   }
-  BX_CPU_THIS_PTR vmcbptr = pAddr;
-  BX_CPU_THIS_PTR vmcbhostptr = BX_CPU_THIS_PTR getHostMemAddr(pAddr, BX_WRITE);
+  set_VMCBPTR(pAddr);
 
   BX_DEBUG(("VMLOAD VMCB ptr: 0x" FMT_ADDRX64, BX_CPU_THIS_PTR vmcbptr));
 
@@ -1097,8 +1124,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::VMSAVE(bxInstruction_c *i)
     BX_ERROR(("VMSAVE: invalid or not page aligned VMCB physical address !"));
     exception(BX_GP_EXCEPTION, 0);
   }
-  BX_CPU_THIS_PTR vmcbptr = pAddr;
-  BX_CPU_THIS_PTR vmcbhostptr = BX_CPU_THIS_PTR getHostMemAddr(pAddr, BX_WRITE);
+  set_VMCBPTR(pAddr);
 
   BX_DEBUG(("VMSAVE VMCB ptr: 0x" FMT_ADDRX64, BX_CPU_THIS_PTR vmcbptr));
 
@@ -1214,6 +1240,7 @@ void BX_CPU_C::register_svm_state(bx_param_c *parent)
   // register SVM state for save/restore param tree
   bx_list_c *svm = new bx_list_c(parent, "SVM");
 
+  BXRS_HEX_PARAM_FIELD(svm, vmcbptr, BX_CPU_THIS_PTR vmcbptr);
   BXRS_PARAM_BOOL(svm, in_svm_guest, BX_CPU_THIS_PTR in_svm_guest);
   BXRS_PARAM_BOOL(svm, gif, BX_CPU_THIS_PTR svm_gif);
 

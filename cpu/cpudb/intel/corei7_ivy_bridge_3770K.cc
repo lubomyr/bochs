@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: corei7_ivy_bridge_3770K.cc 13153 2017-03-26 20:12:14Z sshwarts $
+// $Id: corei7_ivy_bridge_3770K.cc 14149 2021-02-16 18:57:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2013-2017 Stanislav Shwartsman
@@ -23,6 +23,7 @@
 
 #include "bochs.h"
 #include "cpu.h"
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "corei7_ivy_bridge_3770K.h"
 
@@ -92,7 +93,7 @@ void corei7_ivy_bridge_3770k_t::get_cpuid_leaf(Bit32u function, Bit32u subfuncti
 {
   static const char* brand_string = "       Intel(R) Core(TM) i7-3770K CPU @ 3.50GHz";
 
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
+  static bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
   if (cpuid_limit_winnt)
     if (function > 2 && function < 0x80000000) function = 2;
 
@@ -210,18 +211,11 @@ Bit32u corei7_ivy_bridge_3770k_t::get_vmx_extensions_bitmask(void) const
 // leaf 0x00000000 //
 void corei7_ivy_bridge_3770k_t::get_std_cpuid_leaf_0(cpuid_function_t *leaf) const
 {
-  static const char* vendor_string = "GenuineIntel";
-
   // EAX: highest std function understood by CPUID
   // EBX: vendor ID string
   // EDX: vendor ID string
   // ECX: vendor ID string
-  unsigned max_leaf = 0xD;
-  static bx_bool cpuid_limit_winnt = SIM->get_param_bool(BXPN_CPUID_LIMIT_WINNT)->get();
-  if (cpuid_limit_winnt)
-    max_leaf = 0x2;
-
-  get_leaf_0(max_leaf, vendor_string, leaf);
+  get_leaf_0(0xD, "GenuineIntel", leaf);
 }
 
 // leaf 0x00000001 //
@@ -370,7 +364,9 @@ void corei7_ivy_bridge_3770k_t::get_std_cpuid_leaf_1(cpuid_function_t *leaf) con
               BX_CPUID_STD_SSE |
               BX_CPUID_STD_SSE2 |
               BX_CPUID_STD_SELF_SNOOP |
+#if BX_SUPPORT_SMP
               BX_CPUID_STD_HT |
+#endif
               BX_CPUID_STD_THERMAL_MONITOR |
               BX_CPUID_STD_PBE;
 #if BX_SUPPORT_APIC
@@ -522,9 +518,7 @@ void corei7_ivy_bridge_3770k_t::get_std_cpuid_leaf_7(Bit32u subfunction, cpuid_f
     //   [19:19] ADCX/ADOX instructions support
     //   [20:20] SMAP: Supervisor Mode Access Prevention
     //   [31:21] reserved
-    leaf->ebx = BX_CPUID_EXT3_FSGSBASE | 
-                BX_CPUID_EXT3_SMEP | 
-                BX_CPUID_EXT3_ENCHANCED_REP_STRINGS;
+    leaf->ebx = get_std_cpuid_leaf_7_ebx(BX_CPUID_EXT3_ENCHANCED_REP_STRINGS);
     leaf->ecx = 0;
     leaf->edx = 0;
     break;

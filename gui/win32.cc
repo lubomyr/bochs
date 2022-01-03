@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: win32.cc 13217 2017-05-05 21:44:30Z vruppert $
+// $Id: win32.cc 14094 2021-01-30 18:32:52Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2017  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -42,14 +42,20 @@
 #include <commctrl.h>
 #include <process.h>
 
+#define COMMAND_MODE_VKEY VK_F7
+
 class bx_win32_gui_c : public bx_gui_c {
 public:
   bx_win32_gui_c(void);
   DECLARE_GUI_VIRTUAL_METHODS();
-  virtual void statusbar_setitem_specific(int element, bx_bool active, bx_bool w);
+  virtual void set_font(bool lg);
+  virtual void draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                         Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                         bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs);
+  virtual void statusbar_setitem_specific(int element, bool active, bool w);
   virtual void get_capabilities(Bit16u *xres, Bit16u *yres, Bit16u *bpp);
   virtual void set_tooltip(unsigned hbar_id, const char *tip);
-  virtual void set_mouse_mode_absxy(bx_bool mode);
+  virtual void set_mouse_mode_absxy(bool mode);
 #if BX_SHOW_IPS
   virtual void show_ips(Bit32u ips_count);
 #endif
@@ -102,8 +108,9 @@ static BOOL win32MouseModeAbsXY = 0;
 static HANDLE workerThread = 0;
 static DWORD workerThreadID = 0;
 static int mouse_buttons = 3;
-static bx_bool win32_nokeyrepeat = 0;
-static bx_bool win32_traphotkeys = 0;
+static bool win32_autoscale = 0;
+static bool win32_nokeyrepeat = 0;
+static bool win32_traphotkeys = 0;
 HHOOK hKeyboardHook;
 
 // Graphics screen stuff
@@ -118,19 +125,14 @@ static BOOL updated_area_valid = FALSE;
 static HWND desktopWindow;
 static RECT desktop;
 static BOOL queryFullScreen = FALSE;
-static int desktop_x, desktop_y;
+static unsigned desktop_x, desktop_y;
+static unsigned max_client_x, max_client_y;
 static BOOL toolbarVisible, statusVisible;
-static BOOL fullscreenMode;
+static BOOL fullscreenMode, inFullscreenToggle;
 
 // Text mode screen stuff
-static unsigned prev_cursor_x = 0;
-static unsigned prev_cursor_y = 0;
 static HBITMAP vgafont[256];
 static int xChar = 8, yChar = 16;
-static unsigned int text_rows=25, text_cols=80;
-static Bit8u text_pal_idx[16];
-static Bit8u h_panning = 0, v_panning = 0;
-static Bit16u line_compare = 1023;
 
 // Headerbar stuff
 HWND hwndTB, hwndSB;
@@ -160,16 +162,17 @@ static char ipsText[20];
 #define SIZE_OF_SB_ELEMENT        40
 #define SIZE_OF_SB_MOUSE_MESSAGE 170
 #define SIZE_OF_SB_IPS_MESSAGE    90
+Bit32u SB_Led_Colors[3] = {0x0000FF00, 0x000040FF, 0x0000FFFF};
 Bit32s SB_Edges[BX_MAX_STATUSITEMS+BX_SB_MAX_TEXT_ELEMENTS+1];
 char SB_Text[BX_MAX_STATUSITEMS][10];
 unsigned SB_Text_Elements;
-bx_bool SB_Active[BX_MAX_STATUSITEMS];
-bx_bool SB_ActiveW[BX_MAX_STATUSITEMS];
+bool SB_Active[BX_MAX_STATUSITEMS];
+Bit8u SB_ActiveColor[BX_MAX_STATUSITEMS];
 
 // Misc stuff
 static unsigned dimension_x, dimension_y, current_bpp;
 static unsigned stretched_x, stretched_y;
-static unsigned stretch_factor_x, stretch_factor_y;
+static unsigned stretch_factor;
 static BOOL fix_size = FALSE;
 #if BX_DEBUGGER && BX_DEBUGGER_GUI
 static BOOL gui_debug = FALSE;
@@ -202,10 +205,10 @@ sharedThreadInfo stInfo;
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK simWndProc(HWND, UINT, WPARAM, LPARAM);
 DWORD WINAPI UIThread(PVOID);
-void SetStatusText(unsigned Num, const char *Text, bx_bool active, bx_bool w=0);
+void SetStatusText(unsigned Num, const char *Text, bool active, Bit8u color=0);
 void terminateEmul(int);
 void create_vga_font(void);
-void DrawBitmap(HDC, HBITMAP, int, int, int, int, int, int, DWORD, unsigned char);
+void DrawBitmap(HDC, HBITMAP, int, int, int, int, int, int, Bit8u, Bit8u);
 void updateUpdated(int,int,int,int);
 static void win32_toolbar_click(int x);
 
@@ -616,20 +619,23 @@ bx_win32_gui_c::bx_win32_gui_c()
   GetWindowRect(desktopWindow, &desktop);
   desktop_x = desktop.right - desktop.left;
   desktop_y = desktop.bottom - desktop.top;
+  max_client_x = desktop_x - 20;
+  max_client_y = desktop_y - 80;
 }
 
 
 void bx_win32_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
 {
   int i;
-  bx_bool gui_ci;
+  bool gui_ci;
 
   gui_ci = !strcmp(SIM->get_param_enum(BXPN_SEL_CONFIG_INTERFACE)->get_selected(), "win32config");
   put("WINGUI");
 
   hotKeyReceiver = stInfo.simWnd;
   fullscreenMode = FALSE;
-  BX_INFO(("Desktop Window dimensions: %d x %d", desktop_x, desktop_y));
+  inFullscreenToggle = FALSE;
+  BX_INFO(("Desktop window dimensions: %d x %d", desktop_x, desktop_y));
 
   static RGBQUAD black_quad={ 0, 0, 0, 0};
   stInfo.kill = 0;
@@ -673,6 +679,10 @@ void bx_win32_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
         BX_INFO(("hide IPS display in status bar"));
         hideIPS = TRUE;
 #endif
+      } else if (!strcmp(argv[i], "cmdmode")) {
+        command_mode.present = 1;
+      } else if (!strcmp(argv[i], "autoscale")) {
+        win32_autoscale = 1;
       } else {
         BX_PANIC(("Unknown win32 option '%s'", argv[i]));
       }
@@ -700,8 +710,7 @@ void bx_win32_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   current_bpp = 8;
   stretched_x = dimension_x;
   stretched_y = dimension_y;
-  stretch_factor_x = 1;
-  stretch_factor_y = 1;
+  stretch_factor = 1;
 
   for(unsigned c=0; c<256; c++) vgafont[c] = NULL;
   create_vga_font();
@@ -751,6 +760,7 @@ void bx_win32_gui_c::specific_init(int argc, char **argv, unsigned headerbar_y)
   if (gui_ci) {
     dialog_caps = BX_GUI_DLG_ALL;
   }
+  new_text_api = 1;
 }
 
 void set_fullscreen_mode(BOOL enable)
@@ -759,18 +769,28 @@ void set_fullscreen_mode(BOOL enable)
 
   if (enable) {
     if (desktop_y > 0) {
+      if (!queryFullScreen) {
+        MessageBox(NULL,
+          "Going into fullscreen mode -- Alt-Enter to revert",
+          "Going fullscreen",
+          MB_APPLMODAL);
+        queryFullScreen = TRUE;
+        enq_key_event(0x38, BX_KEY_RELEASED); // send lost ALT keyup event
+      }
+      inFullscreenToggle = TRUE;
+      BX_INFO(("entering fullscreen mode"));
       stretched_x = desktop_x;
       stretched_y = desktop_y;
     } else {
       return;
     }
-    if (!queryFullScreen) {
-      MessageBox(NULL,
-        "Going into fullscreen mode -- Alt-Enter to revert",
-        "Going fullscreen",
-        MB_APPLMODAL);
-      queryFullScreen = TRUE;
-      enq_key_event(0x38, BX_KEY_RELEASED); // send lost ALT keyup event
+    if (win32_autoscale) {
+      stretch_factor = 1;
+      while (((dimension_x * stretch_factor * 2) <= desktop_x) &&
+             ((dimension_y * stretch_factor * 2) <= desktop_y)) {
+        stretch_factor *= 2;
+      }
+      if (stretch_factor > 1) BX_INFO(("autoscale: factor = %d", stretch_factor));
     }
     // hide toolbar and status bars to get some additional space
     ShowWindow(hwndTB, SW_HIDE);
@@ -790,7 +810,9 @@ void set_fullscreen_mode(BOOL enable)
        desktop.right, desktop.bottom, SWP_SHOWWINDOW);
     }
     fullscreenMode = TRUE;
+    inFullscreenToggle = FALSE;
   } else {
+    BX_INFO(("leaving fullscreen mode"));
     stretched_x = dimension_x;
     stretched_y = dimension_y;
     if (saveParent) {
@@ -822,19 +844,35 @@ void resize_main_window(BOOL disable_fullscreen)
     statusVisible = TRUE;
   }
 
-  if ((desktop_y > 0) && (dimension_y >= (unsigned)desktop_y)) {
+  if ((desktop_y > 0) && (dimension_y >= desktop_y)) {
     set_fullscreen_mode(true);
   } else {
     if (fullscreenMode && disable_fullscreen) {
       set_fullscreen_mode(false);
     }
-    if (stretch_factor_x > 1) {
-      stretched_x *= stretch_factor_x;
-    }
-    if (stretch_factor_y > 1) {
-      stretched_y *= stretch_factor_y;
+    if (win32_autoscale) {
+      stretch_factor = 1;
+      if (!fullscreenMode) {
+        while (((dimension_x * stretch_factor * 2) <= max_client_x) &&
+               ((dimension_y * stretch_factor * 2) <= max_client_y)) {
+          stretch_factor *= 2;
+        }
+      } else {
+        while (((dimension_x * stretch_factor * 2) <= desktop_x) &&
+               ((dimension_y * stretch_factor * 2) <= desktop_y)) {
+          stretch_factor *= 2;
+        }
+      }
+      if (stretch_factor > 1) BX_INFO(("autoscale: factor = %d", stretch_factor));
     }
     if (!fullscreenMode) {
+      if (stretch_factor > 1) {
+        stretched_x = dimension_x * stretch_factor;
+        stretched_y = dimension_y * stretch_factor;
+      } else {
+        stretched_x = dimension_x;
+        stretched_y = dimension_y;
+      }
       if (toolbarVisible) {
         ShowWindow(hwndTB, SW_SHOW);
         GetWindowRect(hwndTB, &R);
@@ -1009,7 +1047,7 @@ DWORD WINAPI UIThread(LPVOID)
   return 0;
 }
 
-void SetStatusText(unsigned Num, const char *Text, bx_bool active, bx_bool w)
+void SetStatusText(unsigned Num, const char *Text, bool active, Bit8u color)
 {
   char StatText[MAX_PATH];
 
@@ -1022,15 +1060,19 @@ void SetStatusText(unsigned Num, const char *Text, bx_bool active, bx_bool w)
     lstrcpy(StatText+1, Text);
     lstrcpy(SB_Text[Num-SB_Text_Elements], StatText);
     SB_Active[Num-SB_Text_Elements] = active;
-    SB_ActiveW[Num-SB_Text_Elements] = w;
+    SB_ActiveColor[Num-SB_Text_Elements] = color;
     SendMessage(hwndSB, SB_SETTEXT, Num | SBT_OWNERDRAW, (LPARAM)SB_Text[Num-SB_Text_Elements]);
   }
   UpdateWindow(hwndSB);
 }
 
-void bx_win32_gui_c::statusbar_setitem_specific(int element, bx_bool active, bx_bool w)
+void bx_win32_gui_c::statusbar_setitem_specific(int element, bool active, bool w)
 {
-  SetStatusText(element+SB_Text_Elements, statusitem[element].text, active, w);
+  Bit8u color = 0;
+  if (w) {
+    color = statusitem[element].auto_off ? 1 : 2;
+  }
+  SetStatusText(element+SB_Text_Elements, statusitem[element].text, active, color);
 }
 
 LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
@@ -1089,7 +1131,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       GetClientRect(stInfo.simWnd, &R);
       x = R.right - R.left;
       y = R.bottom - R.top;
-      if ((x != (int)stretched_x) || (y != (int)stretched_y)) {
+      if (!inFullscreenToggle && ((x != (int)stretched_x) || (y != (int)stretched_y))) {
         BX_ERROR(("Sim client size(%d, %d) != stretched size(%d, %d)!",
           x, y, stretched_x, stretched_y));
         if (!saveParent) fix_size = TRUE; // no fixing if fullscreen
@@ -1102,10 +1144,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     if (lpdis->hwndItem == hwndSB) {
       sbtext = (char *)lpdis->itemData;
       if (SB_Active[lpdis->itemID-SB_Text_Elements]) {
-        if (SB_ActiveW[lpdis->itemID-SB_Text_Elements])
-          SetBkColor(lpdis->hDC, 0x000040FF);
-        else
-          SetBkColor(lpdis->hDC, 0x0000FF00);
+        SetBkColor(lpdis->hDC, SB_Led_Colors[SB_ActiveColor[lpdis->itemID-SB_Text_Elements]]);
       } else {
         SetBkMode(lpdis->hDC, TRANSPARENT);
         SetTextColor(lpdis->hDC, 0x00808080);
@@ -1132,6 +1171,15 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
   return DefWindowProc(hwnd, iMsg, wParam, lParam);
 }
 
+void SetMouseToggleInfo()
+{
+  if (mouseCaptureMode) {
+    SetStatusText(0, szMouseDisable, TRUE);
+  } else {
+    SetStatusText(0, szMouseEnable, TRUE);
+  }
+}
+
 void SetMouseCapture()
 {
   POINT pt = { 0, 0 };
@@ -1155,18 +1203,20 @@ void SetMouseCapture()
     re.right = pt.x + stretched_x;
     re.bottom = pt.y + stretched_y;
     ClipCursor(&re);
-    SetStatusText(0, szMouseDisable, TRUE);
   } else {
     ClipCursor(NULL);
-    SetStatusText(0, szMouseEnable, TRUE);
   }
+  SetMouseToggleInfo();
 }
 
 LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 {
   HDC hdc, hdcMem;
   PAINTSTRUCT ps;
-  bx_bool mouse_toggle = 0;
+  bool mouse_toggle = 0;
+  int toolbar_cmd = -1;
+  Bit8u kmodchange = 0;
+  bool keymod = 0;
   static BOOL mouseModeChange = FALSE;
 
   switch (iMsg) {
@@ -1188,7 +1238,7 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     hdcMem = CreateCompatibleDC (hdc);
     SelectObject (hdcMem, MemoryBitmap);
 
-    if ((stretch_factor_x == 1) && (stretch_factor_y == 1)) {
+    if (stretch_factor == 1) {
       BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top,
              ps.rcPaint.right - ps.rcPaint.left + 1,
              ps.rcPaint.bottom - ps.rcPaint.top + 1, hdcMem,
@@ -1197,9 +1247,9 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       StretchBlt(hdc, ps.rcPaint.left, ps.rcPaint.top,
                  ps.rcPaint.right - ps.rcPaint.left + 1,
                  ps.rcPaint.bottom - ps.rcPaint.top + 1, hdcMem,
-                 ps.rcPaint.left/stretch_factor_x, ps.rcPaint.top/stretch_factor_y,
-                 (ps.rcPaint.right - ps.rcPaint.left+1)/stretch_factor_x,
-                 (ps.rcPaint.bottom - ps.rcPaint.top+1)/stretch_factor_y, SRCCOPY);
+                 ps.rcPaint.left/stretch_factor, ps.rcPaint.top/stretch_factor,
+                 (ps.rcPaint.right - ps.rcPaint.left+1)/stretch_factor,
+                 (ps.rcPaint.bottom - ps.rcPaint.top+1)/stretch_factor, SRCCOPY);
     }
     DeleteDC (hdcMem);
     EndPaint (hwnd, &ps);
@@ -1310,9 +1360,24 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 
   case WM_KEYDOWN:
   case WM_SYSKEYDOWN:
-    if (wParam == VK_CONTROL) {
-      mouse_toggle = bx_gui->mouse_toggle_check(BX_MT_KEY_CTRL, 1);
+    // check modifier keys
+    if (wParam == VK_SHIFT) {
+      kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_SHIFT, 1);
+      keymod = 1;
+    } else if (wParam == VK_CONTROL) {
+      kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_CTRL, 1);
+      keymod = 1;
     } else if (wParam == VK_MENU) {
+      kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_ALT, 1);
+      keymod = 1;
+    } else if (wParam == VK_CAPITAL) {
+      kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_CAPS, 1);
+      keymod = 1;
+    }
+    // mouse capture toggle-check
+    if (kmodchange == BX_MOD_KEY_CTRL) {
+      mouse_toggle = bx_gui->mouse_toggle_check(BX_MT_KEY_CTRL, 1);
+    } else if (kmodchange == BX_MOD_KEY_ALT) {
       mouse_toggle = bx_gui->mouse_toggle_check(BX_MT_KEY_ALT, 1);
     } else if (wParam == VK_F10) {
       mouse_toggle = bx_gui->mouse_toggle_check(BX_MT_KEY_F10, 1);
@@ -1323,6 +1388,63 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
       mouseCaptureMode = !mouseCaptureMode;
       SetMouseCapture();
       return 0;
+    }
+    if (bx_gui->command_mode_active()) {
+      if (bx_gui->get_modifier_keys() == 0) {
+        if (wParam == 'A') {
+          toolbar_cmd = 0; // Floppy A
+        } else if (wParam == 'B') {
+          toolbar_cmd = 1; // Floppy B
+        } else if (wParam == 'C') {
+          toolbar_cmd = 10; // Copy
+        } else if (wParam == 'F') {
+          if (!saveParent) {
+            set_fullscreen_mode(TRUE);
+            bx_gui->set_fullscreen_mode(1);
+          } else {
+            resize_main_window(TRUE);
+            bx_gui->set_fullscreen_mode(0);
+          }
+        } else if (wParam == 'M') {
+          bx_gui->marklog_handler();
+        } else if (wParam == 'P') {
+          toolbar_cmd = 9; // Paste
+        } else if (wParam == 'R') {
+          toolbar_cmd = 6; // Reset
+        } else if (wParam == 'S') {
+          toolbar_cmd = 8; // Snapshot
+        } else if (wParam == 'U') {
+          toolbar_cmd = 11; // User
+        }
+      } else if (bx_gui->get_modifier_keys() == BX_MOD_KEY_SHIFT) {
+        if (wParam == 'C') {
+          toolbar_cmd = 7; // Config
+        } else if (wParam == 'P') {
+          toolbar_cmd = 4; // Power
+        } else if (wParam == 'S') {
+          toolbar_cmd = 5; // Suspend
+        }
+      }
+      if (!keymod) {
+        bx_gui->set_command_mode(0);
+        SetMouseToggleInfo();
+      }
+      if (toolbar_cmd >= 0) {
+        EnterCriticalSection(&stInfo.keyCS);
+        enq_key_event((Bit32u)toolbar_cmd, TOOLBAR_CLICKED);
+        LeaveCriticalSection(&stInfo.keyCS);
+        return 0;
+      }
+      if (wParam != COMMAND_MODE_VKEY) {
+        return 0;
+      }
+    } else {
+      if (bx_gui->has_command_mode() && (bx_gui->get_modifier_keys() == 0) &&
+          (wParam == COMMAND_MODE_VKEY)) {
+        bx_gui->set_command_mode(1);
+        SetStatusText(0, "Command mode", TRUE);
+        return 0;
+      }
     }
     EnterCriticalSection(&stInfo.keyCS);
     if (((lParam & 0x40000000) == 0) || !win32_nokeyrepeat) {
@@ -1338,16 +1460,23 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     if ((wParam == VK_RETURN) &&
         ((HIWORD(lParam) & BX_SYSKEY) == (KF_ALTDOWN | KF_UP))) {
       if (!saveParent) {
-        BX_INFO(("entering fullscreen mode"));
         set_fullscreen_mode(TRUE);
       } else {
-        BX_INFO(("leaving fullscreen mode"));
         resize_main_window(TRUE);
       }
     } else {
-      if (wParam == VK_CONTROL) {
-        bx_gui->mouse_toggle_check(BX_MT_KEY_CTRL, 0);
+      // check modifier keys
+      if (wParam == VK_SHIFT) {
+        kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_SHIFT, 0);
+      } else if (wParam == VK_CONTROL) {
+        kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_CTRL, 0);
       } else if (wParam == VK_MENU) {
+        kmodchange = bx_gui->set_modifier_keys(BX_MOD_KEY_ALT, 0);
+      }
+      // mouse capture toggle-check
+      if (kmodchange == BX_MOD_KEY_CTRL) {
+        bx_gui->mouse_toggle_check(BX_MT_KEY_CTRL, 0);
+      } else if (kmodchange == BX_MOD_KEY_ALT) {
         bx_gui->mouse_toggle_check(BX_MT_KEY_ALT, 0);
       } else if (wParam == VK_F10) {
         bx_gui->mouse_toggle_check(BX_MT_KEY_F10, 0);
@@ -1366,10 +1495,8 @@ LRESULT CALLBACK simWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
     if (wParam == VK_RETURN) {
       if ((HIWORD(lParam) & BX_SYSKEY) == KF_ALTDOWN) {
         if (!saveParent) {
-          BX_INFO(("entering fullscreen mode"));
           set_fullscreen_mode(TRUE);
         } else {
-          BX_INFO(("leaving fullscreen mode"));
           resize_main_window(TRUE);
         }
       }
@@ -1594,211 +1721,56 @@ void bx_win32_gui_c::clear_screen(void)
 }
 
 
-void bx_win32_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
-                                 unsigned long cursor_x, unsigned long cursor_y,
-                                 bx_vga_tminfo_t *tm_info)
+void bx_win32_gui_c::set_font(bool lg)
+{
+  Bit8u data[64], i;
+
+  for (unsigned c = 0; c<256; c++) {
+    if (char_changed[c]) {
+      memset(data, 0, sizeof(data));
+      BOOL gfxchar = lg && ((c & 0xE0) == 0xC0);
+      for (i=0; i<(unsigned)yChar; i++) {
+        data[i*2] = vga_charmap[c*32+i];
+        if (gfxchar) {
+          data[i*2+1] = (data[i*2] << 7);
+        }
+      }
+      SetBitmapBits(vgafont[c], 64, data);
+      char_changed[c] = 0;
+    }
+  }
+}
+
+void bx_win32_gui_c::draw_char(Bit8u ch, Bit8u fc, Bit8u bc, Bit16u xc, Bit16u yc,
+                               Bit8u fw, Bit8u fh, Bit8u fx, Bit8u fy,
+                               bool gfxcharw9, Bit8u cs, Bit8u ce, bool curs)
 {
   HDC hdc;
-  unsigned char data[64];
-  Bit8u *old_line, *new_line;
-  Bit8u cAttr, cChar;
-  unsigned int curs, hchars, i, offset, rows, x, y, xc, yc;
-  BOOL forceUpdate = FALSE, blink_state, blink_mode;
-  Bit8u *text_base;
-  Bit8u cfwidth, cfheight, cfheight2, font_col, font_row, font_row2;
-  Bit8u split_textrow, split_fontrows;
-  unsigned int yc2, cs_y;
-  BOOL split_screen;
 
   if (!stInfo.UIinited) return;
 
   EnterCriticalSection(&stInfo.drawCS);
-
-  blink_mode = (tm_info->blink_flags & BX_TEXT_BLINK_MODE) > 0;
-  blink_state = (tm_info->blink_flags & BX_TEXT_BLINK_STATE) > 0;
-  if (blink_mode) {
-    if (tm_info->blink_flags & BX_TEXT_BLINK_TOGGLE)
-      forceUpdate = 1;
-  }
-  if (charmap_updated) {
-    for (unsigned c = 0; c<256; c++) {
-      if (char_changed[c]) {
-        memset(data, 0, sizeof(data));
-        BOOL gfxchar = tm_info->line_graphics && ((c & 0xE0) == 0xC0);
-        for (i=0; i<(unsigned)yChar; i++) {
-          data[i*2] = vga_charmap[c*32+i];
-          if (gfxchar) {
-            data[i*2+1] = (data[i*2] << 7);
-          }
-        }
-        SetBitmapBits(vgafont[c], 64, data);
-        char_changed[c] = 0;
-      }
-    }
-    forceUpdate = TRUE;
-    charmap_updated = 0;
-  }
-  for (i=0; i<16; i++) {
-    text_pal_idx[i] = tm_info->actl_palette[i];
-  }
-
   hdc = GetDC(stInfo.simWnd);
-
-  if((tm_info->h_panning != h_panning) || (tm_info->v_panning != v_panning)) {
-    forceUpdate = 1;
-    h_panning = tm_info->h_panning;
-    v_panning = tm_info->v_panning;
-  }
-  if(tm_info->line_compare != line_compare) {
-    forceUpdate = 1;
-    line_compare = tm_info->line_compare;
-  }
-
-  // first invalidate character at previous and new cursor location
-  if((prev_cursor_y < text_rows) && (prev_cursor_x < text_cols)) {
-    curs = prev_cursor_y * tm_info->line_offset + prev_cursor_x * 2;
-    old_text[curs] = ~new_text[curs];
-  }
-  if((tm_info->cs_start <= tm_info->cs_end) && (tm_info->cs_start < yChar) &&
-     (cursor_y < text_rows) && (cursor_x < text_cols)) {
-    curs = cursor_y * tm_info->line_offset + cursor_x * 2;
-    old_text[curs] = ~new_text[curs];
-  } else {
-    curs = 0xffff;
-  }
-
-  rows = text_rows;
-  if (v_panning) rows++;
-  y = 0;
-  cs_y = 0;
-  text_base = new_text - tm_info->start_address;
-  if (line_compare < dimension_y) {
-    split_textrow = (line_compare + v_panning) / yChar;
-    split_fontrows = ((line_compare + v_panning) % yChar) + 1;
-  } else {
-    split_textrow = rows + 1;
-    split_fontrows = 0;
-  }
-  split_screen = 0;
-  do {
-    hchars = text_cols;
-    if (h_panning) hchars++;
-    if (split_screen) {
-      yc = line_compare + cs_y * yChar + 1;
-      font_row = 0;
-      if (rows == 1) {
-        cfheight = (dimension_y - line_compare - 1) % yChar;
-        if (cfheight == 0) cfheight = yChar;
-      } else {
-        cfheight = yChar;
-      }
-    } else if (v_panning) {
-      if (y == 0) {
-        yc = 0;
-        font_row = v_panning;
-        cfheight = yChar - v_panning;
-      } else {
-        yc = y * yChar - v_panning;
-        font_row = 0;
-        if (rows == 1) {
-          cfheight = v_panning;
-        } else {
-          cfheight = yChar;
-        }
-      }
-    } else {
-      yc = y * yChar;
-      font_row = 0;
-      cfheight = yChar;
+  DrawBitmap(hdc, vgafont[ch], xc, yc, fw, fh, fx, fy, fc, bc);
+  if (curs && (ce >= fy) && (cs < (fh + fy))) {
+    if (cs > fy) {
+      yc += (cs - fy);
+      fh -= (cs - fy);
     }
-    if (!split_screen && (y == split_textrow)) {
-      if (split_fontrows < cfheight) cfheight = split_fontrows;
+    if ((ce - cs + 1) < fh) {
+      fh = ce - cs + 1;
     }
-    new_line = new_text;
-    old_line = old_text;
-    x = 0;
-    offset = cs_y * tm_info->line_offset;
-    do {
-      if (h_panning) {
-        if (hchars > text_cols) {
-          xc = 0;
-          font_col = h_panning;
-          cfwidth = xChar - h_panning;
-        } else {
-          xc = x * xChar - h_panning;
-          font_col = 0;
-          if (hchars == 1) {
-            cfwidth = h_panning;
-          } else {
-            cfwidth = xChar;
-          }
-        }
-      } else {
-        xc = x * xChar;
-        font_col = 0;
-        cfwidth = xChar;
-      }
-      if (forceUpdate || (old_text[0] != new_text[0])
-          || (old_text[1] != new_text[1])) {
-        cChar = new_text[0];
-        if (blink_mode) {
-          cAttr = new_text[1] & 0x7F;
-          if (!blink_state && (new_text[1] & 0x80))
-            cAttr = (cAttr & 0x70) | (cAttr >> 4);
-        } else {
-          cAttr = new_text[1];
-        }
-        DrawBitmap(hdc, vgafont[cChar], xc, yc, cfwidth, cfheight, font_col,
-                   font_row, SRCCOPY, cAttr);
-        if (offset == curs) {
-          if (font_row == 0) {
-            yc2 = yc + tm_info->cs_start;
-            font_row2 = tm_info->cs_start;
-            cfheight2 = tm_info->cs_end - tm_info->cs_start + 1;
-          } else {
-            if (v_panning > tm_info->cs_start) {
-              yc2 = yc;
-              font_row2 = font_row;
-              cfheight2 = tm_info->cs_end - v_panning + 1;
-            } else {
-              yc2 = yc + tm_info->cs_start - v_panning;
-              font_row2 = tm_info->cs_start;
-              cfheight2 = tm_info->cs_end - tm_info->cs_start + 1;
-            }
-          }
-          cAttr = ((cAttr >> 4) & 0xF) + ((cAttr & 0xF) << 4);
-          DrawBitmap(hdc, vgafont[cChar], xc, yc2, cfwidth, cfheight2, font_col,
-                     font_row2, SRCCOPY, cAttr);
-        }
-      }
-      x++;
-      new_text+=2;
-      old_text+=2;
-      offset+=2;
-    } while (--hchars);
-    if (!split_screen && (y == split_textrow)) {
-      new_text = text_base;
-      forceUpdate = 1;
-      cs_y = 0;
-      if (tm_info->split_hpanning) h_panning = 0;
-      rows = ((dimension_y - line_compare + yChar - 2) / yChar) + 1;
-      split_screen = 1;
-    } else {
-      y++;
-      cs_y++;
-      new_text = new_line + tm_info->line_offset;
-      old_text = old_line + tm_info->line_offset;
-    }
-  } while (--rows);
-
-  h_panning = tm_info->h_panning;
-
-  prev_cursor_x = cursor_x;
-  prev_cursor_y = cursor_y;
-
+    DrawBitmap(hdc, vgafont[ch], xc, yc, fw, fh, fx, fy, bc, fc);
+  }
   ReleaseDC(stInfo.simWnd, hdc);
-
   LeaveCriticalSection(&stInfo.drawCS);
+}
+
+void bx_win32_gui_c::text_update(Bit8u *old_text, Bit8u *new_text,
+                                 unsigned long cursor_x, unsigned long cursor_y,
+                                 bx_vga_tminfo_t *tm_info)
+{
+  // present for compatibility
 }
 
 int bx_win32_gui_c::get_clipboard_text(Bit8u **bytes, Bit32s *nbytes)
@@ -1839,7 +1811,7 @@ int bx_win32_gui_c::set_clipboard_text(char *text_snapshot, Bit32u len)
 }
 
 
-bx_bool bx_win32_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green,
+bool bx_win32_gui_c::palette_change(Bit8u index, Bit8u red, Bit8u green,
                                        Bit8u blue) {
   if ((current_bpp == 16) && (index < 3)) {
     cmap_index[256+index].rgbRed = red;
@@ -1881,18 +1853,13 @@ void bx_win32_gui_c::graphics_tile_update(Bit8u *tile, unsigned x0, unsigned y0)
 void bx_win32_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, unsigned fwidth, unsigned bpp)
 {
   guest_textmode = (fheight > 0);
-  if (guest_textmode && (fwidth > 9)) {
-    // use existing stretching feature for text mode CO40
-    x >>= 1;
-    fwidth >>= 1;
-  }
-  xChar = fwidth;
-  yChar = fheight;
+  guest_fwidth = fwidth;
+  guest_fheight = fheight;
   guest_xres = x;
   guest_yres = y;
   if (guest_textmode) {
-    text_cols = x / fwidth;
-    text_rows = y / fheight;
+    yChar = fheight;
+    xChar = fwidth;
   }
 
   if ((x == dimension_x) && (y == dimension_y) && (bpp == current_bpp))
@@ -1900,20 +1867,15 @@ void bx_win32_gui_c::dimension_update(unsigned x, unsigned y, unsigned fheight, 
   dimension_x = x;
   dimension_y = y;
 
-  if ((desktop_y > 0) && (((int)x > desktop_x) | ((int)y > desktop_y))) {
+  if ((desktop_y > 0) && ((x > desktop_x) | (y > desktop_y))) {
     BX_ERROR(("dimension_update(): resolution of out of desktop bounds - screen only partly visible"));
   }
-  if (!fullscreenMode) {
-    stretched_x = x;
-    stretched_y = y;
-  }
-  stretch_factor_x = 1;
-  stretch_factor_y = 1;
-  if (guest_textmode && (x < 400)) {
-    stretch_factor_x = 2;
-  } else if (x < 400) {
-    stretch_factor_x = 2;
-    stretch_factor_y = 2;
+  // stretch small simulation window (compatibility code)
+  if (!win32_autoscale) {
+    stretch_factor = 1;
+    if (x < 400) {
+      stretch_factor = 2;
+    }
   }
 
   bitmap_info->bmiHeader.biBitCount = bpp;
@@ -2034,7 +1996,7 @@ void bx_win32_gui_c::replace_bitmap(unsigned hbar_id, unsigned bmap_id)
 {
   if (bmap_id != win32_toolbar_entry[hbar_id].bmap_id) {
     win32_toolbar_entry[hbar_id].bmap_id = bmap_id;
-    bx_bool is_visible = IsWindowVisible(hwndTB);
+    bool is_visible = IsWindowVisible(hwndTB);
     if (is_visible) {
       ShowWindow(hwndTB, SW_HIDE);
     }
@@ -2082,43 +2044,47 @@ void create_vga_font(void)
 }
 
 
-COLORREF GetColorRef(unsigned char attr)
+COLORREF GetColorRef(Bit8u pal_idx)
 {
-  Bit8u pal_idx = text_pal_idx[attr];
   return RGB(cmap_index[pal_idx].rgbRed, cmap_index[pal_idx].rgbGreen,
              cmap_index[pal_idx].rgbBlue);
 }
 
 
 void DrawBitmap(HDC hdc, HBITMAP hBitmap, int xStart, int yStart, int width,
-                int height, int fcol, int frow, DWORD dwRop, unsigned char cColor)
+                int height, int fcol, int frow, Bit8u fgcolor, Bit8u bgcolor)
 {
   BITMAP bm;
   HDC hdcMem;
   POINT ptSize, ptOrg;
   HGDIOBJ oldObj;
 
-  hdcMem = CreateCompatibleDC (hdc);
-  SelectObject (hdcMem, hBitmap);
-  SetMapMode (hdcMem, GetMapMode (hdc));
+  hdcMem = CreateCompatibleDC(hdc);
+  SelectObject(hdcMem, hBitmap);
+  SetMapMode(hdcMem, GetMapMode (hdc));
 
-  GetObject (hBitmap, sizeof (BITMAP), (LPVOID) &bm);
+  GetObject(hBitmap, sizeof (BITMAP), (LPVOID) &bm);
 
   ptSize.x = width;
   ptSize.y = height;
 
-  DPtoLP (hdc, &ptSize, 1);
+  DPtoLP(hdc, &ptSize, 1);
 
   ptOrg.x = fcol;
   ptOrg.y = frow;
-  DPtoLP (hdcMem, &ptOrg, 1);
+  DPtoLP(hdcMem, &ptOrg, 1);
 
   oldObj = SelectObject(MemoryDC, MemoryBitmap);
 
-  COLORREF crFore = SetTextColor(MemoryDC, GetColorRef((cColor>>4)&0xf));
-  COLORREF crBack = SetBkColor(MemoryDC, GetColorRef(cColor&0xf));
-  BitBlt(MemoryDC, xStart, yStart, ptSize.x, ptSize.y, hdcMem, ptOrg.x,
-         ptOrg.y, dwRop);
+  COLORREF crFore = SetTextColor(MemoryDC, GetColorRef(bgcolor));
+  COLORREF crBack = SetBkColor(MemoryDC, GetColorRef(fgcolor));
+  if (xChar > 9) {
+    StretchBlt(MemoryDC, xStart, yStart, ptSize.x, ptSize.y, hdcMem, ptOrg.x,
+              ptOrg.y, ptSize.x / 2, ptSize.y, SRCCOPY);
+  } else {
+    BitBlt(MemoryDC, xStart, yStart, ptSize.x, ptSize.y, hdcMem, ptOrg.x,
+           ptOrg.y, SRCCOPY);
+  }
   SetBkColor(MemoryDC, crBack);
   SetTextColor(MemoryDC, crFore);
 
@@ -2126,16 +2092,16 @@ void DrawBitmap(HDC hdc, HBITMAP hBitmap, int xStart, int yStart, int width,
 
   updateUpdated(xStart, yStart, ptSize.x + xStart - 1, ptSize.y + yStart - 1);
 
-  DeleteDC (hdcMem);
+  DeleteDC(hdcMem);
 }
 
 
 void updateUpdated(int x1, int y1, int x2, int y2)
 {
-  x1 *= stretch_factor_x;
-  y1 *= stretch_factor_y;
-  x2 *= stretch_factor_x;
-  y2 *= stretch_factor_y;
+  x1 *= stretch_factor;
+  y1 *= stretch_factor;
+  x2 *= stretch_factor;
+  y2 *= stretch_factor;
   if (!updated_area_valid) {
     updated_area.left = x1 ;
     updated_area.top = y1 ;
@@ -2159,9 +2125,9 @@ void win32_toolbar_click(int x)
   }
 }
 
-void bx_win32_gui_c::mouse_enabled_changed_specific(bx_bool val)
+void bx_win32_gui_c::mouse_enabled_changed_specific(bool val)
 {
-  if ((val != (bx_bool)mouseCaptureMode) && !mouseToggleReq) {
+  if ((val != (bool)mouseCaptureMode) && !mouseToggleReq) {
     mouseToggleReq = TRUE;
     mouseCaptureNew = val;
   }
@@ -2185,7 +2151,7 @@ void bx_win32_gui_c::set_tooltip(unsigned hbar_id, const char *tip)
   win32_toolbar_entry[hbar_id].tooltip = tip;
 }
 
-void bx_win32_gui_c::set_mouse_mode_absxy(bx_bool mode)
+void bx_win32_gui_c::set_mouse_mode_absxy(bool mode)
 {
   win32MouseModeAbsXY = mode;
 }

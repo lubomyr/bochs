@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: uhci_core.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: uhci_core.cc 14226 2021-04-17 17:48:42Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2009-2017  Benjamin D Lunt (fys [at] fysnet [dot] net)
-//                2009-2018  The Bochs Project
+//                2009-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -57,7 +57,7 @@
 //#define UHCI_FULL_DEBUG
 
 const Bit8u uhci_iomask[32] = {2, 1, 2, 1, 2, 1, 2, 0, 4, 0, 0, 0, 1, 0, 0, 0,
-                              3, 1, 3, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                               3, 1, 3, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // the device object
 
@@ -78,7 +78,7 @@ void bx_uhci_core_c::init_uhci(Bit8u devfunc, Bit16u devid, Bit8u headt, Bit8u i
   // Call our timer routine every 1mS (1,000uS)
   // Continuous and active
   hub.timer_index =
-    DEV_register_timer(this, uhci_timer_handler, 1000, 1,1, "usb.timer");
+    DEV_register_timer(this, uhci_timer_handler, 1000, 1, 1, "usb.timer");
 
   hub.devfunc = devfunc;
   DEV_register_pci_handlers(this, &hub.devfunc, BX_PLUGIN_USB_UHCI,
@@ -159,7 +159,7 @@ void bx_uhci_core_c::reset_uhci(unsigned type)
     hub.usb_port[j].able_changed = 0;
     hub.usb_port[j].status = 0;
     if (hub.usb_port[j].device != NULL) {
-      set_connect_status(j, hub.usb_port[j].device->get_type(), 1);
+      set_connect_status(j, 1);
     }
   }
   while (packets != NULL) {
@@ -168,7 +168,7 @@ void bx_uhci_core_c::reset_uhci(unsigned type)
   }
 }
 
-void bx_uhci_core_c::register_state(bx_list_c *parent)
+void bx_uhci_core_c::uhci_register_state(bx_list_c *parent)
 {
   unsigned j;
   char portnum[8];
@@ -236,7 +236,7 @@ void bx_uhci_core_c::after_restore_state(void)
 
 void bx_uhci_core_c::update_irq()
 {
-  bx_bool level;
+  bool level;
 
   if (((hub.usb_status.status2 & 1) && (hub.usb_enable.on_complete)) ||
       ((hub.usb_status.status2 & 2) && (hub.usb_enable.short_packet)) ||
@@ -265,6 +265,11 @@ Bit32u bx_uhci_core_c::read(Bit32u address, unsigned io_len)
   Bit32u val = 0x0;
   Bit8u  offset,port;
 
+  // if the host driver has not cleared the reset bit, do nothing (reads are
+  // undefined)
+  if (hub.usb_command.reset)
+    return 0;
+
   offset = address - pci_bar[4].addr;
 
   switch (offset) {
@@ -276,7 +281,7 @@ Bit32u bx_uhci_core_c::read(Bit32u address, unsigned io_len)
             | hub.usb_command.suspend << 3
             | hub.usb_command.reset << 2
             | hub.usb_command.host_reset << 1
-            | hub.usb_command.schedule;
+            | (Bit16u)hub.usb_command.schedule;
       break;
 
     case 0x02: // status register (16-bit)
@@ -285,14 +290,14 @@ Bit32u bx_uhci_core_c::read(Bit32u address, unsigned io_len)
             | hub.usb_status.pci_error << 3
             | hub.usb_status.resume << 2
             | hub.usb_status.error_interrupt << 1
-            | hub.usb_status.interrupt;
+            | (Bit16u)hub.usb_status.interrupt;
       break;
 
     case 0x04: // interrupt enable register (16-bit)
       val = hub.usb_enable.short_packet << 3
             | hub.usb_enable.on_complete << 2
             | hub.usb_enable.resume << 1
-            | hub.usb_enable.timeout_crc;
+            | (Bit16u)hub.usb_enable.timeout_crc;
       break;
 
     case 0x06: // frame number register (16-bit)
@@ -329,7 +334,7 @@ Bit32u bx_uhci_core_c::read(Bit32u address, unsigned io_len)
               | hub.usb_port[port].able_changed << 3
               | hub.usb_port[port].enabled << 2
               | hub.usb_port[port].connect_changed << 1
-              | hub.usb_port[port].status;
+              | (Bit16u)hub.usb_port[port].status;
         if (offset & 1) val >>= 8;
         break;
       } // else fall through to default
@@ -357,11 +362,16 @@ void bx_uhci_core_c::write_handler(void *this_ptr, Bit32u address, Bit32u value,
 
 void bx_uhci_core_c::write(Bit32u address, Bit32u value, unsigned io_len)
 {
-  Bit8u  offset,port;
-
-  BX_DEBUG(("register write to  address 0x%04X:  0x%08X (%2i bits)", (unsigned) address, (unsigned) value, io_len * 8));
+  Bit8u offset, port;
 
   offset = address - pci_bar[4].addr;
+
+  // if the reset bit is not cleared and this write is not clearing the bit,
+  // do nothing
+  if (hub.usb_command.reset && ((offset != 0) || (value & 0x04)))
+    return;
+
+  BX_DEBUG(("register write to  address 0x%04X:  0x%08X (%2i bits)", (unsigned) address, (unsigned) value, io_len * 8));
 
   switch (offset) {
     case 0x00: // command register (16-bit) (R/W)
@@ -497,7 +507,7 @@ void bx_uhci_core_c::write(Bit32u address, Bit32u value, unsigned io_len)
       port = (offset & 0x0F) >> 1;
       if ((port < USB_UHCI_PORTS) && (io_len == 2)) {
         // If the ports reset bit is set, don't allow any writes unless the new write will clear the reset bit
-        if (hub.usb_port[port].reset & (value & (1<<9)))
+        if (hub.usb_port[port].reset && ((value & (1 << 9)) != 0))
           break;
         if (value & ((1<<5) | (1<<4) | (1<<0)))
           BX_DEBUG(("write to one or more read-only bits in port #%d register: 0x%04x", port+1, value));
@@ -531,7 +541,7 @@ void bx_uhci_core_c::write(Bit32u address, Bit32u value, unsigned io_len)
             if (hub.usb_port[port].device != NULL) {
               hub.usb_port[port].low_speed =
                 (hub.usb_port[port].device->get_speed() == USB_SPEED_LOW);
-              set_connect_status(port, hub.usb_port[port].device->get_type(), 1);
+              set_connect_status(port, 1);
               hub.usb_port[port].device->usb_send_msg(USB_MSG_RESET);
             }
           }
@@ -586,7 +596,7 @@ void bx_uhci_core_c::uhci_timer(void)
   }
   if (hub.usb_command.schedule) {
     busy = 1;
-    bx_bool interrupt = 0, shortpacket = 0, stalled = 0, was_inactive = 0;
+    bool interrupt = 0, shortpacket = 0, stalled = 0, was_inactive = 0;
     struct TD td;
     struct HCSTACK stack[USB_STACK_SIZE+1];  // queue stack for this item only
     Bit32s stk = 0;
@@ -637,9 +647,9 @@ void bx_uhci_core_c::uhci_timer(void)
           DEV_MEM_READ_PHYSICAL(address+4,  4, (Bit8u*) &td.dword1);
           DEV_MEM_READ_PHYSICAL(address+8,  4, (Bit8u*) &td.dword2);
           DEV_MEM_READ_PHYSICAL(address+12, 4, (Bit8u*) &td.dword3);
-          bx_bool spd = (td.dword1 & (1<<29)) ? 1 : 0;
+          bool spd = (td.dword1 & (1<<29)) ? 1 : 0;
           stack[stk].next = td.dword0 & ~0xF;
-          bx_bool depthbreadth = (td.dword0 & 0x0004) ? 1 : 0;     // 1 = depth first, 0 = breadth first
+          bool depthbreadth = (td.dword0 & 0x0004) ? 1 : 0;     // 1 = depth first, 0 = breadth first
           stack[stk].q = (td.dword0 & 0x0002) ? 1 : 0;
           stack[stk].t = (td.dword0 & 0x0001) ? 1 : 0;
           if (td.dword1 & (1<<23)) {  // is it an active TD
@@ -695,7 +705,7 @@ void bx_uhci_core_c::uhci_timer(void)
       // if one of the TD's in this frame had the ioc bit set, we need to
       //   raise an interrupt, if interrupts are not masked via interrupt register.
       //   always set the status register if IOC.
-      hub.usb_status.status2 |= interrupt;
+      hub.usb_status.status2 |= interrupt ? 1 : 0;
       if (interrupt && hub.usb_enable.on_complete) {
         BX_DEBUG((" [IOC] We want it to fire here (Frame: %04i)", hub.usb_frame_num.frame_num));
       }
@@ -761,11 +771,11 @@ void bx_uhci_core_c::event_handler(int event, USBPacket *packet, int port)
   }
 }
 
-bx_bool bx_uhci_core_c::DoTransfer(Bit32u address, Bit32u queue_num, struct TD *td) {
+bool bx_uhci_core_c::DoTransfer(Bit32u address, Bit32u queue_num, struct TD *td) {
 
   int len = 0, ret = 0;
   USBAsync *p;
-  bx_bool completion;
+  bool completion;
 
   Bit16u maxlen = (td->dword2 >> 21);
   Bit8u  addr   = (td->dword2 >> 8) & 0x7F;
@@ -821,6 +831,7 @@ bx_bool bx_uhci_core_c::DoTransfer(Bit32u address, Bit32u queue_num, struct TD *
         ret = broadcast_packet(&p->packet);
         break;
       default:
+        remove_async_packet(&packets, p);
         hub.usb_status.host_error = 1;
         update_irq();
         return 0;
@@ -870,8 +881,8 @@ int bx_uhci_core_c::broadcast_packet(USBPacket *p)
 }
 
 // If the request fails, set the stall bit ????
-void bx_uhci_core_c::set_status(struct TD *td, bx_bool stalled, bx_bool data_buffer_error, bx_bool babble,
-                             bx_bool nak, bx_bool crc_time_out, bx_bool bitstuff_error, Bit16u act_len)
+void bx_uhci_core_c::set_status(struct TD *td, bool stalled, bool data_buffer_error, bool babble,
+                             bool nak, bool crc_time_out, bool bitstuff_error, Bit16u act_len)
 {
   // clear out the bits we can modify and/or want zero
   td->dword1 &= 0xDF00F800;
@@ -924,72 +935,70 @@ const char *usb_speed[4] = {
   "super"
 };
 
-void bx_uhci_core_c::set_connect_status(Bit8u port, int type, bx_bool connected)
+bool bx_uhci_core_c::set_connect_status(Bit8u port, bool connected)
 {
   usb_device_c *device = hub.usb_port[port].device;
   if (device != NULL) {
-    if (device->get_type() == type) {
-      if (connected) {
-        BX_DEBUG(("port #%d: speed = %s", port+1, usb_speed[device->get_speed()]));
-        switch (device->get_speed()) {
-          case USB_SPEED_LOW:
-            hub.usb_port[port].low_speed = 1;
-            break;
-          case USB_SPEED_FULL:
-            hub.usb_port[port].low_speed = 0;
-            break;
-          case USB_SPEED_HIGH:
-          case USB_SPEED_SUPER:
-            BX_ERROR(("HC ignores device with unsupported speed"));
-            return;
-          default:
-            BX_PANIC(("USB device returned invalid speed value"));
-            set_connect_status(port, type, 0);
-            return;
-        }
-        if (hub.usb_port[port].low_speed) {
-          hub.usb_port[port].line_dminus = 1;  //  dminus=1 & dplus=0 = low speed  (at idle time)
-          hub.usb_port[port].line_dplus = 0;   //  dminus=0 & dplus=1 = high speed (at idle time)
-        } else {
-          hub.usb_port[port].line_dminus = 0;
-          hub.usb_port[port].line_dplus = 1;
-        }
-        hub.usb_port[port].status = 1;
-        hub.usb_port[port].connect_changed = 1;
-
-        // if in suspend state, signal resume
-        if (hub.usb_command.suspend) {
-          hub.usb_port[port].resume = 1;
-          hub.usb_status.resume = 1;
-          if (hub.usb_enable.resume) {
-            hub.usb_status.interrupt = 1;
-          }
-          update_irq();
-        }
-
-        if (!device->get_connected()) {
-          if (!device->init()) {
-            set_connect_status(port, type, 0);
-            BX_ERROR(("port #%d: connect failed", port+1));
-            return;
-          } else {
-            BX_INFO(("port #%d: connect: %s", port+1, device->get_info()));
-          }
-        }
-        device->set_event_handler(this, uhci_event_handler, port);
-      } else {
-        hub.usb_port[port].status = 0;
-        hub.usb_port[port].connect_changed = 1;
-        if (hub.usb_port[port].enabled) {
-          hub.usb_port[port].able_changed = 1;
-          hub.usb_port[port].enabled = 0;
-        }
-        hub.usb_port[port].low_speed = 0;
-        hub.usb_port[port].line_dminus = 0;
-        hub.usb_port[port].line_dplus = 0;
+    if (connected) {
+      BX_DEBUG(("port #%d: speed = %s", port+1, usb_speed[device->get_speed()]));
+      switch (device->get_speed()) {
+        case USB_SPEED_LOW:
+          hub.usb_port[port].low_speed = 1;
+          break;
+        case USB_SPEED_FULL:
+          hub.usb_port[port].low_speed = 0;
+          break;
+        case USB_SPEED_HIGH:
+        case USB_SPEED_SUPER:
+          BX_ERROR(("HC ignores device with unsupported speed"));
+          return 0;
+        default:
+          BX_PANIC(("USB device returned invalid speed value"));
+          return 0;
       }
+      if (hub.usb_port[port].low_speed) {
+        hub.usb_port[port].line_dminus = 1;  //  dminus=1 & dplus=0 = low speed  (at idle time)
+        hub.usb_port[port].line_dplus = 0;   //  dminus=0 & dplus=1 = high speed (at idle time)
+      } else {
+        hub.usb_port[port].line_dminus = 0;
+        hub.usb_port[port].line_dplus = 1;
+      }
+      hub.usb_port[port].status = 1;
+      hub.usb_port[port].connect_changed = 1;
+
+      // if in suspend state, signal resume
+      if (hub.usb_command.suspend) {
+        hub.usb_port[port].resume = 1;
+        hub.usb_status.resume = 1;
+        if (hub.usb_enable.resume) {
+          hub.usb_status.interrupt = 1;
+        }
+        update_irq();
+      }
+
+      if (!device->get_connected()) {
+        if (!device->init()) {
+          BX_ERROR(("port #%d: connect failed", port+1));
+          return 0;
+        } else {
+          BX_INFO(("port #%d: connect: %s", port+1, device->get_info()));
+        }
+      }
+      device->set_event_handler(this, uhci_event_handler, port);
+    } else {
+      BX_INFO(("port #%d: device disconnect", port+1));
+      hub.usb_port[port].status = 0;
+      hub.usb_port[port].connect_changed = 1;
+      if (hub.usb_port[port].enabled) {
+        hub.usb_port[port].able_changed = 1;
+        hub.usb_port[port].enabled = 0;
+      }
+      hub.usb_port[port].low_speed = 0;
+      hub.usb_port[port].line_dminus = 0;
+      hub.usb_port[port].line_dplus = 0;
     }
   }
+  return connected;
 }
 
 void bx_uhci_core_c::set_port_device(int port, usb_device_c *dev)
@@ -997,9 +1006,9 @@ void bx_uhci_core_c::set_port_device(int port, usb_device_c *dev)
   usb_device_c *olddev = hub.usb_port[port].device;
   if ((dev != NULL) && (olddev == NULL)) {
     hub.usb_port[port].device = dev;
-    set_connect_status(port, dev->get_type(), 1);
+    set_connect_status(port, 1);
   } else if ((dev == NULL) && (olddev != NULL)) {
-    set_connect_status(port, olddev->get_type(), 0);
+    set_connect_status(port, 0);
     hub.usb_port[port].device = dev;
   }
 }

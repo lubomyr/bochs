@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.cc 13466 2018-02-16 07:57:32Z sshwarts $
+// $Id: icache.cc 14113 2021-01-31 14:03:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2007-2015 Stanislav Shwartsman
@@ -26,6 +26,7 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
+#include "gui/siminterface.h"
 #include "param_names.h"
 #include "cpustats.h"
 
@@ -33,7 +34,7 @@
 
 bxPageWriteStampTable pageWriteStampTable;
 
-extern int fetchDecode32(const Bit8u *fetchPtr, bx_bool is_32, bxInstruction_c *i, unsigned remainingInPage);
+extern int fetchDecode32(const Bit8u *fetchPtr, bool is_32, bxInstruction_c *i, unsigned remainingInPage);
 #if BX_SUPPORT_X86_64
 extern int fetchDecode64(const Bit8u *fetchPtr, bxInstruction_c *i, unsigned remainingInPage);
 #endif
@@ -196,7 +197,7 @@ bxICacheEntry_c* BX_CPU_C::serveICacheMiss(Bit32u eipBiased, bx_phy_address pAdd
   return entry;
 }
 
-bx_bool BX_CPU_C::mergeTraces(bxICacheEntry_c *entry, bxInstruction_c *i, bx_phy_address pAddr)
+bool BX_CPU_C::mergeTraces(bxICacheEntry_c *entry, bxInstruction_c *i, bx_phy_address pAddr)
 {
   bxICacheEntry_c *e = BX_CPU_THIS_PTR iCache.find_entry(pAddr, BX_CPU_THIS_PTR fetchModeMask);
 

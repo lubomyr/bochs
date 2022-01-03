@@ -1,3 +1,107 @@
+-------------------------------------------------------------------------
+Changes in 2.7 (August 1, 2021):
+
+Brief summary :
+  - Bugfixes for CPU emulation correctness (CPUID/VMX/SVM fixes to support
+    Windows Hyper-V as guest in Bochs)
+  - Improvements for the plugin handling to simplify Bochs extensions
+  - Added "multiple NICs" support to the NE2000 and E1000 devices
+  - Added experimental FTP service for networking modules 'vnet' and 'socket'
+  - Fixes and improvements for all supported Voodoo graphics adapters
+  - Added USB keyboard emulation with most of the keys supported
+  - GUI "cmdmode": create a headerbar event with key combo starting with F7
+  - LGPL'd VGABIOS updated to version 0.8a (new VGABIOS for Voodoo Banshee)
+
+Detailed change log :
+
+- General
+  - Improved plugins handling: all available plugins in path are detected at
+    startup (including externally developed ones). These types are supported in
+    Bochs configuration: config interfaces, display libraries, VGA compatile
+    adapters, optional PCI/ISA devices, pluggable USB devices, disk image,
+    networking and sound driver modules.
+  - Save/Restore bugfixes
+  - Removed legacy "load32bitOShack" feature.
+  - Removed "svga" display library designed for the obsolete Linux SVGALib.
+
+- Configure and compile
+  - Added example shortcut script for cross compiling on Linux for Windows.
+  - Visual Studio workspace files upgraded to VS2019 format.
+
+- Config interface
+  - The config interfaces 'textconfig' and 'win32config' are now plugins.
+  - Switch config interface to 'textconfig' at runtime in case the gui doesn't
+    support dialogs (rfb and vncsrv on Windows).
+
+- CPU/CPUDB
+  - Bugfixes for CPU emulation correctness (CPUID/VMX/SVM fixes to support Windows Hyper-V as guest in Bochs)
+  ! CPUID: Added TigerLake CPU definition (features CET and CLWB support)
+
+- Memory
+  - Improved BIOS write support by implementing Intel(tm) flash chip emulation.
+
+- Bochs Debugger and Instrumentation
+  - Switching to new internal instruction disassembler implementation based on Bochs internal instruction decoder.
+    New disassembler supporting natively all instruction extensions that Bochs is able to emulate, including AVX512*.
+    Old disassembler module is outdate and was removed from the source tree.
+  - Add more symbol lookups to disasm methods
+
+- I/O Devices
+  - Networking
+    - Added "multiple NICs" support to the NE2000 and E1000 devices. Up to 4 devices
+      per model are supported. Use the zero-based "card" parameter to specify device.
+    - Added experimental FTP service for networking modules 'vnet' and 'socket'.
+    - Fixes for iPXE network boot support (modules 'slirp', 'socket', 'vnet').
+    - Added config file support for the 'vnet' module (similar to 'slirp').
+    - Added log file support to 'bxhub' utility (networking module 'socket').
+    - Packet logging in text format for the 'slirp' and 'vnet' modules controlled
+      by runtime option ("pktlog" option in config).
+  - VGA
+    - Voodoo (all models): Now using CLUT for gamma correction in 16 bpp modes.
+    - Voodoo2: Added most of the bitblt capabilities.
+    - Voodoo Banshee: Added "Polygon Fill" command and 2D colorkey support.
+    - Removed lfb_enabled switch from Bochs VBE code. Now banked and LFB writes
+      to VRAM are always valid. Fixes GRUB bootloader menu when using Bochs VBE.
+    - DDC: Added "ddc" parameter to the "vga" option to make it possible
+      either to disable the DDC feature or to read the monitor EDID from file.
+  - PCI (general)
+    - Added config parameter to set up advanced PCI options. Now it is possible
+      to disable ACPI or HPET in case the i440FX chipset is selected. For the
+      i440BX chipset it is possible to disable the incomplete AGP subsystem.
+  - USB
+    - Added keyboard emulation with most of the keys supported.
+    - Added support for USB packet logging in PCAP format.
+    - Changed handling of device options in the USB port configuration
+      (see bochsrc sample).
+  - Sound
+    - Added PC speaker volume control for the lowlevel sound support.
+
+- GUI and display libraries
+    - Added support for calling a headerbar handler after pressing F7 (enabled
+      with "cmdmode" option / present in sdl, sdl2, win32 and x).
+    - Added support for saving text mode snapshot in BMP format.
+    - Write marker to log file by pressing "m" button (guis with "cmdmode" on).
+    - X11 keymaps: added new one for Swiss-German and improved Italian map.
+    - RFB / vncsrv: VGA features h/v pel panning and split screen now supported.
+    - RFB: added support for the pixel format RGB332.
+    - added display library option for disabling the Bochs gui console to use
+      the default system console instead (rfb, sdl, sdl2, vncsrv, x).
+    - win32: added display library option "autoscale" to scale a small
+      simulation window by factor 2, 4 or 8 depending in desktop window size.
+    - wx: fixed status bar handling to avoid segfaults and deadlocks.
+
+- VGABIOS
+  - LGPL'd VGABIOS updated to version 0.8a.
+    - Added initial version of the VGABIOS for Voodoo Banshee adapters.
+    - Added 'write character' support for non-VGA 8-bpp modes (Bochs VBE /
+      Cirrus / Banshee). Cirrus code uses bitblt engine.
+    - Fixed text output and scrolling in VGA graphics modes.
+    - Some small fixes in the VBE code and several code optimizations.
+
+- Misc
+  - Added support for converting VDI images to another format with bximage.
+
+-------------------------------------------------------------------------
 Changes in 2.6.11 (January 5, 2020):
 
 - General

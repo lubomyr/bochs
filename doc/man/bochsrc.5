@@ -1,5 +1,5 @@
 .\"Document Author:  Timothy R. Butler   -   tbutler@uninetsolutions.com"
-.TH bochsrc 5 "01 Jan 2020" "bochsrc" "The Bochs Project"
+.TH bochsrc 5 "27 Jun 2021" "bochsrc" "The Bochs Project"
 .\"SKIP_SECTION"
 .SH NAME
 bochsrc \- Configuration file for Bochs.
@@ -64,12 +64,12 @@ The configuration interface is a series of menus or dialog boxes that
 allows you to change all the settings that control Bochs's behavior.
 Depending on the platform there are up to 3 choices of configuration
 interface: a text mode version called "textconfig" and two graphical versions
-called "win32config" and "wx".  The text mode version uses stdin/stdout and
-is always compiled in, unless Bochs is compiled for wx only. The choice
-"win32config" is only available on win32 and it is the default there.
-The choice "wx" is only available when you use "--with-wx" on the configure
-command.  If you do not write a config_interface line, Bochs will
-choose a default for you.
+called "win32config" and "wx".  The text mode version uses stdin/stdout or
+gui console (if available / runtime config) and is always compiled in, unless
+Bochs is compiled for wx only. The choice "win32config" is only available on
+win32/win64 and it is the default on these platforms. The choice "wx" is only
+available when Bochs is compiled with wxWidgets support. If you do not write a
+config_interface line, Bochs will choose a default for you.
 
 .B NOTE:
 if you use the "wx" configuration interface, you must also use
@@ -102,25 +102,28 @@ The choices are:
   nogui       no display at all
 
 .B NOTE:
-if you use the "wx" configuration interface, you must also use
+If you use the "wx" configuration interface, you must also use
 the "wx" display library.
 
 .B Specific options:
 Some display libraries now support specific options to control their
 behaviour. These options are supported by more than one display library:
 
+  "cmdmode"     - call a headerbar button handler after pressing F7 (x, sdl, sdl2)
+  "fullscreen"  - startup in fullscreen mode (sdl, sdl2)
   "gui_debug"   - use GTK debugger gui (sdl, sdl2, x)
-  "hideIPS"     - disable IPS output in status bar (rfb, sdl, sdl2, vncsrv, wx, x)
+  "hideIPS"     - disable IPS output in status bar (rfb, sdl, sdl2, term, vncsrv, wx, x)
   "nokeyrepeat" - turn off host keyboard repeat (sdl, sdl2, x)
+  "no_gui_console" - use system console instead of builtin gui console (rfb, sdl, sdl2, vncsrv, x)
   "timeout"     - time (in seconds) to wait for client (rfb, vncsrv)
 
-See the examples below for other currently supported options.
+.B NOTE:
+Setting up options without specifying display library is also supported.
 
 Examples:
   display_library: x
-  display_library: sdl, options="fullscreen"  # startup in fullscreen mode
-  display_library: sdl2, options="fullscreen"  # startup in fullscreen mode
-
+  display_library: sdl2, options=fullscreen,hideIPS
+  display_library: options=cmdmode
 
 .TP
 .I "cpu:"
@@ -479,9 +482,16 @@ is driven by the cpu and depends on the ips setting. If the host is slow
 to 0 and "clock: sync=none" may improve the responsiveness of the guest
 GUI when the guest is otherwise idle.
 
+ddc:
+
+This parameter defines the behaviour of the DDC emulation that returns
+the monitor EDID data. By default the 'builtin' values for 'Bochs Screen'
+are used. Other choices are 'disabled' (no DDC emulation) and 'file'
+(read monitor EDID from file / path name separated with a colon).
+
 Examples:
-  vga: extension=none, update_freq=10, realtime=0
-  vga: extension=cirrus, update_freq=30
+  vga: extension=none, update_freq=10, realtime=0, ddc=disabled
+  vga: extension=cirrus, update_freq=30, ddc=file:monitor.bin
   vga: extension=vbe
 
 .TP
@@ -586,18 +596,40 @@ Examples:
 
 .TP
 .I "pci:"
-This option controls the presence of a PCI chipset in Bochs. Currently it
-supports the i430FX, i440FX and i440BX chipsets. You can also specify the
-devices connected to PCI slots. Up to 5 slots are available. For these
-combined PCI/ISA devices assigning to slot is mandatory if you want to emulate
-the PCI model: cirrus, ne2k and pcivga. These PCI-only devices are also
-supported, but they are auto-assigned if you don't use the slot configuration:
-e1000, es1370, pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci and voodoo.
-In case of the i440BX chipset, slot #5 is the AGP slot. Currently only the
-\&'voodoo' device can be assigned to AGP.
+This defines the parameters to set up the Bochs PCI emulation:
+
+enabled
+
+If Bochs is compiled with PCI support, it is enabled by default.
+
+chipset
+
+Currently the chipsets i430FX, i440FX and i440BX (limited) are supported and
+the default is i440FX.
+
+slotX
+
+It is possible to specify the devices connected to PCI slots. Up to 5 slots
+are available. For combined PCI/ISA devices assigning to slot is mandatory
+if the PCI model should be emulated (cirrus, ne2k and pcivga). Setting up
+slot for PCI-only devices is also supported, but they are auto-assigned if
+not specified (e1000, es1370, pcidev, pcipnic, usb_ehci, usb_ohci, usb_xhci,
+voodoo). All device models except the network devices ne2k and e1000 can be
+used only once in the slot configuration. In case of the i440BX chipset, the
+slot #5 is the AGP slot. Currently only the 'voodoo' device can be assigned
+to AGP.
+
+advopts
+
+With the advanced PCI options it is possible to control the behaviour of the 
+PCI chipset. These options can be specified as comma-separated values.
+By default the "Bochs i440FX" chipset enables the ACPI and HPET devices, but
+original i440FX doesn't support them. The options 'noacpi' and 'nohpet' make
+it possible to disable them. The option 'noagp' disables the incomplete AGP
+subsystem of the i440BX chipset.
 
 Example:
-  pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k
+  pci: enabled=1, chipset=i440fx, slot1=pcivga, slot2=ne2k, advopts=noacpi
 
 .TP
 .I "clock:"
@@ -724,7 +756,7 @@ Examples:
 This defines the type and characteristics of all attached ata devices:
    type=       type of attached device [disk|cdrom]
    path=       path of the image
-   mode=       image mode [flat|concat|external|dll|sparse|vmware3|vmware4|undoable|growing|volatile|vpc|vbox|vvfat], only valid for disks
+   mode=       image mode [flat|concat|sparse|vmware3|vmware4|undoable|growing|volatile|vpc|vbox|vvfat], only valid for disks
    cylinders=  only valid for disks
    heads=      only valid for disks
    spt=        only valid for disks
@@ -752,8 +784,6 @@ from the image must be exactly C*H*S*512.
 The mode option defines how the disk image is handled. Disks can be defined as:
   - flat : one file flat layout
   - concat : multiple files layout
-  - external : developer's specific, through a C++ class
-  - dll : developer's specific, through a DLL
   - sparse : stackable, commitable, rollbackable
   - vmware3 : vmware3 disk support
   - vmware4 : vmware4 disk support (aka VMDK)
@@ -1001,13 +1031,14 @@ Example for different drivers:
 .I "speaker:"
 This defines the PC speaker output mode. In the 'sound' mode the beep
 is generated by the square wave generator which is a part of the
-lowlevel sound support. The 'system' mode is only available on Linux
-and Windows. On Linux /dev/console is used for output and on Windows
+lowlevel sound support. In this mode the 'volume' parameter can be used
+to set the output volume (0 - 15). The 'system' mode is only available on
+Linux and Windows. On Linux /dev/console is used for output and on Windows
 the Beep() function. The 'gui' mode forwards the beep to the related
 gui methods (currently only used by the Carbon gui).
 
 Example:
-  speaker: enabled=1, mode=sound
+  speaker: enabled=1, mode=sound, volume=15
 
 .TP
 .I "sb16:"
@@ -1094,6 +1125,8 @@ Example for sending output to file:
 .TP
 .I "ne2k:"
 Defines the characteristics of an attached ne2000 isa card :
+   card=CARD,
+   type=TYPE,
    ioaddr=IOADDR,
    irq=IRQ,
    mac=MACADDR,
@@ -1103,6 +1136,16 @@ Defines the characteristics of an attached ne2000 isa card :
    bootrom=BOOTROM
 
 .B PROPERTIES FOR ne2k:
+
+CARD:
+This is the zero-based card number to configure with this ne2k config
+line. Up to 4 devices are supported now (0...3). If not specified, the
+following parameters apply to card #0.
+
+TYPE:
+This is the card type to emulate ('isa' or 'pci'). If not specified,
+card #0 defaults to 'pci' if assigned to a pci slot. For the additional cards
+the type parameter should be set up.
 
 IOADDR, IRQ:
 You probably won't need to change ioaddr and irq, unless there are IRQ conflicts.
@@ -1129,11 +1172,11 @@ If you don't want to make connections to any physical networks,
 you can use the following 'ethmod's to simulate a virtual network.
  - null   : All packets are discarded, but logged to a few files
  - vde    : Virtual Distributed Ethernet
- - vnet   : ARP, ICMP-echo(ping), DHCP and TFTP are simulated
+ - vnet   : ARP, ICMP-echo(ping), DHCP, DNS, FTP and TFTP are simulated
             The virtual host uses 192.168.10.1
-            DHCP assigns 192.168.10.2 to the guest
-            The TFTP server use 'ethdev' for the root directory and doesn't
-            overwrite files
+            DHCP assigns 192.168.10.15 to the guest
+            The FTP and TFTP servers use 'ethdev' for the root directory
+            TFTP doesn't overwrite files, DNS for server and client only
  - socket : Connect up to 6 Bochs instances with external program 'bxhub'
             (simulating an ethernet hub). It provides the same services as the
             'vnet' module and assigns IP addresses like 'slirp' (10.0.2.x).
@@ -1155,8 +1198,8 @@ This is mainly useful for the tun/tap devices that only exist during
 Bochs execution. The network interface name is supplied to the script
 as first parameter. The 'slirp' module uses this parameter to specify
 a config file for setting up an alternative IP configuration or additional
-features. The 'vnet' module uses this parameter to specify an alternative
-log file name.
+features. The 'vnet' module also uses this parameter to specify a config file
+similar to slirp, but with only a few settings.
 
 BOOTROM:
 The bootrom value is optional, and is the name of the ROM image
@@ -1172,7 +1215,7 @@ Examples:
   ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vde, ethdev="/tmp/vde.ctl"
   ne2k: ioaddr=0x300, irq=9, mac=b0:c4:20:00:00:01, ethmod=vnet, ethdev="c:/temp"
   ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=40000 # use localhost
-  ne2k: mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=mymachine:40000
+  ne2k: card=0, mac=b0:c4:20:00:00:01, ethmod=socket, ethdev=mymachine:40000
   ne2k: mac=b0:c4:20:00:00:01, ethmod=slirp, script=slirp.conf, bootrom=ne2k_pci.rom
 
 .TP
@@ -1189,52 +1232,58 @@ Example:
 .I "e1000:"
 To support the Intel(R) 82540EM Gigabit Ethernet adapter, Bochs must be compiled
 with the --eanble-e1000 configure option. The E1000 accepts the same syntax
-(for mac, ethmod, ethdev, script, bootrom) and supports the same networking
+(for card, mac, ethmod, ethdev, script, bootrom) and supports the same networking
 modules as the NE2000 adapter.
 
 Example:
-  e1000: enabled=1, mac=52:54:00:12:34:56, ethmod=slirp, script=slirp.conf
+  e1000: card=0, enabled=1, mac=52:54:00:12:34:56, ethmod=slirp, script=slirp.conf
 
 .TP
 .I "usb_uhci:"
 This option controls the presence of the USB root hub which is a part
 of the i440FX PCI chipset. With the portX parameter you can connect devices
-to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'disk', 'cdrom',
-\&'floppy', 'hub' and 'printer').
+to the hub (currently supported: 'mouse', 'tablet', 'keypad', 'keyboard',
+\&'disk', 'cdrom', 'floppy', 'hub' and 'printer').
 
 If you connect the mouse or tablet to one of the ports, Bochs forwards the
 mouse movement data to the USB device instead of the selected mouse type.
 When connecting the keypad to one of the ports, Bochs forwards the input of
-the numeric keypad to the USB device instead of the PS/2 keyboard.
+the numeric keypad to the USB device instead of the PS/2 keyboard. If the
+keyboard is selected, all key events are sent to the USB device.
 
-To connect a 'flat' mode image as a USB hardisk you can use the 'disk' device
-with the path to the image separated with a colon. To use other disk image modes
-similar to ATA disks the syntax 'disk:mode:filename' must be used (see below).
+To connect a disk image as a USB hardisk you can use the 'disk' device. Use
+the 'path' option in the optionsX parameter to specify the path to the image
+separated with a colon. To use other disk image modes similar to ATA disks
+the syntax 'path:mode:filename' must be used (see below).
 
-To emulate a USB cdrom you can use the 'cdrom' device name and the path to
-an ISO image or raw device name also separated with a colon. An option to
-insert/eject media is available in the runtime configuration.
+To emulate a USB cdrom you can use the 'cdrom' device and the path to an
+ISO image or raw device name can be set with the 'path' option in the
+optionsX parameter also separated with a colon. An option to insert/eject
+media is available in the runtime configuration.
 
-To emulate a USB floppy you can use the 'floppy' device with the path to the
-image separated with a colon. To use the VVFAT image mode similar to the
-legacy floppy the syntax 'floppy:vvfat:directory' must be used (see below).
+To emulate a USB floppy you can use the 'floppy' device and the path to a
+floppy image can be set with the 'path' option in the optionsX parameter
+separated with a colon. To use the VVFAT image mode similar to the legacy
+floppy the syntax 'path:vvfat:directory' must be used (see below).
 An option to insert/eject media is available in the runtime configuration.
 
 The device name 'hub' connects an external hub with max. 8 ports (default: 4)
-to the root hub. To specify the number of ports you have to add the value
-separated with a colon. Connecting devices to the external hub ports is only
-available in the runtime configuration.
+to the root hub. To specify the number of ports you have to use the 'ports'
+option in the optionsX parameter with the value separated with a colon.
+Connecting devices to the external hub ports is only available in the runtime
+configuration.
 
 The device 'printer' emulates the HP Deskjet 920C printer. The PCL data is
-sent to a file specified in bochsrc.txt. The current code appends the PCL
-code to the file if the file already existed. The output file can be
-changed at runtime.
+sent to a file specified in the 'file' option with the optionsX parameter.
+The current code appends the PCL code to the file if the file already existed.
+The output file can be changed at runtime.
 
 The optionsX parameter can be used to assign specific options to the device
-connected to the corresponding USB port. Currently this feature is used to
+connected to the corresponding USB port. The option 'speed' can be used to
 set the speed reported by device ('low', 'full', 'high' or 'super'). The
 available speed choices depend on both HC and device. The option 'debug' turns
-on debug output for the device at connection time.
+on debug output for the device at connection time. The option 'pcap' turns on
+packet logging in PCAP format.
 For the USB 'disk' device the optionsX parameter can be used to specify an
 alternative redolog file (journal) of some image modes. For 'vvfat' mode USB
 disks the optionsX parameter can be used to specify the disk size (range
@@ -1246,13 +1295,14 @@ accepts the parameter "write_protected" with valid values 0 and 1 to select
 the access mode (default is 0).
 
 Examples:
-  usb_uhci: enabled=1, port1=mouse, port2=disk:usbstick.img
-  usb_uhci: enabled=1, port1=hub:7, port2=disk:growing:usbdisk.img
-  usb_uhci: enabled=1, port2=disk:undoable:usbdisk.img, options2=journal:redo.log
-  usb_uhci: enabled=1, port2=disk:usbdisk2.img, options2=sect_size:1024
-  usb_uhci: enabled=1, port2=disk:vvfat:vvfat, options2="debug,speed:full"
-  usb_uhci: enabled=1, port1=printer:printdata.bin, port2=cdrom:image.iso
-  usb_uhci: enabled=1, port2=floppy:vvfat:diskette, options2="model:teac"
+  usb_uhci: port1=mouse, port2=disk, options2="path:usbstick.img"
+  usb_uhci: port1=hub, options1="ports:6"
+  usb_uhci: port2=disk, options2="path:undoable:usbdisk.img, journal:u.redolog"
+  usb_uhci: port2=disk, options2=""path:usbdisk2.img, sect_size:1024"
+  usb_uhci: port2=disk, options2="path:vvfat:vvfat, debug, speed:full"
+  usb_uhci: port2=cdrom, options2="path:image.iso"
+  usb_uhci: port1=printer, options1="file:printdata.bin"
+  usb_uhci: port2=floppy, options2="path:vvfat:diskette, model:teac"
 
 .TP
 .I "usb_ohci:"
@@ -1296,15 +1346,6 @@ Example:
 The vendor and device arguments should contain the vendor ID respectively the
 device ID of the PCI device you want to map within Bochs.
 .B The PCI mapping is still very experimental and not maintained yet.
-
-.TP
-.I "user_plugin:"
-Load user-defined plugin. This option is available only if Bochs is
-compiled with plugin support. Maximum 8 different plugins are supported.
-See the example in the Bochs sources how to write a plugin device.
-
-Example:
-  user_plugin: name=testdev
 
 .\"SKIP_SECTION"
 .SH LICENSE

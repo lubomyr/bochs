@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cpu.cc 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: cpu.cc 14141 2021-02-11 15:05:06Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2018  The Bochs Project
@@ -24,7 +24,28 @@
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
 
+#include "memory/memory-bochs.h"
+#include "pc_system.h"
 #include "cpustats.h"
+
+#if BX_SUPPORT_HANDLERS_CHAINING_SPEEDUPS
+
+#define BX_SYNC_TIME_IF_SINGLE_PROCESSOR(allowed_delta) {                               \
+  if (BX_SMP_PROCESSORS == 1) {                                                         \
+    Bit32u delta = (Bit32u)(BX_CPU_THIS_PTR icount - BX_CPU_THIS_PTR icount_last_sync); \
+    if (delta >= allowed_delta) {                                                       \
+      BX_CPU_THIS_PTR sync_icount();                                                    \
+      BX_TICKN(delta);                                                                  \
+    }                                                                                   \
+  }                                                                                     \
+}
+
+#else
+
+#define BX_SYNC_TIME_IF_SINGLE_PROCESSOR(allowed_delta) \
+  if (BX_SMP_PROCESSORS == 1) BX_TICK1()
+
+#endif
 
 jmp_buf BX_CPU_C::jmp_buf_env;
 
@@ -607,7 +628,7 @@ void BX_CPU_C::prefetch(void)
   bx_TLB_entry *tlbEntry = BX_ITLB_ENTRY_OF(laddr);
   Bit8u *fetchPtr = 0;
 
-  if ((tlbEntry->lpf == lpf) && (tlbEntry->accessBits & (1<<USER_PL)) != 0) {
+  if ((tlbEntry->lpf == lpf) && (tlbEntry->accessBits & (1 << unsigned(USER_PL))) != 0) {
     BX_CPU_THIS_PTR pAddrFetchPage = tlbEntry->ppf;
     fetchPtr = (Bit8u*) tlbEntry->hostPageAddr;
   }  
@@ -636,7 +657,7 @@ void BX_CPU_C::prefetch(void)
 }
 
 #if BX_DEBUGGER || BX_GDBSTUB
-bx_bool BX_CPU_C::dbg_instruction_epilog(void)
+bool BX_CPU_C::dbg_instruction_epilog(void)
 {
 #if BX_DEBUGGER
   bx_address debug_eip = RIP;
@@ -734,7 +755,7 @@ bx_bool BX_CPU_C::dbg_instruction_epilog(void)
 #if (BX_DBG_MAX_PHY_BPOINTS > 0)
     if (bx_guard.guard_for & BX_DBG_GUARD_IADDR_PHY) {
       bx_phy_address phy;
-      bx_bool valid = dbg_xlate_linear2phy(BX_CPU_THIS_PTR guard_found.laddr, &phy);
+      bool valid = dbg_xlate_linear2phy(BX_CPU_THIS_PTR guard_found.laddr, &phy);
       if (valid) {
         for (unsigned n=0; n<bx_guard.iaddr.num_physical; n++) {
           if (bx_guard.iaddr.phy[n].enabled && (bx_guard.iaddr.phy[n].addr == phy))

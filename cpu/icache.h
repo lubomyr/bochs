@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: icache.h 13654 2019-12-09 16:44:36Z sshwarts $
+// $Id: icache.h 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2007-2015 Stanislav Shwartsman
@@ -198,7 +198,7 @@ public:
     return e;
   }
 
-  BX_CPP_INLINE bx_bool breakLinks()
+  BX_CPP_INLINE bool breakLinks()
   {
     // break all links bewteen traces
     if (++traceLinkTimeStamp == 0xffffffff) {

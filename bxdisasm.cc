@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bxdisasm_new.cc 13391 2017-12-13 20:27:02Z sshwarts $
+// $Id: bxdisasm.cc 14091 2021-01-30 17:37:42Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//   Copyright (c) 2014-2017 Stanislav Shwartsman
+//   Copyright (c) 2014-2020 Stanislav Shwartsman
 //          Written by Stanislav Shwartsman [sshwarts at sourceforge net]
 //
 //  This library is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@
 /////////////////////////////////////////////////////////////////////////
 
 // Compile using:
-// g++ -I. -I./instrument/stubs -DBX_STANDALONE_DECODER bxdisasm_new.cc cpu/decoder/*.cc -o bxdisasm
+// g++ -I. -I./instrument/stubs -DBX_STANDALONE_DECODER bxdisasm.cc cpu/decoder/*.cc -o bxdisasm
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,14 +55,11 @@ void hex2bin(Bit8u* target, const char* src, unsigned len)
   }
 }
 
-extern char* disasm(const Bit8u *opcode, bool is_32, bool is_64, char *disbufptr, bxInstruction_c *i, bx_address cs_base = 0, bx_address rip = 0);
-
 int main(int argn, const char **argv)
 {
   char disbuf[256];
   Bit8u ibuf[16] = {0};
-  bx_bool is_32 = 1, is_64 = 0;
-  unsigned len;
+  bool is_32 = 1, is_64 = 0;
 
   if (argn < 2)
   {
@@ -70,7 +67,7 @@ int main(int argn, const char **argv)
     exit(1);
   }
 
-  for (unsigned i=1;i<argn;i++) {
+  for (int i=1;i<argn;i++) {
     if (!strcmp(argv[i], "/16")) {
       is_32 = 0;
       is_64 = 0;
@@ -98,10 +95,13 @@ int main(int argn, const char **argv)
 
   printf("instruction bytes:");
   for (int i=0;i<16;i++)
-    printf("%02x ", ibuf[i]);
+    printf("%02x", ibuf[i]);
   printf("\n");
 
   bxInstruction_c i;
-  disasm(ibuf, is_32, is_64, disbuf, &i, 0, 0);
+  disasm(ibuf, is_32, is_64, disbuf, &i, 0, 0, BX_DISASM_INTEL);
+  printf("disasm: %s (opcode handler=%s)\n", disbuf, i.getIaOpcodeName());
+
+  disasm(ibuf, is_32, is_64, disbuf, &i, 0, 0, BX_DISASM_GAS);
   printf("disasm: %s (opcode handler=%s)\n", disbuf, i.getIaOpcodeName());
 }

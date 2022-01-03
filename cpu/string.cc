@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: string.cc 13613 2019-11-22 10:54:36Z sshwarts $
+// $Id: string.cc 14093 2021-01-30 18:29:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2019  The Bochs Project
@@ -23,6 +23,8 @@
 #include "bochs.h"
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
+
+#include "pc_system.h"
 
 //
 // REP MOVS methods

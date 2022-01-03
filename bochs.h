@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: bochs.h 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: bochs.h 14320 2021-07-25 18:01:28Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2019  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -102,8 +102,7 @@ extern "C" {
 #endif
 
 #include "osdep.h"       /* platform dependent includes and defines */
-#include "bx_debug/debug.h"
-#include "gui/siminterface.h"
+#include "gui/paramtree.h"
 
 // BX_SHARE_PATH should be defined by the makefile.  If not, give it
 // a value of NULL to avoid compile problems.
@@ -120,21 +119,28 @@ int  bx_parse_cmdline(int arg, int argc, char *argv[]);
 int  bx_read_configuration(const char *rcfile);
 int  bx_write_configuration(const char *rcfile, int overwrite);
 void bx_reset_options(void);
-void bx_set_log_actions_by_device(bx_bool panic_flag);
+void bx_set_log_actions_by_device(bool panic_flag);
 // special config parameter and options functions for plugins
+#if BX_NETWORKING
 void bx_init_std_nic_options(const char *name, bx_list_c *menu);
+#endif
+#if BX_SUPPORT_PCIUSB
 void bx_init_usb_options(const char *usb_name, const char *pname, int maxports);
+#endif
 int  bx_parse_param_from_list(const char *context, const char *input, bx_list_c *list);
 int  bx_parse_nic_params(const char *context, const char *param, bx_list_c *base);
-int  bx_parse_usb_port_params(const char *context, bx_bool devopt,
-                              const char *param, int maxports, bx_list_c *base);
-int  bx_write_param_list(FILE *fp, bx_list_c *base, const char *optname, bx_bool multiline);
+int  bx_parse_usb_port_params(const char *context, const char *param,
+                              int maxports, bx_list_c *base);
+int  bx_split_option_list(const char *msg, const char *rawopt, char **argv, int max_argv);
+int  bx_write_param_list(FILE *fp, bx_list_c *base, const char *optname, bool multiline);
+#if BX_SUPPORT_PCIUSB
 int  bx_write_usb_options(FILE *fp, int maxports, bx_list_c *base);
+#endif
 
 Bit32u crc32(const Bit8u *buf, int len);
 
 // used to print param tree from debugger
-void print_tree(bx_param_c *node, int level = 0, bx_bool xml = false);
+void print_tree(bx_param_c *node, int level = 0, bool xml = false);
 
 #if BX_ENABLE_STATISTICS
 // print statistics
@@ -182,22 +188,11 @@ void print_statistics_tree(bx_param_c *node, int level = 0);
   new bx_shadow_num_c(parent, #name, &(field), BASE_DEC)
 
 #define BXRS_PARAM_BOOL(parent, name, field) \
-  new bx_shadow_bool_c(parent, #name, (bx_bool*)(&(field)))
+  new bx_shadow_bool_c(parent, #name, &(field))
 
 // =-=-=-=-=-=-=- Normal optimized use -=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// some pc_systems functions just redirect to the IO devices so optimize
-// by eliminating call here
-//
-// #define BX_INP(addr, len)        bx_pc_system.inp(addr, len)
-// #define BX_OUTP(addr, val, len)  bx_pc_system.outp(addr, val, len)
 #define BX_INP(addr, len)           bx_devices.inp(addr, len)
 #define BX_OUTP(addr, val, len)     bx_devices.outp(addr, val, len)
-#define BX_TICK1()                  bx_pc_system.tick1()
-#define BX_TICKN(n)                 bx_pc_system.tickn(n)
-#define BX_INTR                     bx_pc_system.INTR
-#define BX_RAISE_INTR()             bx_pc_system.raise_INTR()
-#define BX_CLEAR_INTR()             bx_pc_system.clear_INTR()
-#define BX_HRQ                      bx_pc_system.HRQ
 
 #if BX_SUPPORT_SMP
 #define BX_CPU(x)                   (bx_cpu_array[x])
@@ -206,15 +201,6 @@ void print_statistics_tree(bx_param_c *node, int level = 0);
 #endif
 
 #define BX_MEM(x)                   (&bx_mem)
-
-#define BX_SET_ENABLE_A20(enabled)  bx_pc_system.set_enable_a20(enabled)
-#define BX_GET_ENABLE_A20()         bx_pc_system.get_enable_a20()
-
-#if BX_SUPPORT_A20
-#  define A20ADDR(x)                ((bx_phy_address)(x) & bx_pc_system.a20_mask)
-#else
-#  define A20ADDR(x)                ((bx_phy_address)(x))
-#endif
 
 // you can't use static member functions on the CPU, if there are going
 // to be 2 cpus.  Check this early on.
@@ -257,130 +243,7 @@ void print_statistics_tree(bx_param_c *node, int level = 0);
 #  define BX_DBG_PHY_MEMORY_ACCESS(cpu,      phy, len, memtype, rw, attr, data) /* empty */
 #endif  // #if BX_DEBUGGER
 
-#define MAGIC_LOGNUM 0x12345678
-
-typedef class BOCHSAPI logfunctions
-{
-  char *name;
-  char *prefix;
-  int onoff[N_LOGLEV];
-  class iofunctions *logio;
-  // default log actions for all devices, declared and initialized
-  // in logio.cc.
-  BOCHSAPI_CYGONLY static int default_onoff[N_LOGLEV];
-public:
-  logfunctions(void);
-  logfunctions(class iofunctions *);
-  virtual ~logfunctions(void);
-
-  void info(const char *fmt, ...)   BX_CPP_AttrPrintf(2, 3);
-  void error(const char *fmt, ...)  BX_CPP_AttrPrintf(2, 3);
-  void panic(const char *fmt, ...)  BX_CPP_AttrPrintf(2, 3);
-  void ldebug(const char *fmt, ...) BX_CPP_AttrPrintf(2, 3);
-  void fatal1(const char *fmt, ...) BX_CPP_AttrPrintf(2, 3);
-  void fatal(int level, const char *prefix, const char *fmt, va_list ap, int exit_status);
-  void warn(int level, const char *prefix, const char *fmt, va_list ap);
-  void ask(int level, const char *prefix, const char *fmt, va_list ap);
-  void put(const char *p);
-  void put(const char *n, const char *p);
-  void setio(class iofunctions *);
-  void setonoff(int loglev, int value) {
-    assert (loglev >= 0 && loglev < N_LOGLEV);
-    onoff[loglev] = value;
-  }
-  const char *get_name() const { return name; }
-  const char *getprefix() const { return prefix; }
-  int getonoff(int level) const {
-    assert (level>=0 && level<N_LOGLEV);
-    return onoff[level];
-  }
-  static void set_default_action(int loglev, int action) {
-    assert (loglev >= 0 && loglev < N_LOGLEV);
-    assert (action >= 0 && action < N_ACT);
-    default_onoff[loglev] = action;
-  }
-  static int get_default_action(int loglev) {
-    assert (loglev >= 0 && loglev < N_LOGLEV);
-    return default_onoff[loglev];
-  }
-} logfunc_t;
-
-#define BX_LOGPREFIX_LEN 20
-
-class BOCHSAPI iofunctions {
-  int magic;
-  char logprefix[BX_LOGPREFIX_LEN + 1];
-  FILE *logfd;
-  class logfunctions *log;
-  void init(void);
-  void flush(void);
-
-// Log Class types
-public:
-  iofunctions(void);
-  iofunctions(FILE *);
-  iofunctions(int);
-  iofunctions(const char *);
- ~iofunctions(void);
-
-  void out(int level, const char *pre, const char *fmt, va_list ap);
-
-  void init_log(const char *fn);
-  void init_log(int fd);
-  void init_log(FILE *fs);
-  void exit_log();
-  void set_log_prefix(const char *prefix);
-  int get_n_logfns() const { return n_logfn; }
-  logfunc_t *get_logfn(int index) { return logfn_list[index]; }
-  void add_logfn(logfunc_t *fn);
-  void remove_logfn(logfunc_t *fn);
-  void set_log_action(int loglevel, int action);
-  const char *getlevel(int i) const;
-  const char *getaction(int i) const;
-  int isaction(const char *val) const;
-
-protected:
-  int n_logfn;
-#define MAX_LOGFNS 512
-  logfunc_t *logfn_list[MAX_LOGFNS];
-  const char *logfn;
-};
-
-typedef class iofunctions iofunc_t;
-
-#define SAFE_GET_IOFUNC() \
-  ((io==NULL)? (io=new iofunc_t("/dev/stderr")) : io)
-#define SAFE_GET_GENLOG() \
-  ((genlog==NULL)? (genlog=new logfunc_t(SAFE_GET_IOFUNC())) : genlog)
-
-#if BX_NO_LOGGING
-
-#define BX_INFO(x)
-#define BX_DEBUG(x)
-#define BX_ERROR(x)
-#define BX_PANIC(x) (LOG_THIS panic) x
-#define BX_FATAL(x) (LOG_THIS fatal1) x
-
-#define BX_ASSERT(x)
-
-#else
-
-#define BX_INFO(x)  (LOG_THIS info) x
-#define BX_DEBUG(x) (LOG_THIS ldebug) x
-#define BX_ERROR(x) (LOG_THIS error) x
-#define BX_PANIC(x) (LOG_THIS panic) x
-#define BX_FATAL(x) (LOG_THIS fatal1) x
-
-#if BX_ASSERT_ENABLE
-  #define BX_ASSERT(x) do {if (!(x)) BX_PANIC(("failed assertion \"%s\" at %s:%d\n", #x, __FILE__, __LINE__));} while (0)
-#else
-  #define BX_ASSERT(x)
-#endif
-
-#endif
-
-BOCHSAPI extern iofunc_t *io;
-BOCHSAPI extern logfunc_t *genlog;
+#include "logio.h"
 
 #ifndef UNUSED
 #  define UNUSED(x) ((void)x)
@@ -420,20 +283,20 @@ int bx_gdbstub_check(unsigned int eip);
 #endif
 
 typedef struct {
-  bx_bool interrupts;
-  bx_bool exceptions;
-  bx_bool print_timestamps;
+  bool interrupts;
+  bool exceptions;
+  bool print_timestamps;
 #if BX_DEBUGGER
-  bx_bool magic_break_enabled;
+  bool magic_break_enabled;
 #endif
 #if BX_GDBSTUB
-  bx_bool gdbstub_enabled;
+  bool gdbstub_enabled;
 #endif
 #if BX_SUPPORT_APIC
-  bx_bool apic;
+  bool apic;
 #endif
 #if BX_DEBUG_LINUX
-  bx_bool linux_syscall;
+  bool linux_syscall;
 #endif
 } bx_debug_t;
 
@@ -441,9 +304,16 @@ typedef struct {
 BOCHSAPI_MSVCONLY void bx_show_ips_handler(void);
 #endif
 void CDECL bx_signal_handler(int signum);
-int bx_atexit(void);
+BOCHSAPI_MSVCONLY int bx_atexit(void);
 BOCHSAPI extern bx_debug_t bx_dbg;
 
+#if BX_SUPPORT_SMP
+  #define BX_SMP_PROCESSORS (bx_cpu_count)
+#else
+  #define BX_SMP_PROCESSORS 1
+#endif
+
+BOCHSAPI extern Bit8u bx_cpu_count;
 #if BX_SUPPORT_APIC
 // determinted by XAPIC option
 BOCHSAPI extern Bit32u apic_id_mask;
@@ -467,14 +337,10 @@ enum {
 #define BX_RESET_SOFTWARE 10
 #define BX_RESET_HARDWARE 11
 
-#include "memory/memory-bochs.h"
-#include "pc_system.h"
-#include "gui/gui.h"
-
 /* --- EXTERNS --- */
 
 #if BX_GUI_SIGHANDLER
-extern bx_bool bx_gui_sighandler;
+extern bool bx_gui_sighandler;
 #endif
 
 // This value controls how often each I/O device's timer handler
@@ -492,176 +358,10 @@ extern bx_bool bx_gui_sighandler;
 #define BX_N_SERIAL_PORTS 4
 #define BX_N_PARALLEL_PORTS 2
 #define BX_N_PCI_SLOTS 5
-#define BX_N_USER_PLUGINS 8
 
 void bx_center_print(FILE *file, const char *line, unsigned maxwidth);
 
 #include "instrument.h"
-
-BX_CPP_INLINE Bit16u bx_bswap16(Bit16u val16)
-{
-  return (val16<<8) | (val16>>8);
-}
-
-#if !defined(__MORPHOS__)
-#if BX_HAVE___BUILTIN_BSWAP32
-#define bx_bswap32 __builtin_bswap32
-#else
-BX_CPP_INLINE Bit32u bx_bswap32(Bit32u val32)
-{
-  val32 = ((val32<<8) & 0xFF00FF00) | ((val32>>8) & 0x00FF00FF);
-  return (val32<<16) | (val32>>16);
-}
-#endif
-
-#if BX_HAVE___BUILTIN_BSWAP64
-#define bx_bswap64 __builtin_bswap64
-#else
-BX_CPP_INLINE Bit64u bx_bswap64(Bit64u val64)
-{
-  Bit32u lo = bx_bswap32((Bit32u)(val64 >> 32));
-  Bit32u hi = bx_bswap32((Bit32u)(val64 & 0xFFFFFFFF));
-  return ((Bit64u)hi << 32) | (Bit64u)lo;
-}
-#endif
-#endif // !MorphOS
-
-// These are some convenience macros which abstract out accesses between
-// a variable in native byte ordering to/from guest (x86) memory, which is
-// always in little endian format.  You must deal with alignment (if your
-// system cares) and endian rearranging.  Don't assume anything.  You could
-// put some platform specific asm() statements here, to make use of native
-// instructions to help perform these operations more efficiently than C++.
-
-#ifdef BX_LITTLE_ENDIAN
-
-BX_CPP_INLINE void WriteHostWordToLittleEndian(Bit16u *hostPtr, Bit16u nativeVar16)
-{
-  *(hostPtr) = nativeVar16;
-}
-
-BX_CPP_INLINE void WriteHostDWordToLittleEndian(Bit32u *hostPtr, Bit32u nativeVar32)
-{
-  *(hostPtr) = nativeVar32;
-}
-
-BX_CPP_INLINE void WriteHostQWordToLittleEndian(Bit64u *hostPtr, Bit64u nativeVar64)
-{
-#ifdef ANDROID
-// Resolve problems with unaligned access
-  ((Bit8u *)(hostPtr))[0] = (Bit8u) (nativeVar64);
-  ((Bit8u *)(hostPtr))[1] = (Bit8u) ((nativeVar64)>>8);
-  ((Bit8u *)(hostPtr))[2] = (Bit8u) ((nativeVar64)>>16);
-  ((Bit8u *)(hostPtr))[3] = (Bit8u) ((nativeVar64)>>24);
-  ((Bit8u *)(hostPtr))[4] = (Bit8u) ((nativeVar64)>>32);
-  ((Bit8u *)(hostPtr))[5] = (Bit8u) ((nativeVar64)>>40);
-  ((Bit8u *)(hostPtr))[6] = (Bit8u) ((nativeVar64)>>48);
-  ((Bit8u *)(hostPtr))[7] = (Bit8u) ((nativeVar64)>>56);
-#else
-  *(hostPtr) = nativeVar64;
-#endif
-}
-
-BX_CPP_INLINE Bit16u ReadHostWordFromLittleEndian(Bit16u *hostPtr)
-{
-  return *(hostPtr);
-}
-
-BX_CPP_INLINE Bit32u ReadHostDWordFromLittleEndian(Bit32u *hostPtr)
-{
-  return *(hostPtr);
-}
-
-BX_CPP_INLINE Bit64u ReadHostQWordFromLittleEndian(Bit64u *hostPtr)
-{
-#ifdef ANDROID
-// Resolve problems with unaligned access
-  Bit64u nativeVar64 = ((Bit64u) ((Bit8u *)(hostPtr))[0]) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[1])<<8) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[2])<<16) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[3])<<24) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[4])<<32) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[5])<<40) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[6])<<48) |
-                       (((Bit64u) ((Bit8u *)(hostPtr))[7])<<56);
-  return nativeVar64;
-#else
-  return *(hostPtr);
-#endif
-}
-
-#else // !BX_LITTLE_ENDIAN
-
-#ifdef __MORPHOS__
-
-#define bx_bswap16 bx_ppc_bswap16
-#define bx_bswap32 bx_ppc_bswap32
-#define bx_bswap64 bx_ppc_bswap64
-
-BX_CPP_INLINE void WriteHostWordToLittleEndian(Bit16u *hostPtr, Bit16u nativeVar16)
-{
-  bx_ppc_store_le16(hostPtr, nativeVar16);
-}
-
-BX_CPP_INLINE void WriteHostDWordToLittleEndian(Bit32u *hostPtr, Bit32u nativeVar32)
-{
-  bx_ppc_store_le32(hostPtr, nativeVar32);
-}
-
-BX_CPP_INLINE void WriteHostQWordToLittleEndian(Bit64u *hostPtr, Bit64u nativeVar64)
-{
-  bx_ppc_store_le64(hostPtr, nativeVar64);
-}
-
-BX_CPP_INLINE Bit16u ReadHostWordFromLittleEndian(Bit16u *hostPtr)
-{
-  return bx_ppc_load_le16(hostPtr);
-}
-
-BX_CPP_INLINE Bit32u ReadHostDWordFromLittleEndian(Bit32u *hostPtr)
-{
-  return bx_ppc_load_le32(hostPtr);
-}
-
-BX_CPP_INLINE Bit64u ReadHostQWordFromLittleEndian(Bit64u *hostPtr)
-{
-  return bx_ppc_load_le64(hostPtr);
-}
-
-#else // !__MORPHOS__
-
-BX_CPP_INLINE void WriteHostWordToLittleEndian(Bit16u *hostPtr, Bit16u nativeVar16)
-{
-  *(hostPtr) = bx_bswap16(nativeVar16);
-}
-
-BX_CPP_INLINE void WriteHostDWordToLittleEndian(Bit32u *hostPtr, Bit32u nativeVar32)
-{
-  *(hostPtr) = bx_bswap32(nativeVar32);
-}
-
-BX_CPP_INLINE void WriteHostQWordToLittleEndian(Bit64u *hostPtr, Bit64u nativeVar64)
-{
-  *(hostPtr) = bx_bswap64(nativeVar64);
-}
-
-BX_CPP_INLINE Bit16u ReadHostWordFromLittleEndian(Bit16u *hostPtr)
-{
-  return bx_bswap16(*hostPtr);
-}
-
-BX_CPP_INLINE Bit32u ReadHostDWordFromLittleEndian(Bit32u *hostPtr)
-{
-  return bx_bswap32(*hostPtr);
-}
-
-BX_CPP_INLINE Bit64u ReadHostQWordFromLittleEndian(Bit64u *hostPtr)
-{
-  return bx_bswap64(*hostPtr);
-}
-
-#endif
-
-#endif
+#include "misc/bswap.h"
 
 #endif  /* BX_BOCHS_H */

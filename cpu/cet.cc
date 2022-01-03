@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cet.cc 13766 2020-01-03 18:55:17Z sshwarts $
+// $Id: cet.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2019 Stanislav Shwartsman
@@ -38,7 +38,7 @@ const Bit64u BX_CET_SUPPRESS_DIS                           = (1 << 5);
 const Bit64u BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING      = (1 << 10);
 const Bit64u BX_CET_WAIT_FOR_ENBRANCH                      = (1 << 11);
 
-bx_bool is_invalid_cet_control(bx_address val)
+bool is_invalid_cet_control(bx_address val)
 {
   if ((val & (BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING | BX_CET_WAIT_FOR_ENBRANCH)) == 
              (BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING | BX_CET_WAIT_FOR_ENBRANCH)) return true;
@@ -47,31 +47,31 @@ bx_bool is_invalid_cet_control(bx_address val)
   return false;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::ShadowStackEnabled(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::ShadowStackEnabled(unsigned cpl)
 {
   return BX_CPU_THIS_PTR cr4.get_CET() && protected_mode() &&
          BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_SHADOW_STACK_ENABLED;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::ShadowStackWriteEnabled(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::ShadowStackWriteEnabled(unsigned cpl)
 {
   return BX_CPU_THIS_PTR cr4.get_CET() && protected_mode() &&
         (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & (BX_CET_SHADOW_STACK_ENABLED | BX_CET_SHADOW_STACK_WRITE_ENABLED)) == (BX_CET_SHADOW_STACK_ENABLED | BX_CET_SHADOW_STACK_WRITE_ENABLED);
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::EndbranchEnabled(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::EndbranchEnabled(unsigned cpl)
 {
   return BX_CPU_THIS_PTR cr4.get_CET() && protected_mode() &&
          BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_ENDBRANCH_ENABLED;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::EndbranchEnabledAndNotSuppressed(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::EndbranchEnabledAndNotSuppressed(unsigned cpl)
 {
   return BX_CPU_THIS_PTR cr4.get_CET() && protected_mode() &&
         (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & (BX_CET_ENDBRANCH_ENABLED | BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING)) == BX_CET_ENDBRANCH_ENABLED;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::WaitingForEndbranch(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::WaitingForEndbranch(unsigned cpl)
 {
   return BX_CPU_THIS_PTR cr4.get_CET() && protected_mode() &&
         (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & (BX_CET_ENDBRANCH_ENABLED | BX_CET_WAIT_FOR_ENBRANCH)) == (BX_CET_ENDBRANCH_ENABLED | BX_CET_WAIT_FOR_ENBRANCH);
@@ -88,21 +88,21 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::track_indirect(unsigned cpl)
 void BX_CPP_AttrRegparmN(2) BX_CPU_C::track_indirect_if_not_suppressed(bxInstruction_c *i, unsigned cpl)
 {
   if (EndbranchEnabledAndNotSuppressed(cpl)) {
-    if (i->segOverride() == BX_SEG_REG_DS && (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_ENABLE_NO_TRACK_INDIRECT_BRANCH_PREFIX) != 0)
+    if (i->segOverrideCet() == BX_SEG_REG_DS && (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_ENABLE_NO_TRACK_INDIRECT_BRANCH_PREFIX) != 0)
       return;
 
     BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] |= BX_CET_WAIT_FOR_ENBRANCH;
   }
 }
 
-void BX_CPP_AttrRegparmN(2) BX_CPU_C::reset_endbranch_tracker(unsigned cpl, bx_bool suppress)
+void BX_CPP_AttrRegparmN(2) BX_CPU_C::reset_endbranch_tracker(unsigned cpl, bool suppress)
 {
   BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] &= ~(BX_CET_WAIT_FOR_ENBRANCH | BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING);
   if (suppress && !(BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_SUPPRESS_DIS))
     BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] |= BX_CET_SUPPRESS_INDIRECT_BRANCH_TRACKING;
 }
 
-bx_bool BX_CPP_AttrRegparmN(1) BX_CPU_C::LegacyEndbranchTreatment(unsigned cpl)
+bool BX_CPP_AttrRegparmN(1) BX_CPU_C::LegacyEndbranchTreatment(unsigned cpl)
 {
   if (BX_CPU_THIS_PTR msr.ia32_cet_control[cpl==3] & BX_CET_LEGACY_INDIRECT_BRANCH_TREATMENT)
   {

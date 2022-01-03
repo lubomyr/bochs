@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: udp.h 12219 2014-03-02 07:42:24Z vruppert $
+// $Id: udp.h 13932 2020-09-02 08:35:44Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -78,7 +78,7 @@ struct mbuf;
 
 void udp_init(Slirp *);
 void udp_cleanup(Slirp *);
-void udp_input(register struct mbuf *, int);
+void udp_input(struct mbuf *, int);
 int udp_output(struct socket *, struct mbuf *, struct sockaddr_in *);
 int udp_attach(struct socket *);
 void udp_detach(struct socket *);

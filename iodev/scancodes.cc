@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: scancodes.cc 10209 2011-02-24 22:05:47Z sshwarts $
+// $Id: scancodes.cc 14095 2021-01-30 18:47:25Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2009  The Bochs Project
@@ -27,6 +27,7 @@
 #define BX_PLUGGABLE
 
 #include "bochs.h"
+#include "gui/gui.h"
 #include "scancodes.h"
 
 unsigned char translation8042[256] = {

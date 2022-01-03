@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: cdrom_amigaos.h 11924 2013-11-06 11:15:22Z vruppert $
+// $Id: cdrom_amigaos.h 14116 2021-01-31 15:44:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2013  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -29,11 +29,11 @@ class cdrom_amigaos_c : public cdrom_base_c {
 public:
   cdrom_amigaos_c(const char *dev);
   virtual ~cdrom_amigaos_c(void);
-  bx_bool insert_cdrom(const char *dev = NULL);
+  bool insert_cdrom(const char *dev = NULL);
   void eject_cdrom();
-  bx_bool read_toc(Bit8u* buf, int* length, bx_bool msf, int start_track, int format);
+  bool read_toc(Bit8u* buf, int* length, bool msf, int start_track, int format);
   Bit32u capacity();
-  bx_bool read_block(Bit8u* buf, Bit32u lba, int blocksize) BX_CPP_AttrRegparmN(3);
+  bool read_block(Bit8u* buf, Bit32u lba, int blocksize) BX_CPP_AttrRegparmN(3);
 private:
 #if BX_WITH_AMIGAOS
   BPTR fda;

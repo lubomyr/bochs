@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: faststring.cc 13579 2019-10-16 20:19:34Z sshwarts $
+// $Id: faststring.cc 14160 2021-02-21 09:25:33Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2019  The Bochs Project
@@ -23,6 +23,8 @@
 #include "bochs.h"
 #include "cpu.h"
 #define LOG_THIS BX_CPU_THIS_PTR
+
+#include "pc_system.h"
 
 //
 // Repeat Speedups methods

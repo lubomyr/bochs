@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: slowdown_timer.cc 12081 2013-12-29 12:56:52Z vruppert $
+// $Id: slowdown_timer.cc 14100 2021-01-30 19:40:18Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2002-2009  The Bochs Project
@@ -22,6 +22,8 @@
 
 #include "bochs.h"
 #include "param_names.h"
+#include "gui/siminterface.h"
+#include "pc_system.h"
 #include "slowdown_timer.h"
 
 #include <errno.h>

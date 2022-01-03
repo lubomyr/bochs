@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: vmcs.cc 13722 2019-12-22 18:53:07Z sshwarts $
+// $Id: vmcs.cc 14256 2021-05-25 06:27:49Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2009-2019 Stanislav Shwartsman
@@ -89,12 +89,12 @@ void VMCS_Mapping::clear()
   }
 }
 
-bx_bool VMCS_Mapping::clear_mapping(Bit32u encoding)
+bool VMCS_Mapping::clear_mapping(Bit32u encoding)
 {
   return set_mapping(encoding, 0xffffffff);
 }
 
-bx_bool VMCS_Mapping::set_mapping(Bit32u encoding, Bit32u offset)
+bool VMCS_Mapping::set_mapping(Bit32u encoding, Bit32u offset)
 {
   if (is_reserved(encoding))
     return false;
@@ -131,9 +131,9 @@ void BX_CPU_C::init_VMCS(void)
 
   init_vmx_capabilities();
 
-  static bx_bool vmcs_map_ready = 0;
+  static bool vmcs_map_ready = false;
   if (vmcs_map_ready) return;
-  vmcs_map_ready = 1;
+  vmcs_map_ready = true;
 
   // disable not supported encodings
   for (unsigned type=0; type<16; type++) {
@@ -150,7 +150,7 @@ void BX_CPU_C::init_VMCS(void)
 #undef LOG_THIS
 #define LOG_THIS BX_CPU_THIS_PTR
 
-bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
+bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
 {
   switch(encoding)
   {
@@ -320,6 +320,14 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
 #endif
 
 #if BX_SUPPORT_VMX >= 2
+    case VMCS_64BIT_CONTROL_VMFUNC_CTRLS:
+    case VMCS_64BIT_CONTROL_VMFUNC_CTRLS_HI:
+      return BX_CPU_THIS_PTR vmx_cap.vmx_vmfunc_supported_bits != 0;
+
+    case VMCS_64BIT_CONTROL_EPTPTR:
+    case VMCS_64BIT_CONTROL_EPTPTR_HI:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT);
+
     case VMCS_64BIT_CONTROL_EOI_EXIT_BITMAP0:
     case VMCS_64BIT_CONTROL_EOI_EXIT_BITMAP0_HI:
     case VMCS_64BIT_CONTROL_EOI_EXIT_BITMAP1:
@@ -329,14 +337,6 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_64BIT_CONTROL_EOI_EXIT_BITMAP3:
     case VMCS_64BIT_CONTROL_EOI_EXIT_BITMAP3_HI:
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_VINTR_DELIVERY);
-
-    case VMCS_64BIT_CONTROL_EPTPTR:
-    case VMCS_64BIT_CONTROL_EPTPTR_HI:
-      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT);
-
-    case VMCS_64BIT_CONTROL_VMFUNC_CTRLS:
-    case VMCS_64BIT_CONTROL_VMFUNC_CTRLS_HI:
-      return BX_CPU_THIS_PTR vmx_cap.vmx_vmfunc_supported_bits != 0;
 
     case VMCS_64BIT_CONTROL_EPTP_LIST_ADDRESS:
     case VMCS_64BIT_CONTROL_EPTP_LIST_ADDRESS_HI:
@@ -351,7 +351,19 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_64BIT_CONTROL_VE_EXCEPTION_INFO_ADDR:
     case VMCS_64BIT_CONTROL_VE_EXCEPTION_INFO_ADDR_HI:
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT_EXCEPTION);
+
+    case VMCS_64BIT_CONTROL_XSS_EXITING_BITMAP:
+    case VMCS_64BIT_CONTROL_XSS_EXITING_BITMAP_HI:
+      return is_cpu_extension_supported(BX_ISA_XSAVES);
+
+    case VMCS_64BIT_CONTROL_SPPTP:
+    case VMCS_64BIT_CONTROL_SPPTP_HI:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_SPP);
 #endif
+
+    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER:
+    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER_HI:
+      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_TSC_SCALING);
 
 #if BX_SUPPORT_VMX >= 2
     /* VMCS 64-bit read only data fields */
@@ -395,14 +407,10 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_EPT);
 #endif
 
-    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER:
-    case VMCS_64BIT_CONTROL_TSC_MULTIPLIER_HI:
-      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_TSC_SCALING);
-
-#if BX_SUPPORT_VMX >= 2
-    case VMCS_64BIT_CONTROL_SPPTP:
-    case VMCS_64BIT_CONTROL_SPPTP_HI:
-      return BX_SUPPORT_VMX_EXTENSION(BX_VMX_SPP);
+#if BX_SUPPORT_PKEYS
+    case VMCS_64BIT_GUEST_IA32_PKRS:
+    case VMCS_64BIT_GUEST_IA32_PKRS_HI:
+      return is_cpu_extension_supported(BX_ISA_PKS);
 #endif
 
 #if BX_SUPPORT_VMX >= 2
@@ -420,6 +428,12 @@ bx_bool BX_CPU_C::vmcs_field_supported(Bit32u encoding)
     case VMCS_64BIT_HOST_IA32_PERF_GLOBAL_CTRL:
     case VMCS_64BIT_HOST_IA32_PERF_GLOBAL_CTRL_HI:
       return BX_SUPPORT_VMX_EXTENSION(BX_VMX_PERF_GLOBAL_CTRL);
+
+#if BX_SUPPORT_PKEYS
+    case VMCS_64BIT_HOST_IA32_PKRS:
+    case VMCS_64BIT_HOST_IA32_PKRS_HI:
+      return is_cpu_extension_supported(BX_ISA_PKS);
+#endif
 
     /* VMCS natural width control fields */
     /* binary 0110_00xx_xxxx_xxx0 */
@@ -798,6 +812,8 @@ void BX_CPU_C::init_vmexit_ctrls(void)
   //      [20] Save guest MSR_EFER on VMEXIT
   //      [21] Load host MSR_EFER on VMEXIT
   //      [22] Save VMX preemption timer counter on VMEXIT
+  //      [28] Save host CET state on VMEXIT
+  //      [29] Save host MSR_IA32_PKRS on VMEXIT
 
   cap->vmx_vmexit_ctrl_supported_bits = 
       VMX_VMEXIT_CTRL1_INTA_ON_VMEXIT | VMX_VMEXIT_CTRL1_SAVE_DBG_CTRLS;
@@ -824,6 +840,10 @@ void BX_CPU_C::init_vmexit_ctrls(void)
   if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET))
     cap->vmx_vmexit_ctrl_supported_bits |= VMX_VMEXIT_CTRL1_LOAD_HOST_CET_STATE;
 #endif
+#if BX_SUPPORT_PKEYS
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_PKS))
+    cap->vmx_vmexit_ctrl_supported_bits |= VMX_VMEXIT_CTRL1_LOAD_HOST_PKRS;
+#endif
 }
 
 void BX_CPU_C::init_vmentry_ctrls(void)
@@ -842,6 +862,8 @@ void BX_CPU_C::init_vmentry_ctrls(void)
   //      [13] Load guest MSR_PERF_GLOBAL_CTRL
   //      [14] Load guest MSR_PAT
   //      [15] Load guest MSR_EFER
+  //      [17] Load guest CET state
+  //      [22] Load guest MSR_IA32_PKRS value
 
   cap->vmx_vmentry_ctrl_supported_bits = VMX_VMENTRY_CTRL1_LOAD_DBG_CTRLS |
                                          VMX_VMENTRY_CTRL1_SMM_ENTER |
@@ -862,6 +884,10 @@ void BX_CPU_C::init_vmentry_ctrls(void)
 #if BX_SUPPORT_CET
   if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_CET))
     cap->vmx_vmentry_ctrl_supported_bits |= VMX_VMENTRY_CTRL1_LOAD_GUEST_CET_STATE;
+#endif
+#if BX_SUPPORT_PKEYS
+  if (BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_PKS))
+    cap->vmx_vmentry_ctrl_supported_bits |= VMX_VMENTRY_CTRL1_LOAD_GUEST_PKRS;
 #endif
 }
 

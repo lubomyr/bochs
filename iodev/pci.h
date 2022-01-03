@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: pci.h 13472 2018-03-04 04:53:16Z vruppert $
+// $Id: pci.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2018  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -47,11 +47,11 @@ public:
   virtual void register_state(void);
   virtual void after_restore_state(void);
 
-  static bx_bool agp_ap_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
-  static bx_bool agp_ap_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool agp_ap_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  static bool agp_ap_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
 
-  Bit32u agp_aperture_read(bx_phy_address addr, unsigned len, bx_bool agp);
-  void   agp_aperture_write(bx_phy_address addr, Bit32u value, unsigned len, bx_bool agp);
+  Bit32u agp_aperture_read(bx_phy_address addr, unsigned len, bool agp);
+  void   agp_aperture_write(bx_phy_address addr, Bit32u value, unsigned len, bool agp);
 
   virtual void pci_write_handler(Bit8u address, Bit32u value, unsigned io_len);
 #if BX_DEBUGGER

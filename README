@@ -1,6 +1,6 @@
 Bochs - The cross platform IA-32 (x86) emulator
-Updated: Sun Jan  5 08:36:00 CET 2020
-Version: 2.6.11
+Updated: Sun Aug  1 10:07:00 CEST 2021
+Version: 2.7
 
 WHAT IS BOCHS?
 
@@ -12,7 +12,7 @@ from early 386 to the most recent x86-64 Intel and AMD processors
 which may even not reached the market yet. Bochs is capable of running
 most Operating Systems inside the emulation, for example DOS,
 Linux or Windows. Bochs was written by Kevin Lawton and is currently
-maintained by the Bochs project at "http://bochs.sourceforge.net".
+maintained by the Bochs project at "https://bochs.sourceforge.io".
 
 Bochs can be compiled and used in a variety of modes, some which are
 still in development.  The 'typical' use of bochs is to provide
@@ -27,7 +27,7 @@ Bochs is distributed under the GNU LGPL. See LICENSE and COPYING for details.
 GETTING CURRENT SOURCE CODE
 
 Source code for Bochs is available from the Bochs home page at
-http://bochs.sourceforge.net.  You can download the most recent
+https://bochs.sourceforge.io.  You can download the most recent
 release, use SVN to get the latest sources, or grab a SVN
 snapshot which is updated frequently. The releases contain the most
 stable code, but if you want the very newest features try the
@@ -40,7 +40,7 @@ format that can be rendered to many popular browser formats such
 as HTML, PDF, and Postscript.  Each binary release contains the
 HTML rendering of the documentation.  Also, you can view the
 latest documentation on the web at
-  http://bochs.sf.net/doc/docbook/index.html
+  https://bochs.sourceforge.io/doc/docbook/index.html
 
 WHERE CAN I GET MORE INFORMATION?  HOW DO I REPORT PROBLEMS?
 
@@ -81,23 +81,15 @@ many ways you could help out.  For example:
 
 CHANGES
 
-Summary of changes in 2.6.11:
-  - General
-    - Added 64-bit support to the NSIS installer script
-    - Several fixes in the build system based on Debian patches
-  - CPU / CPUDB
-    - Bugfixes for CPU emulation correctness
-      - Many critical bugfixes for Protection Keys, AVX512*, VMX/SVM, SHA, GFNI emulation
-    ! Implemented CET (Control Flow Enforcement Technology) emulation according to Intel SDM rev071
-  - I/O Devices
-    - Added missing Cirrus SVGA bitblt feature "transparent color compare"
-    - Some fixes in HPET emulation (patch by Oleg)
-    - Fixed disk image lock mechanism in the USB MSD case
-  - BIOS / VGABIOS
-    - LGPL'd VGABIOS updated to version 0.7b (Fixed VESA extension 'read EDID'
-      for Bochs VBE and Cirrus)
-    - Updated SeaBIOS ROM image to current version 1.13.0
-    - Added SeaVGABIOS ROM image for the Cirrus adapter
-    - Bochs BIOS built to work with CPU level 5 again
+Brief summary of changes in 2.7:
+  - Bugfixes for CPU emulation correctness (CPUID/VMX/SVM fixes to support
+    Windows Hyper-V as guest in Bochs)
+  - Improvements for the plugin handling to simplify Bochs extensions
+  - Added "multiple NICs" support to the NE2000 and E1000 devices
+  - Added experimental FTP service for networking modules 'vnet' and 'socket'
+  - Fixes and improvements for all supported Voodoo graphics adapters
+  - Added USB keyboard emulation with most of the keys supported
+  - GUI "cmdmode": create a headerbar event with key combo starting with F7
+  - LGPL'd VGABIOS updated to version 0.8a (new VGABIOS for Voodoo Banshee)
 
 See CHANGES file for more information!

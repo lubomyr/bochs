@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: eth_slirp.cc 13207 2017-04-23 08:38:16Z vruppert $
+// $Id: eth_slirp.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2014-2017  The Bochs Project
+//  Copyright (C) 2014-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,9 @@
 #define _WIN32
 #endif
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "pc_system.h"
 #include "netmod.h"
 
 #if BX_NETWORKING && BX_NETMOD_SLIRP
@@ -38,16 +40,14 @@
 
 static unsigned int bx_slirp_instances = 0;
 
-// network driver plugin entry points
+// network driver plugin entry point
 
-int CDECL libslirp_net_plugin_init(plugin_t *plugin, plugintype_t type)
+PLUGIN_ENTRY_FOR_NET_MODULE(slirp)
 {
+  if (mode == PLUGIN_PROBE) {
+    return (int)PLUGTYPE_NET;
+  }
   return 0; // Success
-}
-
-void CDECL libslirp_net_plugin_fini(void)
-{
-  // Nothing here yet
 }
 
 // network driver implementation
@@ -71,7 +71,7 @@ class bx_slirp_pktmover_c : public eth_pktmover_c {
 public:
   bx_slirp_pktmover_c(const char *netif, const char *macaddr,
                       eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                      bx_devmodel_c *dev, const char *script);
+                      logfunctions *netdev, const char *script);
   virtual ~bx_slirp_pktmover_c();
   void sendpkt(void *buf, unsigned io_len);
   void receive(void *pkt, unsigned pkt_len);
@@ -89,8 +89,11 @@ private:
   char *smb_export, *smb_tmpdir;
   struct in_addr smb_srv;
 #endif
+  char *pktlog_fn;
+  FILE *pktlog_txt;
+  bool slirp_logging;
 
-  bx_bool parse_slirp_conf(const char *conf);
+  bool parse_slirp_conf(const char *conf);
   static void rx_timer_handler(void *);
 };
 
@@ -100,8 +103,8 @@ public:
 protected:
   eth_pktmover_c *allocate(const char *netif, const char *macaddr,
                            eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                           bx_devmodel_c *dev, const char *script) {
-    return (new bx_slirp_pktmover_c(netif, macaddr, rxh, rxstat, dev, script));
+                           logfunctions *netdev, const char *script) {
+    return (new bx_slirp_pktmover_c(netif, macaddr, rxh, rxstat, netdev, script));
   }
 } bx_slirp_match;
 
@@ -135,30 +138,18 @@ bx_slirp_pktmover_c::~bx_slirp_pktmover_c()
       signal(SIGPIPE, SIG_DFL);
 #endif
     }
+    if (slirp_logging) {
+      fclose(pktlog_txt);
+    }
   }
 }
 
-static size_t strip_whitespace(char *s)
-{
-  size_t ptr = 0;
-  char *tmp = (char*)malloc(strlen(s)+1);
-  strcpy(tmp, s);
-  while (s[ptr] == ' ') ptr++;
-  if (ptr > 0) strcpy(s, tmp+ptr);
-  free(tmp);
-  ptr = strlen(s);
-  while ((ptr > 0) && (s[ptr-1] == ' ')) {
-    s[--ptr] = 0;
-  }
-  return ptr;
-}
-
-bx_bool bx_slirp_pktmover_c::parse_slirp_conf(const char *conf)
+bool bx_slirp_pktmover_c::parse_slirp_conf(const char *conf)
 {
   FILE *fd = NULL;
   char line[512];
   char *ret, *param, *val, *tmp;
-  bx_bool format_checked = 0;
+  bool format_checked = 0;
   size_t len1 = 0, len2;
   unsigned i, count;
 
@@ -276,6 +267,13 @@ bx_bool bx_slirp_pktmover_c::parse_slirp_conf(const char *conf)
           } else {
             BX_ERROR(("slirp: wrong format for 'hostfwd'"));
           }
+        } else if (!stricmp(param, "pktlog")) {
+          if (len2 < BX_PATHNAME_LEN) {
+            pktlog_fn = (char*)malloc(len2+1);
+            strcpy(pktlog_fn, val);
+          } else {
+            BX_ERROR(("slirp: wrong format for 'pktlog'"));
+          }
         } else {
           BX_ERROR(("slirp: unknown option '%s'", line));
         }
@@ -290,7 +288,7 @@ bx_slirp_pktmover_c::bx_slirp_pktmover_c(const char *netif,
                                          const char *macaddr,
                                          eth_rx_handler_t rxh,
                                          eth_rx_status_t rxstat,
-                                         bx_devmodel_c *dev,
+                                         logfunctions *netdev,
                                          const char *script)
 {
   logfunctions *slirplog;
@@ -301,6 +299,7 @@ bx_slirp_pktmover_c::bx_slirp_pktmover_c(const char *netif,
   hostname = NULL;
   bootfile = NULL;
   dnssearch = NULL;
+  pktlog_fn = NULL;
   n_hostfwd = 0;
   /* default settings according to historic slirp */
   net.s_addr  = htonl(0x0a000200); /* 10.0.2.0 */
@@ -314,7 +313,7 @@ bx_slirp_pktmover_c::bx_slirp_pktmover_c(const char *netif,
   smb_srv.s_addr = 0;
 #endif
 
-  this->netdev = dev;
+  this->netdev = netdev;
   if (sizeof(struct arphdr) != 28) {
     BX_FATAL(("system error: invalid ARP header structure size"));
   }
@@ -357,11 +356,35 @@ bx_slirp_pktmover_c::bx_slirp_pktmover_c(const char *netif,
     }
   }
 #endif
+  if (pktlog_fn != NULL) {
+    pktlog_txt = fopen(pktlog_fn, "wb");
+    slirp_logging = (pktlog_txt != NULL);
+    if (slirp_logging) {
+      fprintf(pktlog_txt, "slirp packetmover readable log file\n");
+      if (strlen(netif) > 0) {
+        fprintf(pktlog_txt, "TFTP root = %s\n", netif);
+      } else {
+        fprintf(pktlog_txt, "TFTP service disabled\n");
+      }
+      fprintf(pktlog_txt, "guest MAC address = ");
+      int i;
+      for (i=0; i<6; i++)
+        fprintf(pktlog_txt, "%02x%s", 0xff & macaddr[i], i<5?":" : "\n");
+      fprintf(pktlog_txt, "--\n");
+      fflush(pktlog_txt);
+    }
+    free(pktlog_fn);
+  } else {
+    slirp_logging = 0;
+  }
   bx_slirp_instances++;
 }
 
 void bx_slirp_pktmover_c::sendpkt(void *buf, unsigned io_len)
 {
+  if (slirp_logging) {
+    write_pktlog_txt(pktlog_txt, (const Bit8u*)buf, io_len, 0);
+  }
   slirp_input(slirp, (Bit8u*)buf, io_len);
 }
 
@@ -407,6 +430,9 @@ void bx_slirp_pktmover_c::receive(void *pkt, unsigned pkt_len)
 {
   if (this->rxstat(this->netdev) & BX_NETDEV_RXREADY) {
     if (pkt_len < MIN_RX_PACKET_LEN) pkt_len = MIN_RX_PACKET_LEN;
+    if (slirp_logging) {
+      write_pktlog_txt(pktlog_txt, (const Bit8u*)pkt, pkt_len, 1);
+    }
     this->rxh(this->netdev, pkt, pkt_len);
   } else {
     BX_ERROR(("device not ready to receive data"));

@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: usb_hub.h 12989 2016-12-11 12:26:12Z vruppert $
+// $Id: usb_hub.h 14158 2021-02-20 19:58:39Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 // USB hub emulation support (ported from QEMU)
 //
 // Copyright (C) 2005       Fabrice Bellard
-// Copyright (C) 2009-2016  The Bochs Project
+// Copyright (C) 2009-2021  The Bochs Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,12 +30,17 @@
 #define BX_IODEV_USB_HUB_H
 
 
-#define USB_HUB_PORTS 8
+#define USB_HUB_MAX_PORTS 8
+#define USB_HUB_DEF_PORTS 4
 
 class usb_hub_device_c : public usb_device_c {
 public:
-  usb_hub_device_c(Bit8u ports);
+  usb_hub_device_c(void);
   virtual ~usb_hub_device_c(void);
+
+  virtual bool init();
+  virtual bool set_option(const char *option);
+  virtual const char* get_info();
 
   virtual usb_device_c* find_device(Bit8u addr);
   virtual int handle_packet(USBPacket *p);
@@ -54,23 +59,24 @@ private:
     bx_list_c *config;
     bx_list_c *state;
     char serial_number[16];
+    char info_txt[18];
     struct {
       // our data
       usb_device_c *device;  // device connected to this port
 
       Bit16u PortStatus;
       Bit16u PortChange;
-    } usb_port[USB_HUB_PORTS];
+    } usb_port[USB_HUB_MAX_PORTS];
     Bit16u device_change;
   } hub;
 
   int broadcast_packet(USBPacket *p);
   void init_device(Bit8u port, bx_list_c *portconf);
   void remove_device(Bit8u port);
-  void usb_set_connect_status(Bit8u port, int type, bx_bool connected);
+  bool usb_set_connect_status(Bit8u port, bool connected);
 
-  static const char *hub_param_handler(bx_param_string_c *param, int set,
-                                       const char *oldval, const char *val, int maxlen);
+  static Bit64s hub_param_handler(bx_param_c *param, bool set, Bit64s val);
+  static bool hub_param_enable_handler(bx_param_c *param, bool en);
 };
 
 #endif

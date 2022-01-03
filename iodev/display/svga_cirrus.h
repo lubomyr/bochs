@@ -1,11 +1,11 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: svga_cirrus.h 13434 2018-01-11 19:02:08Z vruppert $
+// $Id: svga_cirrus.h 14119 2021-02-01 20:39:33Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (c) 2004 Makoto Suzuki (suzu)
 //                     Volker Ruppert (vruppert)
 //                     Robin Kay (komadori)
-//  Copyright (C) 2004-2017  The Bochs Project
+//  Copyright (C) 2004-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -63,7 +63,7 @@ public:
   bx_svga_cirrus_c();
   virtual ~bx_svga_cirrus_c();
 
-  virtual bx_bool init_vga_extension(void);
+  virtual bool init_vga_extension(void);
   virtual void reset(unsigned type);
   virtual void redraw_area(unsigned x0, unsigned y0,
                            unsigned width, unsigned height);
@@ -166,7 +166,7 @@ private:
   BX_CIRRUS_SMF void svga_simplebitblt_memsrc();
   BX_CIRRUS_SMF void svga_colorexpand_transp_memsrc();
 
-  BX_CIRRUS_SMF bx_bool svga_asyncbitblt_next();
+  BX_CIRRUS_SMF bool svga_asyncbitblt_next();
   BX_CIRRUS_SMF bx_bitblt_rop_t svga_get_fwd_rop_handler(Bit8u rop);
   BX_CIRRUS_SMF bx_bitblt_rop_t svga_get_bkwd_rop_handler(Bit8u rop);
 
@@ -190,10 +190,10 @@ private:
     Bit8u palette[48];
   } hidden_dac; // 0x3c6
 
-  bx_bool svga_unlock_special;
-  bx_bool svga_needs_update_tile;
-  bx_bool svga_needs_update_dispentire;
-  bx_bool svga_needs_update_mode;
+  bool svga_unlock_special;
+  bool svga_needs_update_tile;
+  bool svga_needs_update_dispentire;
+  bool svga_needs_update_mode;
 
   unsigned svga_xres;
   unsigned svga_yres;
@@ -217,6 +217,7 @@ private:
     Bit8u bltmodeext;
     Bit8u bltrop;
     Bit8u *dst;
+    Bit32u dstaddr;
     const Bit8u *src;
     Bit32u srcaddr;
 #if BX_USE_CIRRUS_SMF
@@ -245,16 +246,16 @@ private:
 
   bx_ddc_c ddc;
 
-  bx_bool is_unlocked() { return svga_unlock_special; }
+  bool is_unlocked() { return svga_unlock_special; }
 
-  bx_bool banking_granularity_is_16k() { return !!(control.reg[0x0B] & 0x20); }
-  bx_bool banking_is_dual() { return !!(control.reg[0x0B] & 0x01); }
+  bool banking_granularity_is_16k() { return !!(control.reg[0x0B] & 0x20); }
+  bool banking_is_dual() { return !!(control.reg[0x0B] & 0x01); }
 
 #if BX_SUPPORT_PCI
   BX_CIRRUS_SMF void svga_init_pcihandlers(void);
 
-  BX_CIRRUS_SMF bx_bool cirrus_mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
-  BX_CIRRUS_SMF bx_bool cirrus_mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  BX_CIRRUS_SMF bool cirrus_mem_read_handler(bx_phy_address addr, unsigned len, void *data, void *param);
+  BX_CIRRUS_SMF bool cirrus_mem_write_handler(bx_phy_address addr, unsigned len, void *data, void *param);
 #endif
 };
 

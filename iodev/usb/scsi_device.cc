@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: scsi_device.cc 13653 2019-12-09 16:29:23Z sshwarts $
+// $Id: scsi_device.cc 14312 2021-07-12 19:05:25Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //  SCSI emulation layer (ported from QEMU)
@@ -9,7 +9,7 @@
 //
 //  Written by Paul Brook
 //
-//  Copyright (C) 2007-2018  The Bochs Project
+//  Copyright (C) 2007-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -48,7 +48,7 @@ static Bit32u serial_number = 12345678;
 Bit64s scsireq_save_handler(void *class_ptr, bx_param_c *param)
 {
   char fname[BX_PATHNAME_LEN];
-  char path[BX_PATHNAME_LEN];
+  char path[BX_PATHNAME_LEN+1];
 
   param->get_param_path(fname, BX_PATHNAME_LEN);
   if (!strncmp(fname, "bochs.", 6)) {
@@ -64,7 +64,7 @@ Bit64s scsireq_save_handler(void *class_ptr, bx_param_c *param)
 void scsireq_restore_handler(void *class_ptr, bx_param_c *param, Bit64s value)
 {
   char fname[BX_PATHNAME_LEN];
-  char path[BX_PATHNAME_LEN];
+  char path[BX_PATHNAME_LEN+1];
 
   if (value != 0) {
     param->get_param_path(fname, BX_PATHNAME_LEN);
@@ -224,7 +224,7 @@ SCSIRequest* scsi_device_t::scsi_find_request(Bit32u tag)
   return r;
 }
 
-bx_bool scsi_device_t::save_requests(const char *path)
+bool scsi_device_t::save_requests(const char *path)
 {
   char tmppath[BX_PATHNAME_LEN];
   FILE *fp, *fp2;
@@ -275,14 +275,14 @@ void scsi_device_t::restore_requests(const char *path)
   Bit64s value;
   Bit32u tag = 0;
   SCSIRequest *r = NULL;
-  bx_bool rrq_error = 0;
+  bool rrq_error = 0;
 
   fp = fopen(path, "r");
   if (fp != NULL) {
     do {
       ret = fgets(line, sizeof(line)-1, fp);
       line[sizeof(line) - 1] = '\0';
-      int len = strlen(line);
+      size_t len = strlen(line);
       if ((len > 0) && (line[len-1] < ' '))
         line[len-1] = '\0';
       i = 0;
@@ -336,9 +336,9 @@ void scsi_device_t::restore_requests(const char *path)
                 } else if (!strcmp(pname, "status")) {
                   r->status = (Bit32u)value;
                 } else if (!strcmp(pname, "write_cmd")) {
-                  r->write_cmd = (bx_bool)value;
+                  r->write_cmd = (bool)value;
                 } else if (!strcmp(pname, "async_mode")) {
-                  r->async_mode = (bx_bool)value;
+                  r->async_mode = (bool)value;
                 } else if (!strcmp(pname, "seek_pending")) {
                   r->seek_pending = (Bit8u)value;
                 } else {
@@ -485,7 +485,7 @@ Bit8u* scsi_device_t::scsi_get_buf(Bit32u tag)
   return r->dma_buf;
 }
 
-Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool async)
+Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bool async)
 {
   Bit64u nb_sectors;
   Bit64u lba;
@@ -628,8 +628,8 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool
           case 0x83:
             {
               // Device identification page, mandatory
-              int max_len = 255 - 8;
-              int id_len = strlen(DEVICE_NAME);
+              size_t max_len = 255 - 8;
+              size_t id_len = strlen(DEVICE_NAME);
               if (id_len > max_len)
                 id_len = max_len;
 
@@ -643,15 +643,15 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool
 
               outbuf[r->buf_len++] = 0x83; // this page
               outbuf[r->buf_len++] = 0x00;
-              outbuf[r->buf_len++] = 3 + id_len;
+              outbuf[r->buf_len++] = 3 + (Bit8u)id_len;
 
               outbuf[r->buf_len++] = 0x2; // ASCII
               outbuf[r->buf_len++] = 0;   // not officially assigned
               outbuf[r->buf_len++] = 0;   // reserved
-              outbuf[r->buf_len++] = id_len; // length of data following
+              outbuf[r->buf_len++] = (Bit8u)id_len; // length of data following
 
               memcpy(&outbuf[r->buf_len], DEVICE_NAME, id_len);
-              r->buf_len += id_len;
+              r->buf_len += (int)id_len;
             }
             break;
 
@@ -769,7 +769,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool
           p[21] = (16 * 176) & 0xff;
           p += 22;
         }
-        r->buf_len = p - outbuf;
+        r->buf_len = (int)(p - outbuf);
         outbuf[0] = r->buf_len - 4;
         if (r->buf_len > (int)len)
           r->buf_len = len;
@@ -964,7 +964,7 @@ Bit32s scsi_device_t::scsi_send_command(Bit32u tag, Bit8u *buf, int lun, bx_bool
   }
 }
 
-void scsi_device_t::set_inserted(bx_bool value)
+void scsi_device_t::set_inserted(bool value)
 {
   inserted = value;
   if (inserted) {

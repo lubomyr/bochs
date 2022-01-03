@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: parser.y 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: parser.y 14121 2021-02-04 18:25:27Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 
 %{
@@ -14,7 +14,7 @@ Bit64u eval_value;
 %union {
   char    *sval;
   Bit64u   uval;
-  bx_bool  bval;
+  unsigned bval;
 }
 
 // Common registers
@@ -87,7 +87,6 @@ Bit64u eval_value;
 %token <sval> BX_TOKEN_SMI
 %token <sval> BX_TOKEN_NMI
 %token <sval> BX_TOKEN_TLB
-%token <sval> BX_TOKEN_HEX
 %token <sval> BX_TOKEN_DISASM
 %token <sval> BX_TOKEN_INSTRUMENT
 %token <sval> BX_TOKEN_STRING
@@ -954,11 +953,6 @@ disassemble_command:
     | BX_TOKEN_DISASM BX_TOKEN_SWITCH_MODE '\n'
       {
         bx_dbg_disassemble_switch_mode();
-        free($1); free($2);
-      }
-    | BX_TOKEN_DISASM BX_TOKEN_HEX BX_TOKEN_TOGGLE_ON_OFF '\n'
-      {
-        bx_dbg_disassemble_hex_mode_switch($3);
         free($1); free($2);
       }
     | BX_TOKEN_DISASM BX_TOKEN_SIZE '=' BX_TOKEN_NUMERIC '\n'

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: tasking.cc 13699 2019-12-20 07:42:07Z sshwarts $
+// $Id: tasking.cc 14086 2021-01-30 08:35:35Z sshwarts $
 /////////////////////////////////////////////////////////////////////////
 //
 //  Copyright (C) 2001-2014  The Bochs Project
@@ -108,7 +108,7 @@
 
 void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
                  bx_descriptor_t *tss_descriptor, unsigned source,
-                 Bit32u dword1, Bit32u dword2, bx_bool push_error, Bit32u error_code)
+                 Bit32u dword1, Bit32u dword2, bool push_error, Bit32u error_code)
 {
   Bit32u obase32; // base address of old TSS
   Bit32u nbase32; // base address of new TSS
@@ -124,7 +124,7 @@ void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
   Bit32u newESP, newEBP, newESI, newEDI;
   Bit32u newEFLAGS, newEIP;
 #if BX_SUPPORT_CET
-  bx_bool pushCSLIPSSP = false, verifyCSLIP = false;
+  bool pushCSLIPSSP = false, verifyCSLIP = false;
   Bit64u tempSSP = 0, shadowLIP = 0, shadowCS = 0; // silence compiler warnings
   Bit32u oldSSP = 0, oldCS = 0, oldRIP = 0;
   Bit32u newSSP = 0;
@@ -567,7 +567,7 @@ void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
   }
 
   if ((raw_ldt_selector & 0xfffc) != 0) {
-    bx_bool good = fetch_raw_descriptor2(&ldt_selector, &dword1, &dword2);
+    bool good = fetch_raw_descriptor2(&ldt_selector, &dword1, &dword2);
     if (!good) {
       BX_ERROR(("task_switch(exception after commit point): bad LDT fetch"));
       exception(BX_TS_EXCEPTION, raw_ldt_selector & 0xfffc);
@@ -612,7 +612,7 @@ void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
     // SS
     if ((raw_ss_selector & 0xfffc) != 0)
     {
-      bx_bool good = fetch_raw_descriptor2(&ss_selector, &dword1, &dword2);
+      bool good = fetch_raw_descriptor2(&ss_selector, &dword1, &dword2);
       if (!good) {
         BX_ERROR(("task_switch(exception after commit point): bad SS fetch"));
         exception(BX_TS_EXCEPTION, raw_ss_selector & 0xfffc);
@@ -686,7 +686,7 @@ void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
 
     // CS
     if ((raw_cs_selector & 0xfffc) != 0) {
-      bx_bool good = fetch_raw_descriptor2(&cs_selector, &dword1, &dword2);
+      bool good = fetch_raw_descriptor2(&cs_selector, &dword1, &dword2);
       if (!good) {
         BX_ERROR(("task_switch(exception after commit point): bad CS fetch"));
         exception(BX_TS_EXCEPTION, raw_cs_selector & 0xfffc);
@@ -778,6 +778,10 @@ void BX_CPU_C::task_switch(bxInstruction_c *i, bx_selector_t *tss_selector,
 
   if (source != BX_TASK_FROM_IRET) {
     if (ShadowStackEnabled(CPL)) {
+      if (newSSP & 0x7) {
+        BX_ERROR(("task_switch: newSSP is not aligned to 8 byte boundary"));
+        exception(BX_TS_EXCEPTION, BX_CPU_THIS_PTR tr.selector.value & 0xfffc);
+      }
       shadow_stack_switch(newSSP);
       if (pushCSLIPSSP) {
         call_far_shadow_stack_push(oldCS, oldRIP, oldSSP);
@@ -836,7 +840,7 @@ void BX_CPU_C::task_switch_load_selector(bx_segment_reg_t *seg,
   // NULL selector is OK, will leave cache invalid
   if ((raw_selector & 0xfffc) != 0)
   {
-    bx_bool good = fetch_raw_descriptor2(selector, &dword1, &dword2);
+    bool good = fetch_raw_descriptor2(selector, &dword1, &dword2);
     if (!good) {
       BX_ERROR(("task_switch(%s): bad selector fetch !", strseg(seg)));
       exception(BX_TS_EXCEPTION, raw_selector & 0xfffc);

@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: xsave.cc 13743 2019-12-28 15:20:38Z sshwarts $
+// $Id: xsave.cc 14326 2021-07-27 15:36:11Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
 //   Copyright (c) 2008-2019 Stanislav Shwartsman
@@ -47,7 +47,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVE(bxInstruction_c *i)
 #if BX_CPU_LEVEL >= 6
   BX_CPU_THIS_PTR prepareXSAVE();
 
-  bx_bool xsaveopt = (i->getIaOpcode() == BX_IA_XSAVEOPT);
+  bool xsaveopt = (i->getIaOpcode() == BX_IA_XSAVEOPT);
 
   BX_DEBUG(("%s: save processor state XCR0=0x%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32()));
 
@@ -132,7 +132,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVEC(bxInstruction_c *i)
 #if BX_CPU_LEVEL >= 6
   BX_CPU_THIS_PTR prepareXSAVE();
 
-  bx_bool xsaves = (i->getIaOpcode() == BX_IA_XSAVES);
+  bool xsaves = (i->getIaOpcode() == BX_IA_XSAVES);
   if (xsaves) {
     if (CPL != 0) {
       BX_ERROR(("%s: with CPL != 0", i->getIaOpcodeNameShort()));
@@ -154,7 +154,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XSAVEC(bxInstruction_c *i)
 #endif
   }
 
-  BX_DEBUG(("%s: save processor state XCR0=0x%08x XSS=%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
+  BX_DEBUG(("%s: save processor state XCR0=0x%08x XSS=" FMT_LL "x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   bx_address laddr = get_laddr(i->seg(), eaddr);
@@ -235,7 +235,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
 #if BX_CPU_LEVEL >= 6
   BX_CPU_THIS_PTR prepareXSAVE();
 
-  bx_bool xrstors = (i->getIaOpcode() == BX_IA_XRSTORS);
+  bool xrstors = (i->getIaOpcode() == BX_IA_XRSTORS);
   if (xrstors) {
     if (CPL != 0) {
       BX_ERROR(("%s: with CPL != 0", i->getIaOpcodeNameShort()));
@@ -257,7 +257,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
 #endif
   }
 
-  BX_DEBUG(("%s: restore processor state XCR0=0x%08x XSS=%08x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
+  BX_DEBUG(("%s: restore processor state XCR0=0x%08x XSS=" FMT_LL "x", i->getIaOpcodeNameShort(), BX_CPU_THIS_PTR xcr0.get32(), BX_CPU_THIS_PTR msr.ia32_xss));
 
   bx_address eaddr = BX_CPU_RESOLVE_ADDR(i);
   bx_address laddr = get_laddr(i->seg(), eaddr);
@@ -287,7 +287,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
     exception(BX_GP_EXCEPTION, 0);
   }
 
-  bx_bool compaction = (xcomp_bv & XSAVEC_COMPACTION_ENABLED) != 0;
+  bool compaction = (xcomp_bv & XSAVEC_COMPACTION_ENABLED) != 0;
 
   if (! BX_CPUID_SUPPORT_ISA_EXTENSION(BX_ISA_XSAVEC) || ! compaction) {
     if (xcomp_bv != 0) {
@@ -422,7 +422,7 @@ void BX_CPP_AttrRegparmN(1) BX_CPU_C::XRSTOR(bxInstruction_c *i)
 #if BX_SUPPORT_PKEYS
   // take effect of changing the PKRU state
   if ((requested_feature_bitmap & BX_XCR0_PKRU_MASK) != 0) {
-    set_PKRU(TMP32);
+    set_PKeys(TMP32, BX_CPU_THIS_PTR pkrs);
   }
 #endif
 
@@ -594,7 +594,7 @@ void BX_CPU_C::xrstor_init_x87_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_x87_state_xinuse(void)
+bool BX_CPU_C::xsave_x87_state_xinuse(void)
 {
   if (BX_CPU_THIS_PTR the_i387.get_control_word() != 0x037F ||
       BX_CPU_THIS_PTR the_i387.get_status_word() != 0 ||
@@ -648,7 +648,7 @@ void BX_CPU_C::xrstor_init_sse_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_sse_state_xinuse(void)
+bool BX_CPU_C::xsave_sse_state_xinuse(void)
 {
   for(unsigned index=0; index < 16; index++) {
     // set XMM8-XMM15 only in 64-bit mode
@@ -700,7 +700,7 @@ void BX_CPU_C::xrstor_init_ymm_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_ymm_state_xinuse(void)
+bool BX_CPU_C::xsave_ymm_state_xinuse(void)
 {
   for(unsigned index=0; index < 16; index++) {
     // set YMM8-YMM15 only in 64-bit mode
@@ -746,7 +746,7 @@ void BX_CPU_C::xrstor_init_opmask_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_opmask_state_xinuse(void)
+bool BX_CPU_C::xsave_opmask_state_xinuse(void)
 {
   for(unsigned index=0; index < 8; index++) {
     if (BX_READ_OPMASK(index)) return true;
@@ -795,7 +795,7 @@ void BX_CPU_C::xrstor_init_zmm_hi256_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_zmm_hi256_state_xinuse(void)
+bool BX_CPU_C::xsave_zmm_hi256_state_xinuse(void)
 {
   unsigned num_regs = long64_mode() ? 16 : 8;
 
@@ -849,7 +849,7 @@ void BX_CPU_C::xrstor_init_hi_zmm_state(void)
   }
 }
 
-bx_bool BX_CPU_C::xsave_hi_zmm_state_xinuse(void)
+bool BX_CPU_C::xsave_hi_zmm_state_xinuse(void)
 {
   if (!long64_mode()) return true;
 
@@ -875,19 +875,19 @@ void BX_CPU_C::xsave_pkru_state(bxInstruction_c *i, bx_address offset)
 
 void BX_CPU_C::xrstor_pkru_state(bxInstruction_c *i, bx_address offset)
 {
-  // just write the pkru to TMP register for now and don't call set_PKRU
+  // just write the pkru to TMP register for now and don't call set_PKeys
   // calling it will take immediate effect on all future memory accesses including load of other XRSTOR components
   TMP32 = read_virtual_dword(i->seg(), offset);
 }
 
 void BX_CPU_C::xrstor_init_pkru_state(void)
 {
-  // just write the pkru to TMP register for now and don't call set_PKRU
+  // just write the pkru to TMP register for now and don't call set_PKeys
   // calling it will take immediate effect on all future memory accesses including load of other XRSTOR components
   TMP32 = 0;
 }
 
-bx_bool BX_CPU_C::xsave_pkru_state_xinuse(void)
+bool BX_CPU_C::xsave_pkru_state_xinuse(void)
 {
   return (BX_CPU_THIS_PTR pkru != 0);
 }
@@ -921,7 +921,7 @@ void BX_CPU_C::xrstor_init_cet_u_state(void)
   BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] = 0;
 }
 
-bx_bool BX_CPU_C::xsave_cet_u_state_xinuse(void)
+bool BX_CPU_C::xsave_cet_u_state_xinuse(void)
 {
   return BX_CPU_THIS_PTR msr.ia32_cet_control[1] == 0 &&
          BX_CPU_THIS_PTR msr.ia32_pl_ssp[3] == 0;
@@ -957,7 +957,7 @@ void BX_CPU_C::xrstor_init_cet_s_state(void)
     BX_CPU_THIS_PTR msr.ia32_pl_ssp[n] = 0;
 }
 
-bx_bool BX_CPU_C::xsave_cet_s_state_xinuse(void)
+bool BX_CPU_C::xsave_cet_s_state_xinuse(void)
 {
   for (unsigned n=0;n<3;n++)
     return BX_CPU_THIS_PTR msr.ia32_pl_ssp[n] != 0;

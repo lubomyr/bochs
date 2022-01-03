@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: rombios.h 13752 2019-12-30 13:16:18Z vruppert $
+// $Id: rombios.h 14293 2021-06-27 14:50:26Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2006-2018 Volker Ruppert
+//  Copyright (C) 2006-2020  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -174,6 +174,11 @@
 #define CPUID_APIC (1 << 9)
 #define CPUID_MTRR (1 << 12)
 
+#define CPUID_EXT_VMX (1 << 5)
+#define MSR_FEATURE_CTRL 0x03a
+#define FEATURE_CTRL_LOCK 0x1
+#define FEATURE_CTRL_VMX  0x4
+
 #define APIC_BASE    ((uint8_t *)0xfee00000)
 #define APIC_ICR_LOW 0x300
 #define APIC_SVR     0x0F0
@@ -252,6 +257,7 @@
 #define PCI_DEVICE_ID_INTEL_82441       0x1237
 #define PCI_DEVICE_ID_INTEL_82443       0x7190
 #define PCI_DEVICE_ID_INTEL_82443_1     0x7191
+#define PCI_DEVICE_ID_INTEL_82443_NOAGP 0x7192
 #define PCI_DEVICE_ID_INTEL_82371FB_0   0x122e
 #define PCI_DEVICE_ID_INTEL_82371FB_1   0x1230
 #define PCI_DEVICE_ID_INTEL_82371SB_0   0x7000

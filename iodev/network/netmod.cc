@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: netmod.cc 13110 2017-03-12 20:26:42Z vruppert $
+// $Id: netmod.cc 14182 2021-03-12 21:31:51Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2001-2017  The Bochs Project
+//  Copyright (C) 2001-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,9 @@
 // Peter Grehan (grehan@iprg.nokia.com) coded the initial version of the
 // NE2000/ether stuff.
 
-#include "iodev.h"
+#include "bochs.h"
+#include "plugin.h"
+#include "gui/siminterface.h"
 
 #if BX_NETWORKING
 
@@ -34,6 +36,8 @@
 
 bx_netmod_ctl_c bx_netmod_ctl;
 
+const char **net_module_names;
+
 bx_netmod_ctl_c::bx_netmod_ctl_c()
 {
   put("netmodctl", "NETCTL");
@@ -41,15 +45,63 @@ bx_netmod_ctl_c::bx_netmod_ctl_c()
 
 void bx_netmod_ctl_c::init(void)
 {
-  // Nothing here yet
+  Bit8u i, count = 0;
+
+  count = PLUG_get_plugins_count(PLUGTYPE_NET);
+  net_module_names = (const char**) malloc((count + 1) * sizeof(char*));
+  for (i = 0; i < count; i++) {
+    net_module_names[i] = PLUG_get_plugin_name(PLUGTYPE_NET, i);
+  }
+  net_module_names[count] = NULL;
+  // move 'null' module to the top of the list
+  if (strcmp(net_module_names[0], "null")) {
+    for (i = 1; i < count; i++) {
+      if (!strcmp(net_module_names[i], "null")) {
+        net_module_names[i] = net_module_names[0];
+        net_module_names[0] = "null";
+        break;
+      }
+    }
+  }
+}
+
+const char **bx_netmod_ctl_c::get_module_names(void)
+{
+  return net_module_names;
+}
+
+void bx_netmod_ctl_c::list_modules(void)
+{
+  char list[60];
+  Bit8u i = 0;
+  size_t len = 0, len1;
+
+  BX_INFO(("Networking modules"));
+  list[0] = 0;
+  while (net_module_names[i] != NULL) {
+    len1 = strlen(net_module_names[i]);
+    if ((len + len1 + 1) > 58) {
+      BX_INFO((" %s", list));
+      list[0] = 0;
+      len = 0;
+    }
+    strcat(list, " ");
+    strcat(list, net_module_names[i]);
+    len = strlen(list);
+    i++;
+  }
+  if (len > 0) {
+    BX_INFO((" %s", list));
+  }
 }
 
 void bx_netmod_ctl_c::exit(void)
 {
+  free(net_module_names);
   eth_locator_c::cleanup();
 }
 
-void* bx_netmod_ctl_c::init_module(bx_list_c *base, void *rxh, void *rxstat, bx_devmodel_c *netdev)
+void* bx_netmod_ctl_c::init_module(bx_list_c *base, void *rxh, void *rxstat, logfunctions *netdev)
 {
   eth_pktmover_c *ethmod;
 
@@ -57,7 +109,7 @@ void* bx_netmod_ctl_c::init_module(bx_list_c *base, void *rxh, void *rxstat, bx_
   const char *modname = SIM->get_param_enum("ethmod", base)->get_selected();
   if (!eth_locator_c::module_present(modname)) {
 #if BX_PLUGINS
-    PLUG_load_net_plugin(modname);
+    PLUG_load_plugin_var(modname, PLUGTYPE_NET);
 #else
     BX_PANIC(("could not find networking module '%s'", modname));
 #endif
@@ -90,9 +142,17 @@ eth_locator_c *eth_locator_c::all;
 //
 eth_locator_c::eth_locator_c(const char *type)
 {
-  next = all;
-  all  = this;
+  eth_locator_c *ptr;
+
   this->type = type;
+  this->next = NULL;
+  if (all == NULL) {
+    all = this;
+  } else {
+    ptr = all;
+    while (ptr->next) ptr = ptr->next;
+    ptr->next = this;
+  }
 }
 
 eth_locator_c::~eth_locator_c()
@@ -116,7 +176,7 @@ eth_locator_c::~eth_locator_c()
   }
 }
 
-bx_bool eth_locator_c::module_present(const char *type)
+bool eth_locator_c::module_present(const char *type)
 {
   eth_locator_c *ptr = 0;
 
@@ -131,7 +191,7 @@ void eth_locator_c::cleanup()
 {
 #if BX_PLUGINS
   while (all != NULL) {
-    PLUG_unload_net_plugin(all->type);
+    PLUG_unload_plugin_type(all->type, PLUGTYPE_NET);
   }
 #endif
 }
@@ -144,13 +204,13 @@ eth_pktmover_c *
 eth_locator_c::create(const char *type, const char *netif,
                       const char *macaddr,
                       eth_rx_handler_t rxh, eth_rx_status_t rxstat,
-                      bx_devmodel_c *dev, const char *script)
+                      logfunctions *netdev, const char *script)
 {
   eth_locator_c *ptr = 0;
 
   for (ptr = all; ptr != NULL; ptr = ptr->next) {
     if (strcmp(type, ptr->type) == 0)
-      return (ptr->allocate(netif, macaddr, rxh, rxstat, dev, script));
+      return (ptr->allocate(netif, macaddr, rxh, rxstat, netdev, script));
   }
   return NULL;
 }
@@ -162,7 +222,7 @@ extern "C" {
 };
 
 // This is a utility script used for tuntap or ethertap
-int execute_script(bx_devmodel_c *netdev, const char* scriptname, char* arg1)
+int execute_script(logfunctions *netdev, const char* scriptname, char* arg1)
 {
   int pid,status;
 
@@ -194,7 +254,7 @@ int execute_script(bx_devmodel_c *netdev, const char* scriptname, char* arg1)
 
 #endif
 
-void write_pktlog_txt(FILE *pktlog_txt, const Bit8u *buf, unsigned len, bx_bool host_to_guest)
+void write_pktlog_txt(FILE *pktlog_txt, const Bit8u *buf, unsigned len, bool host_to_guest)
 {
   Bit8u *charbuf = (Bit8u *)buf;
   Bit8u rawbuf[18];
@@ -226,6 +286,21 @@ void write_pktlog_txt(FILE *pktlog_txt, const Bit8u *buf, unsigned len, bx_bool 
   }
   fprintf(pktlog_txt, "--\n");
   fflush(pktlog_txt);
+}
+
+size_t strip_whitespace(char *s)
+{
+  size_t ptr = 0;
+  char *tmp = (char*)malloc(strlen(s)+1);
+  strcpy(tmp, s);
+  while (s[ptr] == ' ') ptr++;
+  if (ptr > 0) strcpy(s, tmp+ptr);
+  free(tmp);
+  ptr = strlen(s);
+  while ((ptr > 0) && (s[ptr-1] == ' ')) {
+    s[--ptr] = 0;
+  }
+  return ptr;
 }
 
 #endif /* if BX_NETWORKING */

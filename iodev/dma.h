@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////
-// $Id: dma.h 11277 2012-07-12 21:20:46Z vruppert $
+// $Id: dma.h 14112 2021-01-31 10:50:53Z vruppert $
 /////////////////////////////////////////////////////////////////////////
 //
-//  Copyright (C) 2002-2009  The Bochs Project
+//  Copyright (C) 2002-2021  The Bochs Project
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -38,7 +38,7 @@ public:
   virtual void     init(void);
   virtual void     reset(unsigned type);
   virtual void     raise_HLDA(void);
-  virtual void     set_DRQ(unsigned channel, bx_bool val);
+  virtual void     set_DRQ(unsigned channel, bool val);
   virtual unsigned get_TC(void);
   virtual void     register_state(void);
 #if BX_DEBUGGER
@@ -63,23 +63,23 @@ private:
   Bit32u   read (Bit32u address, unsigned io_len) BX_CPP_AttrRegparmN(2);
   void     write(Bit32u address, Bit32u   value, unsigned io_len) BX_CPP_AttrRegparmN(3);
 #endif
-  BX_DMA_SMF void control_HRQ(bx_bool ma_sl);
+  BX_DMA_SMF void control_HRQ(Bit8u ma_sl);
   BX_DMA_SMF void reset_controller(unsigned num);
 
   struct {
-    bx_bool DRQ[4];  // DMA Request
-    bx_bool DACK[4]; // DMA Acknowlege
+    bool DRQ[4];  // DMA Request
+    bool DACK[4]; // DMA Acknowlege
 
-    bx_bool mask[4];
-    bx_bool flip_flop;
+    bool mask[4];
+    bool flip_flop;
     Bit8u   status_reg;
     Bit8u   command_reg;
-    bx_bool ctrl_disabled;
+    bool ctrl_disabled;
     struct {
       struct {
         Bit8u mode_type;
-        bx_bool address_decrement;
-        bx_bool autoinit_enable;
+        bool address_decrement;
+        bool autoinit_enable;
         Bit8u transfer_type;
       } mode;
       Bit16u  base_address;
@@ -87,12 +87,12 @@ private:
       Bit16u  base_count;
       Bit16u  current_count;
       Bit8u   page_reg;
-      bx_bool used;
+      bool used;
     } chan[4]; /* DMA channels 0..3 */
   } s[2];  // state information DMA-1 / DMA-2
 
-  bx_bool HLDA;    // Hold Acknowlege
-  bx_bool TC;      // Terminal Count
+  bool HLDA;    // Hold Acknowlege
+  bool TC;      // Terminal Count
 
   Bit8u   ext_page_reg[16]; // Extra page registers (unused)
 
